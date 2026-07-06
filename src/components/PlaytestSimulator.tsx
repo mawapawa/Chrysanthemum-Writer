@@ -6,8 +6,8 @@
 import React, { useState, useEffect } from "react";
 import { VNProject, StoryNode, StoryChoice, StatChange, InlineEffect } from "../types";
 import { 
-  Play, RefreshCw, ChevronRight, ChevronLeft, 
-  Flag, AlertTriangle, HelpCircle, Eye, EyeOff, Sliders
+  RefreshCw, ChevronRight, ChevronLeft, 
+  Flag, AlertTriangle, Eye, EyeOff, Sliders
 } from "lucide-react";
 
 interface PlaytestSimulatorProps {
@@ -451,7 +451,7 @@ export default function PlaytestSimulator({
         </div>
 
         {/* Narrative / Script stage visualization area */}
-        <div className="flex-1 flex flex-col justify-center items-center py-6" id="vn-player-expressive-stage">
+        <div className="flex-1 flex flex-col justify-start py-4" id="vn-player-expressive-stage">
           {/* If ending node is active, show giant beautiful ending splashes */}
           {node.isEnding ? (
             <div className="text-center p-8 max-w-md bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden" id="ending-splash-card">
@@ -482,7 +482,7 @@ export default function PlaytestSimulator({
               </div>
             </div>
           ) : node.nodeType === "location" && node.locationData ? (
-            <div className="w-full max-w-2xl mx-auto">
+            <div className="w-full">
               <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">🏪</span>
@@ -525,7 +525,7 @@ export default function PlaytestSimulator({
               </div>
             </div>
           ) : node.nodeType === "encounter" && node.encounterData ? (
-            <div className="w-full max-w-2xl mx-auto">
+            <div className="w-full">
               <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-6 shadow-2xl">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">⚔️</span>
@@ -585,9 +585,9 @@ export default function PlaytestSimulator({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col lg:flex-row gap-6 w-full max-w-6xl items-stretch justify-center h-full overflow-hidden" id="playtest-dual-columns">
+            <div className="w-full" id="playtest-story-stage">
               {/* Standard dialogue box player */}
-              <div className="flex-1 bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl relative flex flex-col justify-between" style={{ minHeight: "220px" }}>
+              <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
                 
                 {/* Scene Outline Indicator */}
                 <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase">
@@ -652,71 +652,61 @@ export default function PlaytestSimulator({
                     </div>
                   </div>
                 )}
-              </div>
 
+                {/* Choices inside the dialogue card */}
+                {!node.isEnding && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length > 0 && (
+                  <div className="border-t border-slate-800/60 pt-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {availableChoices.map((choice) => {
+                        const evalResult = checkChoiceCondition(choice);
+                        const canSelect = evalResult.passed;
+
+                        return (
+                          <button
+                            key={choice.id}
+                            disabled={!canSelect}
+                            onClick={() => handleSelectChoice(choice)}
+                            className={`relative text-left p-4 rounded-xl border transition-all text-xs font-bold cursor-pointer group ${
+                              canSelect
+                                ? "bg-slate-900 border-slate-800 text-white hover:border-indigo-500 hover:bg-slate-850 shadow-md hover:shadow-lg hover:scale-101"
+                                : "bg-slate-950 border-red-950/20 text-slate-500 cursor-not-allowed"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-sans text-xs font-bold leading-normal">{choice.text}</p>
+                                {choice.targetNodeId && project.nodes[choice.targetNodeId] && (
+                                  <span className="text-[9px] font-mono text-slate-500 mt-1 block group-hover:text-indigo-400">
+                                    Leads to: {project.nodes[choice.targetNodeId]?.title}
+                                  </span>
+                                )}
+                              </div>
+                              {!canSelect && (
+                                <div className="text-[10px] text-rose-400 font-mono flex items-center gap-0.5 shrink-0 bg-rose-950/20 px-1.5 py-0.5 rounded">
+                                  <AlertTriangle className="w-3 h-3" /> Locked
+                                </div>
+                              )}
+                            </div>
+                            {!canSelect && evalResult.message && (
+                              <p className="text-[9px] text-red-400 font-mono mt-1.5 border-t border-red-950/10 pt-1">{evalResult.message}</p>
+                            )}
+                            {canSelect && choice.statChanges && choice.statChanges.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {choice.statChanges.map((sc, i) => (
+                                  <span key={i} className="text-[8px] font-mono px-1 bg-slate-950 text-indigo-400 rounded">{sc.variableName} {sc.operation}{sc.value}</span>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
-
-        {/* Choice list — only renders when choices are visible */}
-        {!node.isEnding && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length > 0 && (
-          <div className="mt-4 border-t border-slate-800/60 pt-5 z-10">
-            <h3 className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider mb-3">Choice Branch Pathways:</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" id="vn-player-choices-grid">
-              {availableChoices.map((choice) => {
-                const evalResult = checkChoiceCondition(choice);
-                const canSelect = evalResult.passed;
-
-                return (
-                  <button
-                    key={choice.id}
-                    disabled={!canSelect}
-                    onClick={() => handleSelectChoice(choice)}
-                    className={`relative text-left p-4 rounded-xl border transition-all text-xs font-bold cursor-pointer group ${
-                      canSelect
-                        ? "bg-slate-900 border-slate-800 text-white hover:border-indigo-500 hover:bg-slate-850 shadow-md hover:shadow-lg hover:scale-101"
-                        : "bg-slate-950 border-red-950/20 text-slate-500 cursor-not-allowed"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-sans text-xs font-bold leading-normal">{choice.text}</p>
-                        {choice.targetNodeId && project.nodes[choice.targetNodeId] && (
-                          <span className="text-[9px] font-mono text-slate-500 mt-1 block group-hover:text-indigo-400">
-                            Leads to: {project.nodes[choice.targetNodeId]?.title}
-                          </span>
-                        )}
-                      </div>
-
-                      {!canSelect && (
-                        <div className="text-[10px] text-rose-400 font-mono flex items-center gap-0.5 shrink-0 bg-rose-950/20 px-1.5 py-0.5 rounded">
-                          <AlertTriangle className="w-3 h-3" /> Locked
-                        </div>
-                      )}
-                    </div>
-
-                    {!canSelect && evalResult.message && (
-                      <p className="text-[9px] text-red-400 font-mono mt-1.5 border-t border-red-950/10 pt-1">
-                        {evalResult.message}
-                      </p>
-                    )}
-
-                    {canSelect && choice.statChanges && choice.statChanges.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {choice.statChanges.map((sc, i) => (
-                          <span key={i} className="text-[8px] font-mono px-1 bg-slate-950 text-indigo-400 rounded">
-                            {sc.variableName} {sc.operation}{sc.value}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );

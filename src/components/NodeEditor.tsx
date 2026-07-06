@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, DialogueBlock, NodeLock, VNTracker, VNFlag } from "../types";
+import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, DialogueBlock, NodeLock } from "../types";
 import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
 import ScriptEditor from "./ScriptEditor";
 import LocationEditor from "./LocationEditor";

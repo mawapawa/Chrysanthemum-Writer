@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { VNProject, StoryNode, StoryChoice, NodeLock } from "../types";
+import { VNProject, StoryNode, StoryChoice } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
-import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star } from "lucide-react";
 
 interface FlowchartCanvasProps {
   project: VNProject;
