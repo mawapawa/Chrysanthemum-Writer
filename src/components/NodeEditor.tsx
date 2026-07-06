@@ -1,7 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
-import { VNProject, StoryNode, StoryChoice, StatChange, ChoiceCondition, DialogueLine, DialogueBlock, NodeLock, VNTracker, VNFlag, VNEntity } from "../types";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, DialogueBlock, NodeLock, VNTracker, VNFlag } from "../types";
 import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
 import ScriptEditor from "./ScriptEditor";
+import LocationEditor from "./LocationEditor";
+import EncounterEditor from "./EncounterEditor";
 
 function textColorForHex(hex: string): string {
   const val = parseInt(hex.replace("#", ""), 16);
@@ -32,9 +34,11 @@ interface NodeEditorProps {
   selectedNodeId: string;
   onUpdateProject: (project: VNProject) => void;
   onSelectNode: (nodeId: string | null) => void;
+  editorWidth?: number;
+  onResizeEditor?: (width: number) => void;
 }
 
-export default function NodeEditor({ project, selectedNodeId, onUpdateProject, onSelectNode }: NodeEditorProps) {
+export default function NodeEditor({ project, selectedNodeId, onUpdateProject, onSelectNode, editorWidth, onResizeEditor }: NodeEditorProps) {
   const node = project.nodes[selectedNodeId];
 
   const allVars: { name: string; type: "number" | "boolean" }[] = [
@@ -122,25 +126,24 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     });
   };
 
-  const handleAddCondition = (choiceId: string) => {
-    if (allVars.length === 0) {
-      alert("Please define at least one tracker or flag first.");
-      return;
-    }
-    const firstVar = allVars[0];
-    const condition: ChoiceCondition = {
-      variableName: firstVar.name,
-      operator: "==",
-      value: firstVar.type === "number" ? 0 : false,
+  const handleAddRequirement = (choiceId: string, source: "flag" | "tracker") => {
+    const flag = source === "flag" ? project.flags[0] : null;
+    const tracker = source === "tracker" ? project.trackers[0] : null;
+    if (source === "flag" && !flag) { alert("No milestones defined."); return; }
+    if (source === "tracker" && !tracker) { alert("No trackers defined."); return; }
+    const requirement: ChoiceRequirement = {
+      source,
+      targetId: source === "flag" ? flag!.id : tracker!.id,
+      ...(source === "flag" ? { expect: true } : { operator: ">=", compareValue: 1 }),
     };
-    handleUpdateChoice(choiceId, { condition });
+    handleUpdateChoice(choiceId, { requirement });
   };
 
-  const handleRemoveCondition = (choiceId: string) => {
+  const handleRemoveRequirement = (choiceId: string) => {
     updateNode({
       choices: node.choices.map((c) => {
         if (c.id === choiceId) {
-          const { condition, ...rest } = c;
+          const { requirement, ...rest } = c;
           return rest;
         }
         return c;
@@ -148,57 +151,29 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     });
   };
 
-  const handleAddChoiceStatChange = (choiceId: string) => {
-    if (allVars.length === 0) {
-      alert("Please define trackers or flags first.");
-      return;
-    }
-    const firstVar = allVars[0];
-    const newChange: StatChange = {
-      variableName: firstVar.name,
-      operation: firstVar.type === "number" ? "+" : "=",
-      value: firstVar.type === "number" ? 1 : true,
+  const handleAddEffect = (choiceId: string, type: "give_item" | "take_item") => {
+    if (project.inventory.length === 0) { alert("No items defined."); return; }
+    const effect: InlineEffect = {
+      id: crypto.randomUUID(),
+      type,
+      targetId: project.inventory[0].id,
     };
-
     const choice = node.choices.find(c => c.id === choiceId);
-    if (choice) {
-      const existingChanges = choice.statChanges || [];
-      handleUpdateChoice(choiceId, {
-        statChanges: [...existingChanges, newChange],
-      });
+    const existing = choice?.effects || [];
+    handleUpdateChoice(choiceId, { effects: [...existing, effect] });
+  };
+
+  const handleRemoveEffect = (choiceId: string, effectId: string) => {
+    const choice = node.choices.find(c => c.id === choiceId);
+    if (choice?.effects) {
+      handleUpdateChoice(choiceId, { effects: choice.effects.filter(e => e.id !== effectId) });
     }
   };
 
-  const handleRemoveChoiceStatChange = (choiceId: string, idx: number) => {
+  const handleUpdateEffect = (choiceId: string, effectId: string, fields: Partial<InlineEffect>) => {
     const choice = node.choices.find(c => c.id === choiceId);
-    if (choice && choice.statChanges) {
-      const updated = [...choice.statChanges];
-      updated.splice(idx, 1);
-      handleUpdateChoice(choiceId, {
-        statChanges: updated,
-      });
-    }
-  };
-
-  const handleUpdateChoiceStatChange = (choiceId: string, idx: number, fields: Partial<StatChange>) => {
-    const choice = node.choices.find(c => c.id === choiceId);
-    if (choice && choice.statChanges) {
-      const updated = choice.statChanges.map((sc, i) => {
-        if (i === idx) {
-          const updatedSc = { ...sc, ...fields };
-          const targetVar = allVars.find(v => v.name === updatedSc.variableName);
-          if (targetVar) {
-            if (targetVar.type === "number" && typeof updatedSc.value !== "number") {
-              updatedSc.value = parseInt(String(updatedSc.value)) || 0;
-            } else if (targetVar.type === "boolean" && typeof updatedSc.value !== "boolean") {
-              updatedSc.value = String(updatedSc.value) === "true";
-            }
-          }
-          return updatedSc;
-        }
-        return sc;
-      });
-      handleUpdateChoice(choiceId, { statChanges: updated });
+    if (choice?.effects) {
+      handleUpdateChoice(choiceId, { effects: choice.effects.map(e => e.id === effectId ? { ...e, ...fields } : e) });
     }
   };
 
@@ -212,10 +187,33 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     }));
   };
 
+  const resizeRef = useRef<HTMLDivElement>(null);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = editorWidth || 420;
+    const onMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(280, Math.min(700, startWidth + (startX - ev.clientX)));
+      onResizeEditor?.(newWidth);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [editorWidth, onResizeEditor]);
+
   const nodeLock: NodeLock | undefined = (project.locks || []).find(l => l.nodeId === selectedNodeId);
 
   return (
-    <div className="h-full flex flex-col bg-slate-900 border-l border-slate-800 text-slate-100 divide-y divide-slate-800" id="node-editor-sidebar">
+    <div className="h-full flex flex-col bg-slate-900 border-l border-slate-800 text-slate-100 divide-y divide-slate-800 relative" id="node-editor-sidebar">
+      <div
+        ref={resizeRef}
+        onMouseDown={startResize}
+        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/30 transition-colors z-10"
+      />
       {nodeLock && (
         <div className="bg-amber-500/15 border-b border-amber-500/25 px-4 py-2 flex items-center gap-2 text-xs text-amber-300 shrink-0">
           <span className="font-bold">Read-only</span>
@@ -225,6 +223,16 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
       )}
       <div className={`flex-1 overflow-y-auto p-5 space-y-6 ${nodeLock ? "pointer-events-none opacity-70" : ""}`}>
 
+        {node.nodeType === "location" && (
+          <LocationEditor project={project} node={node} onUpdateNode={updateNode} />
+        )}
+
+        {node.nodeType === "encounter" && (
+          <EncounterEditor project={project} node={node} onUpdateNode={updateNode} />
+        )}
+
+        {(!node.nodeType || node.nodeType === "story") && (
+        <>
         {/* 📄 Scene Overview */}
         <CollapsibleSection title="📄 Scene Overview" defaultExpanded={true}>
           <div>
@@ -318,10 +326,27 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
         {/* 📝 Script & Dialogue Editor */}
         <CollapsibleSection title="📝 Script & Dialogue Editor" defaultExpanded={true}>
           <ScriptEditor
+            key={selectedNodeId}
             project={project}
             nodeId={selectedNodeId}
             dialogueTimeline={node.dialogueTimeline ?? convertDialogueLines(node.dialogueLines)}
             onUpdateTimeline={(blocks) => updateNode({ dialogueTimeline: blocks })}
+            onCreateNode={(title: string) => {
+              const newId = crypto.randomUUID();
+              const newNode: StoryNode = {
+                id: newId, title, description: "", speaker: "Narrator",
+                dialogueLines: [], choices: [], statChanges: [],
+                position: { x: 200 + Math.random() * 100, y: 250 + Math.random() * 100 },
+                isEnding: false, nodeType: "story", sceneId: project.nodes[selectedNodeId || ""]?.sceneId,
+              };
+              onUpdateProject({
+                ...project,
+                nodes: { ...project.nodes, [newId]: newNode },
+                lastModified: Date.now(),
+              });
+              return newId;
+            }}
+            onSelectNode={onSelectNode}
           />
         </CollapsibleSection>
 
@@ -392,159 +417,141 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                       </div>
 
                       <div className="flex items-end justify-end gap-1 pb-0.5">
-                        {!choice.condition ? (
-                          <button
-                            onClick={() => handleAddCondition(choice.id)}
-                            className="px-1.5 py-1 bg-slate-900 border border-slate-800 text-[9px] text-slate-400 hover:text-white rounded-md cursor-pointer font-semibold"
-                          >
-                            + Condition
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleRemoveCondition(choice.id)}
-                            className="px-1.5 py-1 bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-400 hover:bg-slate-900 hover:text-slate-400 rounded-md cursor-pointer font-semibold"
-                          >
-                            - Condition
-                          </button>
-                        )}
-
                         <button
-                          onClick={() => handleAddChoiceStatChange(choice.id)}
+                          onClick={() => handleAddEffect(choice.id, "give_item")}
                           className="px-1.5 py-1 bg-slate-900 border border-slate-800 text-[9px] text-slate-400 hover:text-white rounded-md cursor-pointer font-semibold"
                         >
-                          + Effect
+                          🎒 + Give Item
+                        </button>
+                        <button
+                          onClick={() => handleAddEffect(choice.id, "take_item")}
+                          className="px-1.5 py-1 bg-slate-900 border border-slate-800 text-[9px] text-slate-400 hover:text-white rounded-md cursor-pointer font-semibold"
+                        >
+                          🎒 + Take Item
                         </button>
                       </div>
                     </div>
 
-                    {choice.condition && (
-                      <div className="p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg space-y-1">
-                        <span className="block text-[8px] font-bold text-amber-500 uppercase tracking-wider">Choice Visibility Requirement</span>
-                        <div className="flex items-center gap-1">
-                          <select
-                            value={choice.condition.variableName}
-                            onChange={(e) => {
-                              const vName = e.target.value;
-                              const matchedVar = allVars.find(v => v.name === vName);
-                              handleUpdateChoice(choice.id, {
-                                condition: {
-                                  ...choice.condition!,
-                                  variableName: vName,
-                                  value: matchedVar?.type === "number" ? 0 : false,
-                                },
-                              });
-                            }}
-                            className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 max-w-[100px]"
+                    {/* Requirement card */}
+                    <div className="flex items-start gap-2">
+                      {!choice.requirement ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleAddRequirement(choice.id, "flag")}
+                            className="px-1.5 py-1 bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-400 hover:text-white rounded-md cursor-pointer font-semibold"
                           >
-                            {allVars.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name}
-                              </option>
-                            ))}
-                          </select>
-
-                          <select
-                            value={choice.condition.operator}
-                            onChange={(e) =>
-                              handleUpdateChoice(choice.id, {
-                                condition: { ...choice.condition!, operator: e.target.value as any },
-                              })
-                            }
-                            className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1"
+                            🔒 Require Milestone
+                          </button>
+                          <button
+                            onClick={() => handleAddRequirement(choice.id, "tracker")}
+                            className="px-1.5 py-1 bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-400 hover:text-white rounded-md cursor-pointer font-semibold"
                           >
-                            <option value="==">==</option>
-                            <option value="!=">!=</option>
-                            <option value=">=">&gt;=</option>
-                            <option value="<=">&lt;=</option>
-                            <option value=">">&gt;</option>
-                            <option value="<">&lt;</option>
-                          </select>
-
-                          {allVars.find((v) => v.name === choice.condition?.variableName)?.type === "number" ? (
-                            <input
-                              type="number"
-                              value={typeof choice.condition.value === "number" ? choice.condition.value : 0}
-                              onChange={(e) =>
-                                handleUpdateChoice(choice.id, {
-                                  condition: { ...choice.condition!, value: parseInt(e.target.value) || 0 },
-                                })
-                              }
-                              className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 w-12 font-mono text-center"
-                            />
-                          ) : (
-                            <select
-                              value={String(choice.condition.value)}
-                              onChange={(e) =>
-                                handleUpdateChoice(choice.id, {
-                                  condition: { ...choice.condition!, value: e.target.value === "true" },
-                                })
-                              }
-                              className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1"
-                            >
-                              <option value="true">True</option>
-                              <option value="false">False</option>
-                            </select>
-                          )}
+                            🔒 Require Tracker
+                          </button>
                         </div>
-                      </div>
-                    )}
-
-                    {choice.statChanges && choice.statChanges.length > 0 && (
-                      <div className="p-2 bg-indigo-500/5 border border-indigo-500/15 rounded-lg space-y-1.5">
-                        <span className="block text-[8px] font-bold text-indigo-400 uppercase tracking-wider">Instant Selection Effects</span>
-                        {choice.statChanges.map((sc, scIdx) => {
-                          const matchedVar = allVars.find((v) => v.name === sc.variableName);
-                          return (
-                            <div key={scIdx} className="flex items-center gap-1.5 text-xs">
-                              <select
-                                value={sc.variableName}
-                                onChange={(e) => handleUpdateChoiceStatChange(choice.id, scIdx, { variableName: e.target.value })}
-                                className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5 max-w-[80px]"
-                              >
-                                {allVars.map((v) => (
-                                  <option key={v.name} value={v.name}>
-                                    {v.name}
-                                  </option>
-                                ))}
-                              </select>
-
-                              <select
-                                value={sc.operation}
-                                onChange={(e) => handleUpdateChoiceStatChange(choice.id, scIdx, { operation: e.target.value as any })}
-                                className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
-                              >
-                                {matchedVar?.type === "number" ? (
-                                  <>
-                                    <option value="+">+</option>
-                                    <option value="-">-</option>
-                                    <option value="=">=</option>
-                                  </>
-                                ) : (
-                                  <option value="=">=</option>
-                                )}
-                              </select>
-
-                              {matchedVar?.type === "number" ? (
-                                <input
-                                  type="number"
-                                  value={typeof sc.value === "number" ? sc.value : 0}
-                                  onChange={(e) => handleUpdateChoiceStatChange(choice.id, scIdx, { value: parseInt(e.target.value) || 0 })}
-                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5 w-10 text-center"
-                                />
-                              ) : (
+                      ) : (
+                        <div className="flex-1 p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[8px] font-bold text-amber-400 uppercase tracking-wider">Requirement</span>
+                            <button
+                              onClick={() => handleRemoveRequirement(choice.id)}
+                              className="text-amber-400 hover:text-rose-400 text-[9px] cursor-pointer"
+                            >
+                              ✕ Remove
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            {choice.requirement.source === "flag" ? (
+                              <>
+                                <span className="text-[10px] text-slate-400">Only show if</span>
                                 <select
-                                  value={String(sc.value)}
-                                  onChange={(e) => handleUpdateChoiceStatChange(choice.id, scIdx, { value: e.target.value === "true" })}
+                                  value={choice.requirement.targetId}
+                                  onChange={(e) => handleUpdateChoice(choice.id, {
+                                    requirement: { ...choice.requirement!, targetId: e.target.value }
+                                  })}
                                   className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
                                 >
-                                  <option value="true">True</option>
-                                  <option value="false">False</option>
+                                  {project.flags.map(f => (
+                                    <option key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
                                 </select>
-                              )}
+                                <select
+                                  value={String(choice.requirement.expect ?? true)}
+                                  onChange={(e) => handleUpdateChoice(choice.id, {
+                                    requirement: { ...choice.requirement!, expect: e.target.value === "true" }
+                                  })}
+                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
+                                >
+                                  <option value="true">is checked</option>
+                                  <option value="false">is unchecked</option>
+                                </select>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-[10px] text-slate-400">Only show if</span>
+                                <select
+                                  value={choice.requirement.targetId}
+                                  onChange={(e) => handleUpdateChoice(choice.id, {
+                                    requirement: { ...choice.requirement!, targetId: e.target.value }
+                                  })}
+                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
+                                >
+                                  {project.trackers.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={choice.requirement.operator || ">="}
+                                  onChange={(e) => handleUpdateChoice(choice.id, {
+                                    requirement: { ...choice.requirement!, operator: e.target.value as any }
+                                  })}
+                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
+                                >
+                                  <option value=">=">≥</option>
+                                  <option value="<=">≤</option>
+                                  <option value=">">&gt;</option>
+                                  <option value="<">&lt;</option>
+                                  <option value="==">=</option>
+                                  <option value="!=">≠</option>
+                                </select>
+                                <input
+                                  type="number"
+                                  value={choice.requirement.compareValue ?? 1}
+                                  onChange={(e) => handleUpdateChoice(choice.id, {
+                                    requirement: { ...choice.requirement!, compareValue: parseInt(e.target.value) || 0 }
+                                  })}
+                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5 w-12 font-mono text-center"
+                                />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
+                    {/* Inline effects */}
+                    {choice.effects && choice.effects.length > 0 && (
+                      <div className="p-2 bg-indigo-500/5 border border-indigo-500/15 rounded-lg space-y-1.5">
+                        <span className="block text-[8px] font-bold text-indigo-400 uppercase tracking-wider">Selection Effects</span>
+                        {choice.effects.map((ef) => {
+                          const matchedItem = project.inventory.find(i => i.id === ef.targetId);
+                          return (
+                            <div key={ef.id} className="flex items-center gap-1.5 text-xs">
+                              <span className="text-[10px] text-slate-400">
+                                {ef.type === "give_item" ? "Give" : "Take"}
+                              </span>
+                              <select
+                                value={ef.targetId}
+                                onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
+                                className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
+                              >
+                                {project.inventory.map(i => (
+                                  <option key={i.id} value={i.id}>{i.name}</option>
+                                ))}
+                              </select>
                               <button
-                                onClick={() => handleRemoveChoiceStatChange(choice.id, scIdx)}
-                                className="text-slate-500 hover:text-rose-400 p-0.5 ml-auto cursor-pointer"
+                                onClick={() => handleRemoveEffect(choice.id, ef.id)}
+                                className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
                               </button>
@@ -559,6 +566,8 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
             </div>
           )}
         </CollapsibleSection>
+        </>
+      )}
 
       </div>
     </div>

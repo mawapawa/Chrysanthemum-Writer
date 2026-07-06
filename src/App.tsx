@@ -13,15 +13,45 @@ import FlagsManager from "./components/FlagsManager";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
 import { migrateProject } from "./utils/schemaMigration";
+import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, fileNameForProject } from "./services/fileStore";
 import {
   Sliders, Flag, Package, Users, Download,
-  RefreshCw, Layers, Plus, BookOpen, History, Settings, Pencil
+  RefreshCw, Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
 } from "lucide-react";
+import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
 import { useAuth } from "./hooks/useAuth";
 import { tryHandleOAuthRedirect } from "./services/auth";
 
-const DEFAULT_PROJECT: VNProject = {
+const BLANK_PROJECT: VNProject = {
+  id: crypto.randomUUID(),
+  schemaVersion: 2,
+  name: "Untitled Project",
+  description: "A new story canvas.",
+  startNodeId: "node-start",
+  lastModified: Date.now(),
+  entities: [],
+  trackers: [],
+  flags: [],
+  inventory: [],
+  scenes: [],
+  nodes: {
+    "node-start": {
+      id: "node-start",
+      title: "Beginning",
+      description: "Your story starts here. Double-click the canvas to create new scene nodes.",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: { x: 300, y: 150 },
+      isEnding: false,
+      nodeType: "story",
+    }
+  }
+};
+
+const RAVENWOOD_TEMPLATE: VNProject = {
   id: "ravenwood-manor-tracker",
   schemaVersion: 2,
   name: "Mystery of Ravenwood Manor",
@@ -29,8 +59,8 @@ const DEFAULT_PROJECT: VNProject = {
   startNodeId: "node-start",
   lastModified: Date.now(),
   entities: [
-    { id: "char-astrid", name: "Astrid", color: "#f43f5e", displayId: "ENT-001", description: "Your courageous childhood friend with a hidden medallion." },
-    { id: "char-jack", name: "Jack", color: "#0ea5e9", displayId: "ENT-002", description: "The cautious treasure hunter carrying the faded map." },
+    { id: "char-astrid", name: "Astrid", color: "#f43f5e", displayId: "ENT-001", description: "Your courageous childhood friend with a hidden medallion.", tags: [] },
+    { id: "char-jack", name: "Jack", color: "#0ea5e9", displayId: "ENT-002", description: "The cautious treasure hunter carrying the faded map.", tags: [] },
   ],
   trackers: [
     { id: "trk-courage", name: "courage", defaultValue: 10, displayId: "TRK-001", description: "Unlocks bolder, risky story options." },
@@ -41,119 +71,58 @@ const DEFAULT_PROJECT: VNProject = {
     { id: "flg-specter", name: "encountered_specter", defaultValue: false, displayId: "FLG-002", description: "Tracks if the ghost was witnessed." },
   ],
   inventory: [],
+  scenes: [],
   nodes: {
     "node-start": {
-      id: "node-start",
-      title: "Manor Front Gates",
-      description: "Astrid and Jack stand in the pouring rain looking up at the towering Ravenwood Gates.",
-      speaker: "Narrator",
-      dialogueLines: [
-        { id: "line-1", speaker: "Narrator", text: "[The rain drums heavily against the rusty, wrought-iron gates of Ravenwood Manor.]", expression: "Neutral" },
-        { id: "line-2", speaker: "Astrid", text: "Are you sure we should do this? It's completely abandoned...", expression: "Surprise" },
-        { id: "line-3", speaker: "Jack", text: "Don't back out now, Astrid.", expression: "Neutral" }
-      ],
-      choices: [
-        { id: "choice-1", text: "Search the dusty gardener's shed", targetNodeId: "node-shed" },
-        { id: "choice-2", text: "Climb through the broken cellar window", targetNodeId: "node-cellar-climb", condition: { variableName: "courage", operator: ">=", value: 12 } }
-      ],
+      id: "node-start", title: "Manor Front Gates", description: "Astrid and Jack stand in the pouring rain.", speaker: "Narrator",
+      dialogueLines: [{ id: "line-1", speaker: "Narrator", text: "[The rain drums heavily against the rusty gates.]", expression: "Neutral" }],
+      choices: [{ id: "choice-1", text: "Search the gardener's shed", targetNodeId: "node-shed" }],
       statChanges: [{ variableName: "courage", operation: "+", value: 5 }],
-      position: { x: 100, y: 150 },
-      isEnding: false
+      position: { x: 100, y: 150 }, isEnding: false, nodeType: "story"
     },
     "node-shed": {
-      id: "node-shed",
-      title: "Dusty Gardener Shed",
-      description: "You search through old spades and rusty chains.",
-      speaker: "Narrator",
-      dialogueLines: [
-        { id: "line-s1", speaker: "Narrator", text: "[Spiders scramble away as you slide open the creaky wooden drawer.]", expression: "Neutral" },
-        { id: "line-s2", speaker: "Astrid", text: "Jack! Look under that old spade. There's a bronze skeleton key!", expression: "Smile" }
-      ],
-      choices: [{ id: "choice-s1", text: "Return to Gates and Unlock Foyer", targetNodeId: "node-hallway" }],
-      statChanges: [{ variableName: "has_old_key", operation: "=", value: true }],
-      position: { x: 420, y: 80 },
-      isEnding: false
-    },
-    "node-cellar-climb": {
-      id: "node-cellar-climb",
-      title: "Shattered Cellar Window",
-      description: "Using your agility, you leap over the broken glass.",
-      speaker: "Narrator",
-      dialogueLines: [
-        { id: "line-c1", speaker: "Narrator", text: "[You scale the mossy brickwork and land with a splash inside a dark basement vault.]", expression: "Neutral" },
-        { id: "line-c2", speaker: "Jack", text: "Phew, that was close!", expression: "Smile" }
-      ],
-      choices: [{ id: "choice-c1", text: "Head upstairs to the Grand Hallway", targetNodeId: "node-hallway" }],
-      statChanges: [{ variableName: "courage", operation: "+", value: 10 }, { variableName: "affection_astrid", operation: "+", value: 5 }],
-      position: { x: 420, y: 340 },
-      isEnding: false
+      id: "node-shed", title: "Dusty Gardener Shed", description: "You search through old spades.", speaker: "Narrator",
+      dialogueLines: [{ id: "line-s1", speaker: "Narrator", text: "[Spiders scramble away.]", expression: "Neutral" }],
+      choices: [{ id: "choice-s1", text: "Return to Gates", targetNodeId: "node-hallway" }],
+      statChanges: [], position: { x: 420, y: 80 }, isEnding: false, nodeType: "story"
     },
     "node-hallway": {
-      id: "node-hallway",
-      title: "Grand Manor Foyer",
-      description: "You gather inside the silent, dust-laden hallway.",
-      speaker: "Narrator",
-      dialogueLines: [
-        { id: "line-h1", speaker: "Narrator", text: "[The temperature drops instantly.]", expression: "Neutral" },
-        { id: "line-h2", speaker: "Astrid", text: "Jack! Behind the grandfather clock! What is that light...?", expression: "Serious" }
-      ],
+      id: "node-hallway", title: "Grand Manor Foyer", description: "Inside the manor.", speaker: "Narrator",
+      dialogueLines: [{ id: "line-h1", speaker: "Narrator", text: "[The temperature drops instantly.]", expression: "Neutral" }],
       choices: [
-        { id: "choice-h1", text: "Step forward to shield Astrid", targetNodeId: "node-good-end" },
-        { id: "choice-h2", text: "Panic and bolt back outside", targetNodeId: "node-bad-end" }
+        { id: "choice-h1", text: "Step forward", targetNodeId: "node-good-end" },
+        { id: "choice-h2", text: "Bolt back outside", targetNodeId: "node-bad-end" }
       ],
-      statChanges: [{ variableName: "encountered_specter", operation: "=", value: true }],
-      position: { x: 740, y: 220 },
-      isEnding: false
+      statChanges: [], position: { x: 740, y: 220 }, isEnding: false, nodeType: "story"
     },
     "node-good-end": {
-      id: "node-good-end",
-      title: "Heroic Sanctuary",
-      description: "You step bravely before Astrid.",
-      speaker: "Astrid",
-      dialogueLines: [
-        { id: "line-g1", speaker: "Astrid", text: "Jack... you stood up for me! Thank you!", expression: "Smile" }
-      ],
-      choices: [],
-      statChanges: [{ variableName: "affection_astrid", operation: "+", value: 20 }],
-      position: { x: 1060, y: 120 },
-      isEnding: true,
-      endingType: "GOOD",
-      endingName: "True Manor Protectors"
+      id: "node-good-end", title: "Heroic Sanctuary", description: "You step bravely forward.", speaker: "Astrid",
+      dialogueLines: [{ id: "line-g1", speaker: "Astrid", text: "Thank you!", expression: "Smile" }],
+      choices: [], statChanges: [], position: { x: 1060, y: 120 },
+      isEnding: true, endingType: "GOOD", endingName: "True Protectors", nodeType: "story"
     },
     "node-bad-end": {
-      id: "node-bad-end",
-      title: "Lost in Terror",
-      description: "Fleeing in panic, you leave Astrid behind.",
-      speaker: "Narrator",
-      dialogueLines: [
-        { id: "line-b1", speaker: "Narrator", text: "[The wind howls as you stumble out onto the muddy lawns.]", expression: "Neutral" }
-      ],
-      choices: [],
-      statChanges: [{ variableName: "courage", operation: "-", value: 5 }],
-      position: { x: 1060, y: 320 },
-      isEnding: true,
-      endingType: "BAD",
-      endingName: "Locked Out Forever"
+      id: "node-bad-end", title: "Lost in Terror", description: "Fleeing in panic.", speaker: "Narrator",
+      dialogueLines: [{ id: "line-b1", speaker: "Narrator", text: "[You stumble out into the storm.]", expression: "Neutral" }],
+      choices: [], statChanges: [], position: { x: 1060, y: 320 },
+      isEnding: true, endingType: "BAD", endingName: "Locked Out", nodeType: "story"
     }
   }
 };
 
 export default function App() {
-  const [project, setProject] = useState<VNProject>(() => {
-    const saved = localStorage.getItem("storyweaver_vn_project");
-    if (!saved) return DEFAULT_PROJECT;
-    try {
-      return migrateProject(JSON.parse(saved));
-    } catch {
-      return DEFAULT_PROJECT;
-    }
-  });
+  const [project, setProject] = useState<VNProject>(BLANK_PROJECT);
+  const [loading, setLoading] = useState(true);
+  const [currentFileName, setCurrentFileName] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"storyboard" | "trackers" | "flags" | "items" | "entities">("storyboard");
+  const [activeTab, setActiveTab] = useState<"storyboard" | "stats" | "flags" | "items" | "entities">("storyboard");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("node-start");
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
   const [centerNodeTrigger, setCenterNodeTrigger] = useState<{ id: string; timestamp: number } | null>(null);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [editorWidth, setEditorWidth] = useState(420);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [backupDialogOpen, setBackupDialogOpen] = useState(false);
@@ -173,38 +142,71 @@ export default function App() {
     return () => window.removeEventListener("unhandledrejection", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  // Async init: load projects from disk, or migrate from localStorage, or start blank
+  useEffect(() => {
+    (async () => {
+      try {
+        const files = await listProjectFiles();
+        if (files.length > 0) {
+          const proj = await loadProject(files[0]);
+          setProject(proj);
+          setCurrentFileName(files[0]);
+        } else {
+          const migrated = await migrateFromLocalStorage();
+          if (migrated) {
+            const proj = await loadProject(migrated);
+            setProject(proj);
+            setCurrentFileName(migrated);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load project files", e);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Auto-save to disk (debounced)
+  useEffect(() => {
+    if (loading) return;
+    const timer = setTimeout(async () => {
+      try {
+        const name = await saveProject(project, currentFileName || undefined);
+        if (!currentFileName) setCurrentFileName(name);
+      } catch (e) {
+        console.error("Auto-save failed", e);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [project, loading]);
+
+  // Web fallback: also save to localStorage
+  useEffect(() => {
+    if (loading) return;
+    localStorage.setItem("storyweaver_vn_project", JSON.stringify(project));
+  }, [project, loading]);
+
   const handleFileId = useCallback((fileId: string) => {
     setProject(prev => ({ ...prev, driveFileId: fileId }));
   }, []);
 
   const { status: syncStatus, syncNow } = useDriveSync(project, handleFileId);
 
-  const [allProjects, setAllProjects] = useState<VNProject[]>(() => {
-    const savedList = localStorage.getItem("storyweaver_all_projects");
-    if (savedList) {
-      try {
-        return JSON.parse(savedList).map(migrateProject);
-      } catch {
-        return [project];
-      }
-    }
-    return [project];
-  });
+  const [allProjects, setAllProjects] = useState<VNProject[]>([]);
 
   useEffect(() => {
-    setAllProjects((prev) => {
-      const idx = prev.findIndex((p) => p.id === project.id);
-      let updated;
-      if (idx >= 0) {
-        updated = [...prev];
-        updated[idx] = project;
-      } else {
-        updated = [...prev, project];
-      }
-      localStorage.setItem("storyweaver_all_projects", JSON.stringify(updated));
-      return updated;
-    });
-    localStorage.setItem("storyweaver_vn_project", JSON.stringify(project));
+    setAllProjects([project]);
   }, [project]);
 
   const handleUpdateProject = (updatedProject: VNProject) => {
@@ -215,22 +217,23 @@ export default function App() {
     const name = prompt("Enter the name of your new Visual Novel project:");
     if (!name || !name.trim()) return;
 
+    if (type === "template") {
+      const template: VNProject = { ...RAVENWOOD_TEMPLATE, id: crypto.randomUUID(), name: name.trim(), lastModified: Date.now() };
+      setProject(template);
+      setSelectedNodeId("node-start");
+      setIsProjectsModalOpen(false);
+      return;
+    }
+
     const newProj: VNProject = {
       id: crypto.randomUUID(),
       schemaVersion: 2,
       name: name.trim(),
-      description: type === "blank"
-        ? "A newly created blank visual novel story canvas."
-        : "A branching visual novel mystery template.",
+      description: "A newly created blank visual novel story canvas.",
       startNodeId: "node-start",
       lastModified: Date.now(),
-      entities: type === "blank" ? [] : [
-        { id: "char-1", name: "Astrid", color: "#818cf8", displayId: "ENT-001", description: "Companion and enigmatic ally." }
-      ],
-      trackers: type === "blank" ? [] : [
-        { id: crypto.randomUUID(), name: "courage", defaultValue: 10, displayId: "TRK-001", description: "Unlocks bolder options." },
-        { id: crypto.randomUUID(), name: "affection", defaultValue: 0, displayId: "TRK-002", description: "Relationship affinity tracker." }
-      ],
+      entities: [],
+      trackers: [],
       flags: [],
       inventory: [],
       scenes: [],
@@ -238,17 +241,14 @@ export default function App() {
         "node-start": {
           id: "node-start",
           title: "The Beginning",
-          description: type === "blank"
-            ? "Your story starts here."
-            : "A chilling draft sweep across the grand parlor.",
+          description: "Your story starts here. Double-click the canvas to create new scene nodes.",
           speaker: "Narrator",
-          dialogueLines: type === "blank" ? [] : [
-            { id: "line-1", speaker: "Narrator", text: "You have arrived. The story has yet to unfold." }
-          ],
+          dialogueLines: [],
           choices: [],
           statChanges: [],
           position: { x: 300, y: 150 },
           isEnding: false,
+          nodeType: "story",
         }
       }
     };
@@ -258,23 +258,28 @@ export default function App() {
     setIsProjectsModalOpen(false);
   };
 
-  const handleDeleteProject = (projId: string, e: React.MouseEvent) => {
+  const handleDeleteProject = async (projId: string, projName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (allProjects.length <= 1) {
-      alert("You must keep at least one project!");
-      return;
-    }
-    if (!confirm("Are you sure you want to delete this project? This action cannot be undone.")) return;
-    const remaining = allProjects.filter((p) => p.id !== projId);
-    setAllProjects(remaining);
-    localStorage.setItem("storyweaver_all_projects", JSON.stringify(remaining));
-    if (project.id === projId) {
-      setProject(remaining[0]);
-      setSelectedNodeId(remaining[0].startNodeId);
-    }
+    if (!confirm("Are you sure you want to delete this project?")) return;
+    try {
+      await deleteProjectFile(`${projName.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100)}.chrysanthemum`);
+    } catch { /* file may not exist */ }
+    setAllProjects(prev => {
+      const next = prev.filter(p => p.id !== projId);
+      if (next.length === 0) {
+        const blank = { ...BLANK_PROJECT, id: crypto.randomUUID() };
+        setProject(blank);
+        setSelectedNodeId("node-start");
+      } else if (project.id === projId) {
+        setProject(next[0]);
+        setSelectedNodeId(next[0].startNodeId);
+      }
+      return next.length ? next : [project];
+    });
   };
 
-  const handleSelectProject = (proj: VNProject) => {
+  const handleSelectProject = async (proj: VNProject) => {
+    try { await saveProject(project, currentFileName || undefined); } catch {}
     setProject(proj);
     setSelectedNodeId(proj.startNodeId);
     setIsProjectsModalOpen(false);
@@ -313,10 +318,56 @@ export default function App() {
 
   const handleResetProject = () => {
     if (confirm("Reset to default template?")) {
-      setProject(DEFAULT_PROJECT);
+      setProject({ ...BLANK_PROJECT, id: crypto.randomUUID() });
       setSelectedNodeId("node-start");
       setActiveTab("storyboard");
     }
+  };
+
+  const handleAddLocation = () => {
+    const newId = crypto.randomUUID();
+    const newNode: StoryNode = {
+      id: newId,
+      title: "New Location",
+      description: "A location in your world.",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: { x: 100, y: 500 },
+      isEnding: false,
+      nodeType: "location",
+      locationData: { openTime: "any", inventory: [], tags: [] },
+    };
+    setProject({
+      ...project,
+      nodes: { ...project.nodes, [newId]: newNode },
+      lastModified: Date.now(),
+    });
+    setSelectedNodeId(newId);
+  };
+
+  const handleAddEncounter = () => {
+    const newId = crypto.randomUUID();
+    const newNode: StoryNode = {
+      id: newId,
+      title: "New Encounter",
+      description: "An enemy encounter.",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: { x: 100, y: 700 },
+      isEnding: false,
+      nodeType: "encounter",
+      encounterData: { enemyName: "Enemy", hp: 10, attack: 5, defense: 2, drops: [], tags: [] },
+    };
+    setProject({
+      ...project,
+      nodes: { ...project.nodes, [newId]: newNode },
+      lastModified: Date.now(),
+    });
+    setSelectedNodeId(newId);
   };
 
   const handleAddBlankNode = () => {
@@ -332,6 +383,7 @@ export default function App() {
       statChanges: [],
       position: { x: 200, y: 250 },
       isEnding: false,
+      nodeType: "story",
     };
     setProject({
       ...project,
@@ -357,6 +409,14 @@ export default function App() {
   const flagCount = project.flags.length;
   const itemCount = project.inventory.length;
   const entityCount = project.entities.length;
+
+  if (loading) {
+    return (
+      <div className="h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-slate-400 text-sm font-mono animate-pulse">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 overflow-hidden font-sans text-slate-800" id="app-root-container">
@@ -412,7 +472,7 @@ export default function App() {
         </div>
         <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
           <button onClick={handleExportJSON} className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all border border-slate-700 hover:border-slate-600 flex items-center gap-1.5 cursor-pointer">
-            <Download className="w-3.5 h-3.5" /> Export Blueprint
+            <Download className="w-3.5 h-3.5" /> Export Story
           </button>
           <SyncIndicator status={syncStatus} onSyncNow={syncNow} />
           {project.driveFolderId && (
@@ -434,8 +494,8 @@ export default function App() {
           <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
             <Layers className="w-4 h-4 text-indigo-500" /> Storyboard
           </button>
-          <button onClick={() => setActiveTab("trackers")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "trackers" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Sliders className="w-4 h-4 text-emerald-500" /> Trackers ({trackerCount})
+          <button onClick={() => setActiveTab("stats")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "stats" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
+            <Sliders className="w-4 h-4 text-emerald-500" /> Stats ({trackerCount})
           </button>
           <button onClick={() => setActiveTab("flags")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "flags" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
             <Flag className="w-4 h-4 text-amber-500" /> Flags ({flagCount})
@@ -447,11 +507,6 @@ export default function App() {
             <Users className="w-4 h-4 text-indigo-500" /> Entities ({entityCount})
           </button>
         </div>
-        {activeTab === "storyboard" && (
-          <button onClick={handleAddBlankNode} className="py-1.5 px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs rounded-xl hover:bg-indigo-100 transition-colors flex items-center gap-1 cursor-pointer">
-            <Plus className="w-4 h-4" /> Add Scene Point
-          </button>
-        )}
       </div>
 
       <main className="flex-1 overflow-hidden">
@@ -461,7 +516,7 @@ export default function App() {
               project={project}
               onUpdateProject={handleUpdateProject}
               selectedNodeId={selectedNodeId}
-              onSelectNode={setSelectedNodeId}
+              onSelectNode={(id) => { setSelectedNodeId(id); if (id) setRightSidebarOpen(true); }}
               hiddenFolderIds={hiddenFolderIds}
               onToggleFolderVisibility={(sceneId: string) => {
                 setHiddenFolderIds(prev => prev.includes(sceneId) ? prev.filter(id => id !== sceneId) : [...prev, sceneId]);
@@ -473,23 +528,39 @@ export default function App() {
                 project={project}
                 onUpdateProject={handleUpdateProject}
                 selectedNodeId={selectedNodeId}
-                onSelectNode={setSelectedNodeId}
+                onSelectNode={(id) => { setSelectedNodeId(id); if (id) setRightSidebarOpen(true); }}
                 onEnterPlaytest={(id) => setPlaytestStartId(id)}
                 hiddenFolderIds={hiddenFolderIds}
                 centerNodeTrigger={centerNodeTrigger}
+                onCanvasBackgroundClick={() => setRightSidebarOpen(false)}
+                onAddBlankNode={handleAddBlankNode}
+                onAddLocation={handleAddLocation}
+                onAddEncounter={handleAddEncounter}
               />
             </div>
-            <div className="h-full shrink-0 bg-slate-900" style={{ width: 420 }}>
-              <NodeEditor
-                project={project}
-                selectedNodeId={selectedNodeId || ""}
-                onUpdateProject={handleUpdateProject}
-                onSelectNode={setSelectedNodeId}
-              />
-            </div>
+            {rightSidebarOpen ? (
+              <div className="h-full shrink-0 bg-slate-900" style={{ width: editorWidth }}>
+                <NodeEditor
+                  project={project}
+                  selectedNodeId={selectedNodeId || ""}
+                  onUpdateProject={handleUpdateProject}
+                  onSelectNode={setSelectedNodeId}
+                  editorWidth={editorWidth}
+                  onResizeEditor={setEditorWidth}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setRightSidebarOpen(true)}
+                className="w-8 h-full bg-slate-900 border-l border-slate-800 flex items-center justify-center hover:bg-slate-800 cursor-pointer shrink-0"
+                title="Open Node Editor"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-400" />
+              </button>
+            )}
           </div>
         )}
-        {activeTab === "trackers" && <TrackersManager project={project} onUpdateProject={handleUpdateProject} />}
+        {activeTab === "stats" && <TrackersManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "flags" && <FlagsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "items" && <ItemsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "entities" && <EntitiesManager project={project} onUpdateProject={handleUpdateProject} />}
@@ -515,7 +586,7 @@ export default function App() {
                   {proj.id === project.id ? (
                     <span className="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">Active</span>
                   ) : (
-                    <button onClick={(e) => handleDeleteProject(proj.id, e)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded cursor-pointer transition-all">X</button>
+                    <button onClick={(e) => handleDeleteProject(proj.id, proj.name, e)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded cursor-pointer transition-all">X</button>
                   )}
                 </div>
               ))}
@@ -534,6 +605,19 @@ export default function App() {
 
       {isSettingsOpen && (
         <SettingsDialog project={project} onClose={() => setIsSettingsOpen(false)} user={user} signIn={signIn} signOut={signOut} />
+      )}
+
+      {searchOpen && (
+        <SearchPalette
+          project={project}
+          onSelectNode={(id) => {
+            setSelectedNodeId(id);
+            setCenterNodeTrigger({ id, timestamp: Date.now() });
+            setRightSidebarOpen(true);
+          }}
+          onSwitchTab={(tab) => setActiveTab(tab as any)}
+          onClose={() => setSearchOpen(false)}
+        />
       )}
     </div>
   );

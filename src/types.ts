@@ -33,6 +33,8 @@ export interface VNEntity {
   color: string;
   description?: string;
   displayId?: string;
+  tags: string[];
+  stats?: Record<string, number>;
 }
 
 export interface VNTracker {
@@ -56,6 +58,7 @@ export interface VNItem {
   name: string;
   description?: string;
   displayId?: string;
+  tags: string[];
 }
 
 export interface InlineEffect {
@@ -100,6 +103,43 @@ export interface DialogueLine {
   expression?: string;
 }
 
+export interface LocationItem {
+  itemId: string;
+  price: number;
+}
+
+export interface EncounterDrop {
+  itemId: string;
+  chance: number;
+  quantity: number;
+}
+
+export interface LocationData {
+  openTime: "day" | "night" | "any";
+  statusFlagId?: string;
+  inventory: LocationItem[];
+  tags: string[];
+}
+
+export interface EncounterData {
+  enemyName: string;
+  hp: number;
+  attack: number;
+  defense: number;
+  drops: EncounterDrop[];
+  onWinNodeId?: string;
+  onLoseNodeId?: string;
+  onFleeNodeId?: string;
+  tags: string[];
+}
+
+export interface StoryBeatTrigger {
+  source: "flag" | "tracker";
+  targetId: string;
+  expect?: boolean;
+  min?: number;
+}
+
 export interface StoryNode {
   id: string;
   title: string;
@@ -116,6 +156,10 @@ export interface StoryNode {
   displayId?: string;
   order?: number;
   dialogueTimeline?: DialogueBlock[];
+  nodeType: "story" | "location" | "encounter";
+  locationData?: LocationData;
+  encounterData?: EncounterData;
+  trigger?: StoryBeatTrigger;
 }
 
 export interface NodeLock {

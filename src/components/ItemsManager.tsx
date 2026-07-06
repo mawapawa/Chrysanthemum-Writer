@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { VNProject, VNItem } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
 import { Plus, Trash2, Package } from "lucide-react";
+import TagInput from "./TagInput";
 
 interface ItemsManagerProps {
   project: VNProject;
@@ -14,8 +15,10 @@ interface ItemsManagerProps {
 }
 
 export default function ItemsManager({ project, onUpdateProject }: ItemsManagerProps) {
+  const allItemTags = [...new Set(project.inventory.flatMap(i => i.tags))];
   const [itemName, setItemName] = useState("");
   const [description, setDescription] = useState("");
+  const [formTags, setFormTags] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [itemToConfirmDelete, setItemToConfirmDelete] = useState<string | null>(null);
   const itemConfirmRef = useRef<HTMLDivElement>(null);
@@ -52,6 +55,7 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
       displayId: generateDisplayId("ITM"),
       name: cleanName,
       description: description.trim() || undefined,
+      tags: [...formTags],
     };
 
     onUpdateProject({
@@ -62,6 +66,7 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
 
     setItemName("");
     setDescription("");
+    setFormTags([]);
   };
 
   const handleDeleteItem = (idToDelete: string) => {
@@ -122,6 +127,16 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
             />
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Tags</label>
+            <TagInput
+              tags={formTags}
+              onChange={setFormTags}
+              existingTags={allItemTags}
+              placeholder="Add tag and press Enter..."
+            />
+          </div>
+
           <button
             type="submit"
             className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer"
@@ -176,6 +191,15 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
                       <p className="text-xs text-gray-600 leading-relaxed mt-1">{item.description}</p>
                     ) : (
                       <p className="text-xs text-gray-400 italic">No description provided.</p>
+                    )}
+                    {item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {item.tags.map(tag => (
+                          <span key={tag} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

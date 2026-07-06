@@ -16,6 +16,10 @@ interface FlowchartCanvasProps {
   onEnterPlaytest: (startId: string) => void;
   hiddenFolderIds?: string[];
   centerNodeTrigger?: { id: string; timestamp: number } | null;
+  onCanvasBackgroundClick?: () => void;
+  onAddBlankNode?: () => void;
+  onAddLocation?: () => void;
+  onAddEncounter?: () => void;
 }
 
 export default function FlowchartCanvas({
@@ -26,12 +30,17 @@ export default function FlowchartCanvas({
   onEnterPlaytest,
   hiddenFolderIds = [],
   centerNodeTrigger = null,
+  onCanvasBackgroundClick,
+  onAddBlankNode,
+  onAddLocation,
+  onAddEncounter,
 }: FlowchartCanvasProps) {
   // Canvas viewing transformations
   const [pan, setPan] = useState({ x: 100, y: 100 });
   const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0 });
+  const wasDragged = useRef(false);
 
   // Node dragging state
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
@@ -138,6 +147,7 @@ export default function FlowchartCanvas({
       statChanges: [],
       position: { x, y },
       isEnding: false,
+      nodeType: "story",
       sceneId: undefined,
     };
 
@@ -159,11 +169,13 @@ export default function FlowchartCanvas({
     if ((e.target as HTMLElement).closest(".node-card") || (e.target as HTMLElement).closest(".canvas-btn")) return;
 
     setIsPanning(true);
+    wasDragged.current = false;
     panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning) {
+      wasDragged.current = true;
       setPan({
         x: e.clientX - panStart.current.x,
         y: e.clientY - panStart.current.y,
@@ -190,6 +202,15 @@ export default function FlowchartCanvas({
   };
 
   const handleMouseUp = () => {
+    const wasDrag = wasDragged.current;
+    setIsPanning(false);
+    setDraggedNodeId(null);
+    if (!wasDrag) {
+      onCanvasBackgroundClick?.();
+    }
+  };
+
+  const handleCanvasMouseLeave = () => {
     setIsPanning(false);
     setDraggedNodeId(null);
   };
@@ -365,6 +386,7 @@ export default function FlowchartCanvas({
       statChanges: [],
       position: { x: newChildX, y: newChildY },
       isEnding: false,
+      nodeType: "story",
       sceneId: parentNode.sceneId, // inherit scene folder from parent node!
     };
 
@@ -398,7 +420,7 @@ export default function FlowchartCanvas({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleCanvasMouseLeave}
         onDoubleClick={handleCanvasDoubleClick}
         className="absolute inset-0 cursor-grab active:cursor-grabbing overflow-hidden"
         style={{
@@ -466,7 +488,7 @@ export default function FlowchartCanvas({
                 pathD = `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
               }
 
-              const isConditioned = !!choice.condition;
+              const isConditioned = !!(choice.condition || choice.requirement);
 
               if (targetVisible) {
                 // Case 1: both visible — normal line
@@ -506,7 +528,7 @@ export default function FlowchartCanvas({
               .filter(c => c.targetNodeId && visibleNodesMap.has(c.targetNodeId))
               .map((choice) => {
                 const targetNode = project.nodes[choice.targetNodeId!]!;
-                const isConditioned = !!choice.condition;
+                const isConditioned = !!(choice.condition || choice.requirement);
                 const color = isConditioned ? "#d97706" : "#6366f1";
 
                 let stubStartX: number, stubStartY: number, stubEndX: number, stubEndY: number;
@@ -573,6 +595,13 @@ export default function FlowchartCanvas({
                     Story Entrypoint
                   </div>
                 )}
+                {node.nodeType && node.nodeType !== "story" && (
+                  <div className={`text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono ${
+                    node.nodeType === "location" ? "bg-amber-500/20 text-amber-300" : "bg-rose-500/20 text-rose-300"
+                  }`}>
+                    {node.nodeType === "location" ? "🏪 Location Card" : "⚔️ Encounter"}
+                  </div>
+                )}
                 {node.isEnding && (
                   <div
                     className={`text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono ${
@@ -637,6 +666,27 @@ export default function FlowchartCanvas({
                   <p className="text-[10px] text-slate-400 line-clamp-3 mb-2 leading-relaxed">
                     {node.description || <span className="italic opacity-60">No plot details set yet.</span>}
                   </p>
+
+                  {node.nodeType === "location" && node.locationData && (
+                    <div className="mt-2 space-y-0.5">
+                      <div className="text-[9px] text-amber-300 font-mono">Items: {node.locationData.inventory.length} | Open: {node.locationData.openTime}</div>
+                      {node.locationData.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {node.locationData.tags.map(tag => (
+                            <span key={tag} className="px-1 py-0.5 rounded text-[8px] bg-amber-500/10 text-amber-400">{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {node.nodeType === "encounter" && node.encounterData && (
+                    <div className="mt-2 space-y-0.5">
+                      <div className="text-[9px] text-rose-300 font-mono">Enemy: {node.encounterData.enemyName}</div>
+                      <div className="text-[8px] text-slate-400 font-mono">
+                        HP:{node.encounterData.hp} ATK:{node.encounterData.attack} DEF:{node.encounterData.defense}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Node variables modifications indicators */}
                   {node.statChanges.length > 0 && (
@@ -726,6 +776,36 @@ export default function FlowchartCanvas({
         >
           <Crosshair className="w-4 h-4" />
         </button>
+        {onAddBlankNode && (
+          <>
+            <div className="w-[1px] h-5 bg-slate-800 mx-1" />
+            <button
+              onClick={onAddBlankNode}
+              className="canvas-btn p-2 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              title="Add Scene Point"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            {onAddLocation && (
+              <button
+                onClick={onAddLocation}
+                className="canvas-btn p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                title="Add Location Card"
+              >
+                🏪
+              </button>
+            )}
+            {onAddEncounter && (
+              <button
+                onClick={onAddEncounter}
+                className="canvas-btn p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                title="Add Encounter Card"
+              >
+                ⚔️
+              </button>
+            )}
+          </>
+        )}
         <button
           onClick={() => {
             const nextDir = flowDirection === "horizontal" ? "vertical" : "horizontal";

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { VNEntity, VNItem, VNFlag } from "../types";
+import { VNEntity, VNItem, VNFlag, VNTracker } from "../types";
 
 interface ContextMenuProps {
   x: number;
@@ -13,9 +13,11 @@ interface ContextMenuProps {
   onApplyStyle: (style: string) => void;
   onApplyColor: (color: string) => void;
   onRemoveEffects: () => void;
+  onAdjustTracker: (trackerId: string, operation: string, value: number, trackerName: string) => void;
   entities: VNEntity[];
   inventory: VNItem[];
   flags: VNFlag[];
+  trackers: VNTracker[];
 }
 
 type MenuLevel =
@@ -25,7 +27,7 @@ type MenuLevel =
   | "gearGive"
   | "gearTake"
   | "flags"
-  | "flagsRequire"
+  | "adjustStat"
   | "style"
   | "color";
 
@@ -46,8 +48,8 @@ const COLOR_PRESETS: { label: string; hex: string }[] = [
 function ContextMenu({
   x, y, selectedText, onClose,
   onAssignSpeaker, onGiveItem, onTakeItem, onRequireFlag,
-  onApplyStyle, onApplyColor, onRemoveEffects,
-  entities, inventory, flags,
+  onApplyStyle, onApplyColor, onRemoveEffects, onAdjustTracker,
+  entities, inventory, flags, trackers,
 }: ContextMenuProps) {
   const [level, setLevel] = useState<MenuLevel>("main");
   const [customHex, setCustomHex] = useState("");
@@ -93,8 +95,9 @@ function ContextMenu({
         return (
           <>
             {menuItem("📝 Assign Speaker...", () => setLevel("speaker"), true)}
-            {menuItem("🎒 Player Gear...", () => setLevel("gear"), true)}
+            {menuItem("🎒 Items...", () => setLevel("gear"), true)}
             {menuItem("🏁 Flag...", () => setLevel("flags"), true)}
+            {menuItem("📊 Adjust Stat...", () => setLevel("adjustStat"), true)}
             {divider()}
             {menuItem("🎨 Text Style...", () => setLevel("style"), true)}
             {menuItem("🎨 Text Color...", () => setLevel("color"), true)}
@@ -152,6 +155,26 @@ function ContextMenu({
               <div className="px-3 py-2 text-[10px] text-slate-500 italic">No flags defined</div>
             )}
             {flags.map(f => menuItem(`${f.name} (${f.defaultValue ? "on" : "off"})`, () => { onRequireFlag(f.id, f.name); close(); }))}
+          </>
+        );
+
+      case "adjustStat":
+        return (
+          <>
+            {backItem()}
+            {trackers.length === 0 && (
+              <div className="px-3 py-2 text-[10px] text-slate-500 italic">No trackers defined</div>
+            )}
+            {trackers.map(t => (
+              <div key={t.id} className="px-2 py-1">
+                <div className="text-[10px] text-slate-400 mb-0.5">{t.name}</div>
+                <div className="flex gap-1">
+                  <button onClick={() => { onAdjustTracker(t.id, "set", t.defaultValue, t.name); close(); }} className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300 rounded cursor-pointer">Set = {t.defaultValue}</button>
+                  <button onClick={() => { onAdjustTracker(t.id, "add", 1, t.name); close(); }} className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300 rounded cursor-pointer">+1</button>
+                  <button onClick={() => { onAdjustTracker(t.id, "subtract", 1, t.name); close(); }} className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300 rounded cursor-pointer">-1</button>
+                </div>
+              </div>
+            ))}
           </>
         );
 

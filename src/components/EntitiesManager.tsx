@@ -1,28 +1,15 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useRef, useEffect } from "react";
 import { VNProject, VNEntity } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
-import { Plus, Trash2, Users, Check } from "lucide-react";
+import { Plus, Trash2, Users, Check, Edit2 } from "lucide-react";
+import TagInput from "./TagInput";
 
 interface EntitiesManagerProps {
   project: VNProject;
   onUpdateProject: (project: VNProject) => void;
 }
 
-const ENTITY_PALETTE_COLORS = [
-  "#f43f5e",
-  "#3b82f6",
-  "#10b981",
-  "#a855f7",
-  "#f59e0b",
-  "#ea580c",
-  "#ec4899",
-  "#64748b",
-];
+const ENTITY_PALETTE_COLORS = ["#f43f5e", "#3b82f6", "#10b981", "#a855f7", "#f59e0b", "#ea580c", "#ec4899", "#64748b"];
 
 function textColorForHex(hex: string): string {
   const val = parseInt(hex.replace("#", ""), 16);
@@ -31,11 +18,15 @@ function textColorForHex(hex: string): string {
 }
 
 export default function EntitiesManager({ project, onUpdateProject }: EntitiesManagerProps) {
+  const allEntityTags = [...new Set(project.entities.flatMap(e => e.tags))];
+  const [editingEntity, setEditingEntity] = useState<VNEntity | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(ENTITY_PALETTE_COLORS[0]);
   const [useCustomHex, setUseCustomHex] = useState(false);
   const [customHex, setCustomHex] = useState("#");
   const [description, setDescription] = useState("");
+  const [formTags, setFormTags] = useState<string[]>([]);
+  const [formStats, setFormStats] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [entityToConfirmDelete, setEntityToConfirmDelete] = useState<string | null>(null);
   const entityConfirmRef = useRef<HTMLDivElement>(null);
@@ -52,22 +43,53 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     }
   }, [entityToConfirmDelete]);
 
-  const handleAddEntity = (e: React.FormEvent) => {
+  const resetForm = () => {
+    setName("");
+    setColor(ENTITY_PALETTE_COLORS[0]);
+    setUseCustomHex(false);
+    setCustomHex("#");
+    setDescription("");
+    setFormTags([]);
+    setFormStats({});
+    setError(null);
+    setEditingEntity(null);
+  };
+
+  const startEdit = (entity: VNEntity) => {
+    setEditingEntity(entity);
+    setName(entity.name);
+    setColor(entity.color);
+    setUseCustomHex(false);
+    setCustomHex("#");
+    setDescription(entity.description || "");
+    setFormTags([...entity.tags]);
+    setFormStats(entity.stats ? { ...entity.stats } : {});
+    setError(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
     const cleanName = name.trim();
-    if (!cleanName) {
-      setError("Entity name cannot be empty.");
+    if (!cleanName) { setError("Entity name cannot be empty."); return; }
+
+    const finalColor = useCustomHex && /^#[0-9a-fA-F]{6}$/.test(customHex) ? customHex : color;
+
+    if (editingEntity) {
+      const updated = project.entities.map(ent =>
+        ent.id === editingEntity.id
+          ? { ...ent, name: cleanName, color: finalColor, description: description.trim() || undefined, tags: [...formTags], stats: { ...formStats } }
+          : ent
+      );
+      onUpdateProject({ ...project, entities: updated, lastModified: Date.now() });
+      resetForm();
       return;
     }
 
-    if (project.entities.some((ent) => ent.name.toLowerCase() === cleanName.toLowerCase())) {
+    if (project.entities.some(ent => ent.name.toLowerCase() === cleanName.toLowerCase())) {
       setError(`An entity named "${cleanName}" already exists.`);
       return;
     }
-
-    const finalColor = useCustomHex && /^#[0-9a-fA-F]{6}$/.test(customHex) ? customHex : color;
 
     const newEntity: VNEntity = {
       id: crypto.randomUUID(),
@@ -75,6 +97,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
       name: cleanName,
       color: finalColor,
       description: description.trim() || undefined,
+      tags: [...formTags],
     };
 
     onUpdateProject({
@@ -82,162 +105,189 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
       entities: [...project.entities, newEntity],
       lastModified: Date.now(),
     });
-
-    setName("");
-    setDescription("");
+    resetForm();
   };
 
   const handleDeleteEntity = (idToDelete: string) => {
     if (entityToConfirmDelete !== idToDelete) {
       setEntityToConfirmDelete(idToDelete);
-      setTimeout(() => {
-        setEntityToConfirmDelete((current) => (current === idToDelete ? null : current));
-      }, 4000);
+      setTimeout(() => setEntityToConfirmDelete((c) => (c === idToDelete ? null : c)), 4000);
       return;
     }
-
     setEntityToConfirmDelete(null);
     onUpdateProject({
       ...project,
-      entities: project.entities.filter((ent) => ent.id !== idToDelete),
+      entities: project.entities.filter(ent => ent.id !== idToDelete),
       lastModified: Date.now(),
     });
   };
+
+  const addStat = (statName: string) => {
+    if (statName && !(statName in formStats)) {
+      setFormStats(prev => ({ ...prev, [statName]: 0 }));
+    }
+  };
+
+  const unusedStats = project.trackers.filter(t => !(t.name in formStats));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-full overflow-y-auto" id="entities-manager-container">
       <div className="lg:col-span-1 bg-white border border-gray-100 rounded-2xl p-6 shadow-xs h-fit" id="entity-creator-card">
         <div className="flex items-center gap-2 mb-4">
           <Users className="w-5 h-5 text-indigo-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Define Entities</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{editingEntity ? "Edit Entity" : "Define Entities"}</h2>
         </div>
         <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-          Create entities (factions, organizations, or groups) and assign them a color identity for visual distinction.
+          {editingEntity ? `Editing "${editingEntity.name}"` : "Create entities and assign stat overrides."}
         </p>
 
-        <form onSubmit={handleAddEntity} className="space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">{error}</div>}
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Entity Name</label>
-            <input
-              type="text"
-              placeholder="e.g. Forest Guard, Shadow Cabal"
-              value={name}
+            <input type="text" placeholder="e.g. Giant Rat, Astrid" value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
-            />
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Entity Color</label>
+            <label className="block text-xs font-medium text-gray-700 mb-2">Color</label>
             <div className="grid grid-cols-4 gap-2">
-              {ENTITY_PALETTE_COLORS.map((c) => (
-                <button
-                  type="button"
-                  key={c}
-                  onClick={() => { setColor(c); setUseCustomHex(false); }}
+              {ENTITY_PALETTE_COLORS.map(c => (
+                <button key={c} type="button" onClick={() => { setColor(c); setUseCustomHex(false); }}
                   style={{ backgroundColor: c }}
-                  className={`h-10 rounded-xl flex items-center justify-center cursor-pointer transition-transform ${
-                    color === c && !useCustomHex ? "ring-4 ring-indigo-500/35 scale-105" : "hover:scale-102"
-                  }`}
-                >
+                  className={`h-10 rounded-xl flex items-center justify-center cursor-pointer transition-transform ${color === c && !useCustomHex ? "ring-4 ring-indigo-500/35 scale-105" : "hover:scale-102"}`}>
                   {color === c && !useCustomHex && <Check className="w-4 h-4 text-white drop-shadow-md" />}
                 </button>
               ))}
             </div>
             <div className="mt-3">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useCustomHex}
-                  onChange={(e) => setUseCustomHex(e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
-                />
+                <input type="checkbox" checked={useCustomHex} onChange={(e) => setUseCustomHex(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded" />
                 <span>Use Custom Hex Code</span>
               </label>
               {useCustomHex && (
-                <input
-                  type="text"
-                  placeholder="#000000"
-                  value={customHex}
+                <input type="text" placeholder="#000000" value={customHex}
                   onChange={(e) => setCustomHex(e.target.value)}
-                  className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                  className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Description (Optional)</label>
-            <textarea
-              placeholder="e.g. A secret organization pulling the strings from the shadows."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+            <textarea placeholder="e.g. A giant rat found in the sewers." value={description}
+              onChange={(e) => setDescription(e.target.value)} rows={2}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add Entity
-          </button>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Tags</label>
+            <TagInput tags={formTags} onChange={setFormTags} existingTags={allEntityTags} placeholder="Add tag and press Enter..." />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-700">Stat Overrides</label>
+              {unusedStats.length > 0 && (
+                <select value="" onChange={(e) => { if (e.target.value) addStat(e.target.value); }}
+                  className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1 py-0.5 text-gray-600 cursor-pointer">
+                  <option value="">+ Add Stat</option>
+                  {unusedStats.map(s => <option key={s.name} value={s.name}>{s.name} (default: {s.defaultValue})</option>)}
+                </select>
+              )}
+            </div>
+            {Object.keys(formStats).length === 0 && (
+              <p className="text-[11px] text-gray-400 italic">No stat overrides. Add stats from the Stats tab.</p>
+            )}
+            {Object.entries(formStats).map(([statName, val]) => {
+              const def = project.trackers.find(t => t.name === statName)?.defaultValue ?? 0;
+              return (
+                <div key={statName} className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-100 mb-1">
+                  <span className="text-xs font-semibold text-gray-700 w-20 truncate">{statName}</span>
+                  <input type="number" value={val}
+                    onChange={(e) => setFormStats(prev => ({ ...prev, [statName]: parseInt(e.target.value) || 0 }))}
+                    className="w-16 bg-white border border-gray-200 text-xs rounded p-0.5 text-center" />
+                  <span className="text-[9px] text-gray-400">(default: {def})</span>
+                  <button type="button" onClick={() => {
+                    const next = { ...formStats };
+                    delete next[statName];
+                    setFormStats(next);
+                  }} className="text-rose-400 hover:text-rose-600 text-xs ml-auto cursor-pointer">✕</button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit"
+              className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer">
+              {editingEntity ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editingEntity ? "Update Entity" : "Add Entity"}
+            </button>
+            {editingEntity && (
+              <button type="button" onClick={resetForm}
+                className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium text-sm rounded-xl cursor-pointer">
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
       <div className="lg:col-span-2 space-y-6" id="entity-list-panel">
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-xs" id="entity-list-card">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Entity Registry</h2>
-
           {project.entities.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-100 rounded-xl">
               <Users className="w-10 h-10 text-gray-300 mb-3" />
               <p className="text-sm font-medium text-gray-500">No entities defined yet</p>
-              <p className="text-xs text-gray-400 mt-1 text-center">
-                Create entities like factions, guilds, or organizations to populate your story world.
-              </p>
+              <p className="text-xs text-gray-400 mt-1">Create entities to populate your story world.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {project.entities.map((entity) => (
-                <div
-                  key={entity.id}
-                  className="p-4 border border-gray-100 rounded-2xl bg-gray-50/50 flex flex-col justify-between"
-                  id={`entity-card-${entity.id}`}
-                >
+                <div key={entity.id} className="p-4 border border-gray-100 rounded-2xl bg-gray-50/50 flex flex-col justify-between" id={`entity-card-${entity.id}`}>
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${textColorForHex(entity.color)}`} style={{ backgroundColor: entity.color }}>
                         {entity.name}
                       </span>
-                      <div ref={entityConfirmRef}>
-                        <button
-                          onClick={() => handleDeleteEntity(entity.id)}
-                          className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${
-                            entityToConfirmDelete === entity.id
-                              ? "bg-red-600 hover:bg-red-700 border-red-500 text-white animate-pulse"
-                              : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"
-                          }`}
-                          title={entityToConfirmDelete === entity.id ? "Click again to confirm deletion" : "Remove entity"}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          {entityToConfirmDelete === entity.id && <span>Confirm?</span>}
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => startEdit(entity)}
+                          className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer" title="Edit entity">
+                          <Edit2 className="w-3.5 h-3.5" />
                         </button>
+                        <div ref={entityConfirmRef}>
+                          <button onClick={() => handleDeleteEntity(entity.id)}
+                            className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${entityToConfirmDelete === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
+                            title={entityToConfirmDelete === entity.id ? "Click again to confirm" : "Delete entity"}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            {entityToConfirmDelete === entity.id && <span className="text-[9px]">Confirm?</span>}
+                          </button>
+                        </div>
                       </div>
                     </div>
                     {entity.description ? (
                       <p className="text-xs text-gray-600 leading-relaxed mt-1">{entity.description}</p>
                     ) : (
-                      <p className="text-xs text-gray-400 italic">No description provided.</p>
+                      <p className="text-xs text-gray-400 italic">No description.</p>
+                    )}
+                    {entity.stats && Object.keys(entity.stats).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {Object.entries(entity.stats).map(([k, v]) => (
+                          <span key={k} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700">{k}: {v}</span>
+                        ))}
+                      </div>
+                    )}
+                    {entity.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {entity.tags.map(tag => (
+                          <span key={tag} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">{tag}</span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

@@ -89,10 +89,10 @@ export default function TrackersManager({ project, onUpdateProject }: TrackersMa
       <div className="lg:col-span-1 bg-white border border-gray-100 rounded-2xl p-6 shadow-xs h-fit" id="tracker-creator-card">
         <div className="flex items-center gap-2 mb-4">
           <Sliders className="w-5 h-5 text-indigo-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Define Trackers</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Define Stats</h2>
         </div>
         <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-          Create numeric trackers to keep score of player stats, resources, or progression through your story.
+          Create numeric stats to track player resources, attributes, and progression.
         </p>
 
         <form onSubmit={handleAddTracker} className="space-y-4">
@@ -103,7 +103,7 @@ export default function TrackersManager({ project, onUpdateProject }: TrackersMa
           )}
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Tracker Name</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Stat Name</label>
             <input
               type="text"
               placeholder="e.g. Courage, Gold, Relationship"
@@ -140,21 +140,21 @@ export default function TrackersManager({ project, onUpdateProject }: TrackersMa
             className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Add Tracker
+            Add Stat
           </button>
         </form>
       </div>
 
       <div className="lg:col-span-2 space-y-6" id="tracker-list-panel">
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-xs" id="tracker-list-card">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Trackers Registry</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Stats Registry</h2>
 
           {project.trackers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-100 rounded-xl">
               <Sliders className="w-10 h-10 text-gray-300 mb-3" />
-              <p className="text-sm font-medium text-gray-500">No trackers defined yet</p>
+              <p className="text-sm font-medium text-gray-500">No stats defined yet</p>
               <p className="text-xs text-gray-400 mt-1 text-center">
-                Create numeric trackers for player stats, resources, and story progression.
+                Create numeric stats for player resources, attributes, and story progression.
               </p>
             </div>
           ) : (
@@ -183,7 +183,7 @@ export default function TrackersManager({ project, onUpdateProject }: TrackersMa
                             ? "bg-red-600 hover:bg-red-700 border-red-500 text-white animate-pulse"
                             : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"
                         }`}
-                        title={trackerToConfirmDelete === tracker.id ? "Click again to confirm deletion" : "Delete tracker"}
+                        title={trackerToConfirmDelete === tracker.id ? "Click again to confirm" : "Delete stat"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         {trackerToConfirmDelete === tracker.id && <span>Confirm?</span>}

@@ -17,6 +17,7 @@ fn cancel_oauth_server(port: u16) -> Result<(), String> {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_oauth::init())
     .setup(|app| {
       if cfg!(debug_assertions) {

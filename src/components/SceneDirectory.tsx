@@ -165,6 +165,7 @@ export default function SceneDirectory({
       statChanges: [],
       position: { x: 200 + Math.random() * 50, y: 250 + Math.random() * 50 },
       isEnding: false,
+      nodeType: "story",
       sceneId: sceneId,
       order: folderNodes.length,
     };

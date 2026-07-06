@@ -9,6 +9,7 @@ export function migrateProject(project: VNProject & Record<string, unknown>): VN
     color: c.color || "#64748b",
     description: c.description,
     displayId: c.displayId,
+    tags: (c as any).tags || [],
   }));
 
   const allVars = (project.variables || []) as VNProject["variables"];
@@ -37,6 +38,7 @@ export function migrateProject(project: VNProject & Record<string, unknown>): VN
     name: i.name,
     description: i.description,
     displayId: i.displayId,
+    tags: i.tags || [],
   }));
 
   const result: VNProject & Record<string, unknown> = {

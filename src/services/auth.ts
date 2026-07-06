@@ -12,7 +12,7 @@ export interface TokenStore {
 }
 
 const CLIENT_ID = "1056893092259-lpjbsnuopvfcdkejn0h4rcvq5qfv1hbl.apps.googleusercontent.com";
-const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? "";
+const CLIENT_SECRET = "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";
 const REDIRECT_URI = `${window.location.origin}/oauth/callback`;
 const SCOPES = "openid https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
 const TOKEN_KEY = "chrysanthemum_tokens";
@@ -88,9 +88,6 @@ async function refreshAccessToken(refreshToken: string): Promise<TokenStore> {
 }
 
 async function exchangeCode(code: string, codeVerifier: string, redirectUri?: string): Promise<TokenStore> {
-  console.log("[AUTH] exchangeCode — exchanging code");
-  console.log("[AUTH] exchangeCode — codeVerifier length:", codeVerifier.length);
-  console.log("[AUTH] exchangeCode — redirect_uri:", redirectUri ?? REDIRECT_URI);
   const resp = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -104,8 +101,6 @@ async function exchangeCode(code: string, codeVerifier: string, redirectUri?: st
     }),
   });
   const text = await resp.text();
-  console.log("[AUTH] exchangeCode status:", resp.status);
-  console.log("[AUTH] exchangeCode raw response:", text);
   if (!resp.ok) {
     throw new Error(`[AUTH] exchangeCode failed (${resp.status}): ${text}`);
   }
@@ -125,13 +120,10 @@ async function exchangeCode(code: string, codeVerifier: string, redirectUri?: st
 }
 
 async function fetchUserInfo(accessToken: string): Promise<AuthUser> {
-  console.log("[AUTH] fetchUserInfo — fetching");
   const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const text = await resp.text();
-  console.log("[AUTH] userinfo status:", resp.status);
-  console.log("[AUTH] userinfo raw response:", text);
   if (!resp.ok) {
     throw new Error(`[AUTH] fetchUserInfo failed (${resp.status}): ${text}`);
   }
@@ -248,7 +240,6 @@ async function signInTauri(): Promise<AuthUser> {
   const redirectUri = `http://127.0.0.1:${port}/callback`;
 
   const codeVerifier = generateCodeVerifier();
-  console.log("[AUTH] codeVerifier length:", codeVerifier.length);
   const codeChallenge = base64UrlEncode(await sha256(codeVerifier));
 
   const authUrl = await buildAuthUrl(redirectUri, codeChallenge);
@@ -274,8 +265,6 @@ async function signInTauri(): Promise<AuthUser> {
     listen<string>("oauth_redirect", async (event) => {
       if (settled) return;
       clearTimeout(timeout);
-      console.log("[AUTH] oauth_redirect received");
-      console.log("[AUTH] payload:", event.payload);
       try {
         const url = new URL(event.payload);
         const code = url.searchParams.get("code");
