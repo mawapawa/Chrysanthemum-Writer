@@ -1,4 +1,4 @@
-import { appDataDir } from "@tauri-apps/api/path";
+import { appDataDir, documentDir } from "@tauri-apps/api/path";
 import { readTextFile, writeTextFile, exists, mkdir, readDir, remove } from "@tauri-apps/plugin-fs";
 import { VNProject } from "../types";
 import { migrateProject } from "../utils/schemaMigration";
@@ -10,8 +10,8 @@ function sanitize(name: string): string {
 }
 
 async function ensureDataDir(): Promise<string> {
-  const base = await appDataDir();
-  const dir = `${base}\\${DATA_DIR}`;
+  const base = await documentDir();
+  const dir = `${base}\\Chrysanthemum\\${DATA_DIR}`;
   if (!(await exists(dir))) {
     await mkdir(dir, { recursive: true });
   }
@@ -64,4 +64,25 @@ export function isTauri(): boolean {
 
 export function fileNameForProject(project: VNProject): string {
   return `${sanitize(project.name)}.chrysanthemum`;
+}
+
+export async function migrateFromOldPath(): Promise<void> {
+  try {
+    const oldBase = await appDataDir();
+    const oldDir = `${oldBase}\\${DATA_DIR}`;
+    const newBase = await documentDir();
+    const newDir = `${newBase}\\Chrysanthemum\\${DATA_DIR}`;
+    if (!(await exists(oldDir))) return;
+    if (await exists(newDir)) return;
+    const entries = await readDir(oldDir);
+    const chrysanthemumFiles = entries.filter(e => e.name?.endsWith(".chrysanthemum"));
+    if (chrysanthemumFiles.length === 0) return;
+    await mkdir(newDir, { recursive: true });
+    for (const entry of chrysanthemumFiles) {
+      try {
+        const content = await readTextFile(`${oldDir}\\${entry.name}`);
+        await writeTextFile(`${newDir}\\${entry.name}`, content);
+      } catch { /* skip individual file errors */ }
+    }
+  } catch { /* migration is best-effort */ }
 }

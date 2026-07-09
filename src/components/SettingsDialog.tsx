@@ -9,9 +9,11 @@ interface SettingsDialogProps {
   user: AuthUser | null;
   signIn: () => Promise<AuthUser>;
   signOut: () => Promise<void>;
+  onOpenTutorial?: () => void;
+  onExportProject?: () => void;
 }
 
-export default function SettingsDialog({ project, onClose, user, signIn, signOut }: SettingsDialogProps) {
+export default function SettingsDialog({ project, onClose, user, signIn, signOut, onOpenTutorial, onExportProject }: SettingsDialogProps) {
   const { status, syncNow } = useDriveSync(project);
 
   return (
@@ -92,13 +94,36 @@ export default function SettingsDialog({ project, onClose, user, signIn, signOut
           </div>
         </div>
 
+        {/* Export */}
+        <div>
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Export</h3>
+          <div className="bg-slate-800/50 rounded-xl p-3 flex items-center justify-between">
+            <p className="text-xs text-slate-300">Download project as JSON file</p>
+            <button onClick={() => { onExportProject?.(); onClose(); }}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer">
+              Download
+            </button>
+          </div>
+        </div>
+
+        {/* Help */}
+        <div>
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Help</h3>
+          <div className="bg-slate-800/50 rounded-xl p-3">
+            <button onClick={() => { onClose(); onOpenTutorial?.(); }}
+              className="w-full py-2 px-3 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-xl cursor-pointer">
+              📚 View Tutorial
+            </button>
+          </div>
+        </div>
+
         {/* About */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">About</h3>
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-sm font-bold text-slate-200">Chrysanthemum</p>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">Version 0.1.0</p>
-            <p className="text-xs text-slate-500 font-mono">Schema Version 1</p>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">Version 0.2.0</p>
+            <p className="text-xs text-slate-500 font-mono">Built with Tauri + React</p>
           </div>
         </div>
       </div>

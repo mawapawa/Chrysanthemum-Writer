@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, DialogueBlock, NodeLock } from "../types";
+import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, NodeLock } from "../types";
 import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
 import ScriptEditor from "./ScriptEditor";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import LocationEditor from "./LocationEditor";
 import EncounterEditor from "./EncounterEditor";
 
@@ -48,6 +49,11 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
 
   const [choiceToConfirmDelete, setChoiceToConfirmDelete] = useState<string | null>(null);
   const choiceConfirmRef = useRef<HTMLDivElement>(null);
+  const [dialogueSpeaker, setDialogueSpeaker] = useState("Narrator");
+  const [dialogueExpression, setDialogueExpression] = useState("Neutral");
+  const [dialogueHTML, setDialogueHTML] = useState("");
+  const [editingLineIdx, setEditingLineIdx] = useState<number | null>(null);
+  const [lineToConfirmDelete, setLineToConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -151,12 +157,16 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     });
   };
 
-  const handleAddEffect = (choiceId: string, type: "give_item" | "take_item") => {
-    if (project.inventory.length === 0) { alert("No items defined."); return; }
+  const handleAddEffect = (choiceId: string, type: "give_item" | "take_item" | "adjust_tracker" | "set_flag" | "clear_flag") => {
+    if ((type === "give_item" || type === "take_item") && project.inventory.length === 0) { alert("No items defined."); return; }
+    if (type === "adjust_tracker" && project.trackers.length === 0) { alert("No stats defined."); return; }
+    if ((type === "set_flag" || type === "clear_flag") && project.flags.length === 0) { alert("No milestones defined."); return; }
     const effect: InlineEffect = {
       id: crypto.randomUUID(),
       type,
-      targetId: project.inventory[0].id,
+      targetId: type === "adjust_tracker" ? project.trackers[0].id : type === "set_flag" || type === "clear_flag" ? project.flags[0].id : project.inventory[0].id,
+      ...(type === "adjust_tracker" ? { operation: "add" as const, value: 1 } : {}),
+      ...(type === "set_flag" ? { flagValue: true } : {}),
     };
     const choice = node.choices.find(c => c.id === choiceId);
     const existing = choice?.effects || [];
@@ -175,16 +185,6 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     if (choice?.effects) {
       handleUpdateChoice(choiceId, { effects: choice.effects.map(e => e.id === effectId ? { ...e, ...fields } : e) });
     }
-  };
-
-  const convertDialogueLines = (lines: DialogueLine[]): DialogueBlock[] => {
-    return lines.map(l => ({
-      id: l.id,
-      speaker: l.speaker,
-      text: l.text,
-      expression: l.expression,
-      effects: [],
-    }));
   };
 
   const resizeRef = useRef<HTMLDivElement>(null);
@@ -325,241 +325,268 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
 
         {/* 📝 Script & Dialogue Editor */}
         <CollapsibleSection title="📝 Script & Dialogue Editor" defaultExpanded={true}>
-          <ScriptEditor
-            key={selectedNodeId}
-            project={project}
-            nodeId={selectedNodeId}
-            dialogueTimeline={node.dialogueTimeline ?? convertDialogueLines(node.dialogueLines)}
-            onUpdateTimeline={(blocks) => updateNode({ dialogueTimeline: blocks })}
-            onCreateNode={(title: string) => {
-              const newId = crypto.randomUUID();
-              const newNode: StoryNode = {
-                id: newId, title, description: "", speaker: "Narrator",
-                dialogueLines: [], choices: [], statChanges: [],
-                position: { x: 200 + Math.random() * 100, y: 250 + Math.random() * 100 },
-                isEnding: false, nodeType: "story", sceneId: project.nodes[selectedNodeId || ""]?.sceneId,
-              };
-              onUpdateProject({
-                ...project,
-                nodes: { ...project.nodes, [newId]: newNode },
-                lastModified: Date.now(),
-              });
-              return newId;
-            }}
-            onSelectNode={onSelectNode}
-          />
+          <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
+            {node.dialogueLines.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic py-2 text-center">No dialogue yet. Write below and click "Add Line".</p>
+            ) : (
+              node.dialogueLines.map((line, idx) => {
+                const entity = project.entities.find(e => e.name === line.speaker);
+                const color = entity?.color || "#64748b";
+                const textColor = entity ? (() => {
+                  const val = parseInt(color.replace("#", ""), 16);
+                  const r = (val >> 16) & 0xff, g = (val >> 8) & 0xff, b = val & 0xff;
+                  return (r * 0.299 + g * 0.587 + b * 0.114) > 160 ? "text-slate-950" : "text-white";
+                })() : "text-white";
+                return (
+                  <div key={line.id} className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs ${editingLineIdx === idx ? "bg-indigo-950/40 border-indigo-500/40" : "bg-slate-900 border-slate-800/40"}`}>
+                    <span className="text-slate-500 cursor-grab text-[10px] select-none">⠿</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 max-w-[65px] truncate ${textColor}`} style={{ backgroundColor: color }}>
+                      {line.speaker}
+                    </span>
+                    <span className="text-slate-300 flex-1 truncate text-[11px]">
+                      {line.speaker === "Narrator" ? line.text : `"${line.text}"`}
+                    </span>
+                    <button onClick={() => {
+                      setDialogueSpeaker(line.speaker);
+                      setDialogueExpression(line.expression || "Neutral");
+                      setDialogueHTML(line.formattedText || "");
+                      setEditingLineIdx(idx);
+                    }} className="p-0.5 text-slate-500 hover:text-indigo-400 cursor-pointer text-[10px]" title="Edit line">✏️</button>
+                    <button onClick={() => {
+                      if (lineToConfirmDelete === line.id) {
+                        updateNode({ dialogueLines: node.dialogueLines.filter(l => l.id !== line.id) });
+                        setLineToConfirmDelete(null);
+                      } else {
+                        setLineToConfirmDelete(line.id);
+                        setTimeout(() => setLineToConfirmDelete(c => c === line.id ? null : c), 3000);
+                      }
+                    }} className={`p-0.5 cursor-pointer text-[10px] ${lineToConfirmDelete === line.id ? "text-rose-400 animate-pulse" : "text-slate-500 hover:text-rose-400"}`} title={lineToConfirmDelete === line.id ? "Confirm delete" : "Delete line"}>
+                      {lineToConfirmDelete === line.id ? "✕" : "🗑"}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex gap-2 mb-2">
+            <select value={dialogueSpeaker} onChange={(e) => setDialogueSpeaker(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-800 text-[11px] text-slate-200 rounded-lg p-1.5">
+              <option value="Narrator">Narrator</option>
+              {project.entities.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+            </select>
+            <select value={dialogueExpression} onChange={(e) => setDialogueExpression(e.target.value)}
+              className="w-28 bg-slate-900 border border-slate-800 text-[11px] text-slate-200 rounded-lg p-1.5">
+              <option value="Neutral">Neutral</option>
+              <option value="Smile">Smile</option>
+              <option value="Surprise">Surprise</option>
+              <option value="Serious">Serious</option>
+              <option value="Sad">Sad</option>
+              <option value="Angry">Angry</option>
+            </select>
+          </div>
+
+          <div className="flex gap-1.5">
+            <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+              <ScriptEditor
+                initialContent={dialogueHTML}
+                onChange={(html) => setDialogueHTML(html)}
+                placeholder="Write dialogue..."
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button onClick={() => {
+                const cleanHTML = dialogueHTML || `<p>${(node.title || "Dialogue")}</p>`;
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(cleanHTML, "text/html");
+                const plainText = doc.body.textContent || "";
+                if (editingLineIdx !== null) {
+                  const updated = [...node.dialogueLines];
+                  updated[editingLineIdx] = { ...updated[editingLineIdx], speaker: dialogueSpeaker, expression: dialogueExpression, text: plainText, formattedText: cleanHTML };
+                  updateNode({ dialogueLines: updated });
+                  setEditingLineIdx(null);
+                } else {
+                  const newLine: DialogueLine = { id: crypto.randomUUID(), speaker: dialogueSpeaker, text: plainText, expression: dialogueExpression, formattedText: cleanHTML };
+                  updateNode({ dialogueLines: [...node.dialogueLines, newLine] });
+                }
+                setDialogueHTML("");
+              }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2 rounded-lg cursor-pointer shrink-0">
+                {editingLineIdx !== null ? "Save" : "Add"}
+              </button>
+              {editingLineIdx !== null && (
+                <button onClick={() => { setEditingLineIdx(null); setDialogueHTML(""); }}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-2 rounded-lg cursor-pointer shrink-0">
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
         </CollapsibleSection>
 
         {/* 🔒 Choice Trees & Requirements */}
-        <CollapsibleSection title="🔒 Choice Trees & Requirements" defaultExpanded={false}>
+        <CollapsibleSection title="🔒 Choice Trees & Requirements" defaultExpanded={node.choices.length > 0}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1.5">
               <ListPlus className="w-4 h-4 text-indigo-400" />
-              <label className="text-xs font-semibold text-slate-400">Story branch choices ({node.choices.length})</label>
+              <label className="text-xs font-semibold text-slate-400">Choices ({node.choices.length})</label>
             </div>
-            <button
-              onClick={handleAddChoice}
-              className="text-[10px] font-mono font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3 h-3" /> Add Choice
+            <button onClick={handleAddChoice} className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer">
+              <Plus className="w-3 h-3 inline" /> Add
             </button>
           </div>
 
           {node.choices.length === 0 ? (
             <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 rounded-xl text-[11px] leading-relaxed">
-              ⚠️ <strong>Dead End Warn:</strong> This node does not branch. Unless this is marked as a story ending above, players will be locked out and unable to progress further here.
+              ⚠️ Dead end. Add a choice or mark as ending above.
             </div>
           ) : (
             <div className="space-y-4">
               {node.choices.map((choice) => {
                 const targetNode = project.nodes[choice.targetNodeId];
                 return (
-                  <div key={choice.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2" id={`edit-choice-${choice.id}`}>
+                  <div key={choice.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <input
-                        type="text"
-                        value={choice.text}
-                        onChange={(e) => handleUpdateChoice(choice.id, { text: e.target.value })}
+                      <input type="text" value={choice.text} onChange={(e) => handleUpdateChoice(choice.id, { text: e.target.value })}
                         className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-semibold flex-1 focus:outline-none"
-                        placeholder="Choice text (e.g., Run out of the room)"
-                      />
-                      <div ref={choiceConfirmRef}>
-                        <button
-                          onClick={() => handleDeleteChoice(choice.id)}
-                          className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${
-                            choiceToConfirmDelete === choice.id
-                              ? "bg-red-600 hover:bg-red-700 border-red-500 text-white animate-pulse"
-                              : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"
-                          }`}
-                          title={choiceToConfirmDelete === choice.id ? "Click again to confirm deletion" : "Delete choice"}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          {choiceToConfirmDelete === choice.id && <span className="text-[9px]">Confirm?</span>}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[9px] text-slate-500 mb-0.5 font-mono">DESTINATION NODE</label>
-                        <select
-                          value={choice.targetNodeId}
-                          onChange={(e) => handleUpdateChoice(choice.id, { targetNodeId: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-800 text-[11px] text-slate-200 rounded-lg p-1 cursor-pointer"
-                        >
-                          <option value="">-- Disconnected --</option>
-                          {Object.values(project.nodes).map((n) => (
-                            <option key={n.id} value={n.id}>
-                              {n.title} ({n.id.substring(0, 5)})
-                            </option>
-                          ))}
+                        placeholder="Choice text..." />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] text-slate-500 font-mono">→</span>
+                        <select value={choice.targetNodeId} onChange={(e) => handleUpdateChoice(choice.id, { targetNodeId: e.target.value })}
+                          className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 max-w-[130px]">
+                          <option value="">-- None --</option>
+                          {Object.values(project.nodes).map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
                         </select>
-                      </div>
-
-                      <div className="flex items-end justify-end gap-1 pb-0.5">
-                        <button
-                          onClick={() => handleAddEffect(choice.id, "give_item")}
-                          className="px-1.5 py-1 bg-slate-900 border border-slate-800 text-[9px] text-slate-400 hover:text-white rounded-md cursor-pointer font-semibold"
-                        >
-                          🎒 + Give Item
-                        </button>
-                        <button
-                          onClick={() => handleAddEffect(choice.id, "take_item")}
-                          className="px-1.5 py-1 bg-slate-900 border border-slate-800 text-[9px] text-slate-400 hover:text-white rounded-md cursor-pointer font-semibold"
-                        >
-                          🎒 + Take Item
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Requirement card */}
-                    <div className="flex items-start gap-2">
-                      {!choice.requirement ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleAddRequirement(choice.id, "flag")}
-                            className="px-1.5 py-1 bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-400 hover:text-white rounded-md cursor-pointer font-semibold"
-                          >
-                            🔒 Require Milestone
-                          </button>
-                          <button
-                            onClick={() => handleAddRequirement(choice.id, "tracker")}
-                            className="px-1.5 py-1 bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-400 hover:text-white rounded-md cursor-pointer font-semibold"
-                          >
-                            🔒 Require Tracker
+                        <div ref={choiceConfirmRef}>
+                          <button onClick={() => handleDeleteChoice(choice.id)}
+                            className={`text-xs px-2 py-1 rounded-lg cursor-pointer border font-bold ${choiceToConfirmDelete === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
+                            {choiceToConfirmDelete === choice.id ? "Confirm?" : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
                         </div>
-                      ) : (
-                        <div className="flex-1 p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[8px] font-bold text-amber-400 uppercase tracking-wider">Requirement</span>
-                            <button
-                              onClick={() => handleRemoveRequirement(choice.id)}
-                              className="text-amber-400 hover:text-rose-400 text-[9px] cursor-pointer"
-                            >
-                              ✕ Remove
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs">
+                      </div>
+                    </div>
+
+                    {/* Rewards */}
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-[9px] text-indigo-400 font-semibold">Rewards</span>
+                        {(!choice.effects || choice.effects.length === 0) && (
+                          <span className="text-[9px] text-slate-600 italic">— none</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(choice.effects || []).map((ef) => {
+                          if (ef.type === "give_item" || ef.type === "take_item") {
+                            const item = project.inventory.find(i => i.id === ef.targetId);
+                            return (
+                              <span key={ef.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
+                                {ef.type === "give_item" ? "🎒" : "➖"}{" "}
+                                <select value={ef.targetId} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
+                                  className="bg-transparent text-indigo-300 focus:outline-none cursor-pointer text-[9px]">
+                                  {project.inventory.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                </select>
+                                <button onClick={() => handleRemoveEffect(choice.id, ef.id)} className="text-indigo-400 hover:text-indigo-200">✕</button>
+                              </span>
+                            );
+                          }
+                          if (ef.type === "adjust_tracker") {
+                            const tracker = project.trackers.find(t => t.id === ef.targetId);
+                            return (
+                              <span key={ef.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                                ❤️
+                                <select value={ef.targetId} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
+                                  className="bg-transparent text-emerald-300 focus:outline-none cursor-pointer text-[9px]">
+                                  {project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                                <select value={ef.operation || "add"} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { operation: e.target.value as any })}
+                                  className="bg-transparent text-emerald-300 focus:outline-none cursor-pointer text-[9px]">
+                                  <option value="add">+</option>
+                                  <option value="subtract">-</option>
+                                  <option value="set">=</option>
+                                </select>
+                                <input type="number" value={ef.value ?? 1} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { value: parseInt(e.target.value) || 0 })}
+                                  className="w-10 bg-slate-800 text-emerald-300 text-[9px] text-center rounded p-0.5" />
+                                <button onClick={() => handleRemoveEffect(choice.id, ef.id)} className="text-emerald-400 hover:text-emerald-200">✕</button>
+                              </span>
+                            );
+                          }
+                          if (ef.type === "set_flag" || ef.type === "clear_flag") {
+                            const flag = project.flags.find(f => f.id === ef.targetId);
+                            return (
+                              <span key={ef.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                                {ef.type === "set_flag" ? "🏁" : "🏳️"}{" "}
+                                <select value={ef.targetId} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
+                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
+                                  {project.flags.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                </select>
+                                <span className="text-[9px] text-amber-400">{ef.type === "set_flag" ? "✔" : "✘"}</span>
+                                <button onClick={() => handleRemoveEffect(choice.id, ef.id)} className="text-amber-400 hover:text-amber-200">✕</button>
+                              </span>
+                            );
+                          }
+                          return null;
+                        })}
+                        <select value="" onChange={(e) => { if (e.target.value) { handleAddEffect(choice.id, e.target.value as any); } }}
+                          className="text-[9px] bg-slate-900 border border-slate-800 text-slate-400 rounded px-1 py-0.5 cursor-pointer">
+                          <option value="">+ Add Reward</option>
+                          <option value="give_item">🎒 Give Item</option>
+                          <option value="take_item">➖ Take Item</option>
+                          <option value="adjust_tracker">❤️ Adjust Stat</option>
+                          <option value="set_flag">🏁 Set Milestone</option>
+                          <option value="clear_flag">🏳️ Clear Milestone</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Requirements */}
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-[9px] text-amber-400 font-semibold">Requires</span>
+                        {!choice.requirement && <span className="text-[9px] text-slate-600 italic">— none</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {choice.requirement && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                            🔒
                             {choice.requirement.source === "flag" ? (
                               <>
-                                <span className="text-[10px] text-slate-400">Only show if</span>
-                                <select
-                                  value={choice.requirement.targetId}
-                                  onChange={(e) => handleUpdateChoice(choice.id, {
-                                    requirement: { ...choice.requirement!, targetId: e.target.value }
-                                  })}
-                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
-                                >
-                                  {project.flags.map(f => (
-                                    <option key={f.id} value={f.id}>{f.name}</option>
-                                  ))}
+                                <select value={choice.requirement.targetId} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, targetId: e.target.value } })}
+                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
+                                  {project.flags.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                                 </select>
-                                <select
-                                  value={String(choice.requirement.expect ?? true)}
-                                  onChange={(e) => handleUpdateChoice(choice.id, {
-                                    requirement: { ...choice.requirement!, expect: e.target.value === "true" }
-                                  })}
-                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
-                                >
+                                <select value={String(choice.requirement.expect ?? true)} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, expect: e.target.value === "true" } })}
+                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
                                   <option value="true">is checked</option>
                                   <option value="false">is unchecked</option>
                                 </select>
                               </>
                             ) : (
                               <>
-                                <span className="text-[10px] text-slate-400">Only show if</span>
-                                <select
-                                  value={choice.requirement.targetId}
-                                  onChange={(e) => handleUpdateChoice(choice.id, {
-                                    requirement: { ...choice.requirement!, targetId: e.target.value }
-                                  })}
-                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
-                                >
-                                  {project.trackers.map(t => (
-                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                  ))}
+                                <select value={choice.requirement.targetId} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, targetId: e.target.value } })}
+                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
+                                  {project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                 </select>
-                                <select
-                                  value={choice.requirement.operator || ">="}
-                                  onChange={(e) => handleUpdateChoice(choice.id, {
-                                    requirement: { ...choice.requirement!, operator: e.target.value as any }
-                                  })}
-                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
-                                >
-                                  <option value=">=">≥</option>
-                                  <option value="<=">≤</option>
-                                  <option value=">">&gt;</option>
-                                  <option value="<">&lt;</option>
-                                  <option value="==">=</option>
-                                  <option value="!=">≠</option>
+                                <select value={choice.requirement.operator || ">="} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, operator: e.target.value as any } })}
+                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
+                                  <option value=">=">≥</option><option value="<=">≤</option><option value=">">&gt;</option>
+                                  <option value="<">&lt;</option><option value="==">=</option><option value="!=">≠</option>
                                 </select>
-                                <input
-                                  type="number"
-                                  value={choice.requirement.compareValue ?? 1}
-                                  onChange={(e) => handleUpdateChoice(choice.id, {
-                                    requirement: { ...choice.requirement!, compareValue: parseInt(e.target.value) || 0 }
-                                  })}
-                                  className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5 w-12 font-mono text-center"
-                                />
+                                <input type="number" value={choice.requirement.compareValue ?? 1} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, compareValue: parseInt(e.target.value) || 0 } })}
+                                  className="w-10 bg-slate-800 text-amber-300 text-[9px] text-center rounded p-0.5" />
                               </>
                             )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Inline effects */}
-                    {choice.effects && choice.effects.length > 0 && (
-                      <div className="p-2 bg-indigo-500/5 border border-indigo-500/15 rounded-lg space-y-1.5">
-                        <span className="block text-[8px] font-bold text-indigo-400 uppercase tracking-wider">Selection Effects</span>
-                        {choice.effects.map((ef) => {
-                          const matchedItem = project.inventory.find(i => i.id === ef.targetId);
-                          return (
-                            <div key={ef.id} className="flex items-center gap-1.5 text-xs">
-                              <span className="text-[10px] text-slate-400">
-                                {ef.type === "give_item" ? "Give" : "Take"}
-                              </span>
-                              <select
-                                value={ef.targetId}
-                                onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
-                                className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-0.5"
-                              >
-                                {project.inventory.map(i => (
-                                  <option key={i.id} value={i.id}>{i.name}</option>
-                                ))}
-                              </select>
-                              <button
-                                onClick={() => handleRemoveEffect(choice.id, ef.id)}
-                                className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          );
-                        })}
+                            <button onClick={() => handleRemoveRequirement(choice.id)} className="text-amber-400 hover:text-amber-200">✕</button>
+                          </span>
+                        )}
+                        {!choice.requirement && (
+                          <select value="" onChange={(e) => { if (e.target.value === "flag") handleAddRequirement(choice.id, "flag"); if (e.target.value === "tracker") handleAddRequirement(choice.id, "tracker"); }}
+                            className="text-[9px] bg-slate-900 border border-slate-800 text-slate-400 rounded px-1 py-0.5 cursor-pointer">
+                            <option value="">+ Add Requirement</option>
+                            <option value="flag">🔒 Milestone</option>
+                            <option value="tracker">📊 Tracker</option>
+                          </select>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}

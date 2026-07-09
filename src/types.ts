@@ -101,6 +101,7 @@ export interface DialogueLine {
   speaker: string;
   text: string;
   expression?: string;
+  formattedText?: string;
 }
 
 export interface LocationItem {

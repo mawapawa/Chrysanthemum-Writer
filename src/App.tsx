@@ -13,7 +13,7 @@ import FlagsManager from "./components/FlagsManager";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
 import { migrateProject } from "./utils/schemaMigration";
-import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, fileNameForProject } from "./services/fileStore";
+import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath, fileNameForProject } from "./services/fileStore";
 import {
   Sliders, Flag, Package, Users, Download,
   RefreshCw, Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
@@ -123,6 +123,7 @@ export default function App() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [editorWidth, setEditorWidth] = useState(420);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [backupDialogOpen, setBackupDialogOpen] = useState(false);
@@ -157,6 +158,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
+        await migrateFromOldPath();
         const files = await listProjectFiles();
         if (files.length > 0) {
           const proj = await loadProject(files[0]);
@@ -316,14 +318,6 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const handleResetProject = () => {
-    if (confirm("Reset to default template?")) {
-      setProject({ ...BLANK_PROJECT, id: crypto.randomUUID() });
-      setSelectedNodeId("node-start");
-      setActiveTab("storyboard");
-    }
-  };
-
   const handleAddLocation = () => {
     const newId = crypto.randomUUID();
     const newNode: StoryNode = {
@@ -471,18 +465,12 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
-          <button onClick={handleExportJSON} className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all border border-slate-700 hover:border-slate-600 flex items-center gap-1.5 cursor-pointer">
-            <Download className="w-3.5 h-3.5" /> Export Story
-          </button>
           <SyncIndicator status={syncStatus} onSyncNow={syncNow} />
           {project.driveFolderId && (
             <button onClick={() => setBackupDialogOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
               <History className="w-3.5 h-3.5" />
             </button>
           )}
-          <button onClick={handleResetProject} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
           <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
             <Settings className="w-3.5 h-3.5" />
           </button>
@@ -604,7 +592,15 @@ export default function App() {
       )}
 
       {isSettingsOpen && (
-        <SettingsDialog project={project} onClose={() => setIsSettingsOpen(false)} user={user} signIn={signIn} signOut={signOut} />
+        <SettingsDialog
+          project={project}
+          onClose={() => setIsSettingsOpen(false)}
+          user={user}
+          signIn={signIn}
+          signOut={signOut}
+          onOpenTutorial={() => setShowTutorial(true)}
+          onExportProject={handleExportJSON}
+        />
       )}
 
       {searchOpen && (

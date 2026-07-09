@@ -307,11 +307,10 @@ export default function PlaytestSimulator({
     );
   }
 
-  // Active dialogue line (read from dialogueTimeline with dialogueLines fallback)
-  const timeline = node.dialogueTimeline ?? [];
-  const hasDialogue = timeline.length > 0 || (node.dialogueLines?.length ?? 0) > 0;
-  const totalLines = timeline.length > 0 ? timeline.length : (node.dialogueLines?.length ?? 0);
-  const activeLine = timeline.length > 0 ? timeline[lineIdx] : (node.dialogueLines?.[lineIdx] ?? null);
+  // Active dialogue line (from dialogueLines)
+  const hasDialogue = (node.dialogueLines?.length ?? 0) > 0;
+  const totalLines = node.dialogueLines?.length ?? 0;
+  const activeLine = node.dialogueLines?.[lineIdx] ?? null;
 
   // Pre-compute visible choices — single evaluation pass
   const availableChoices = node.choices.filter((choice) => {
@@ -587,7 +586,7 @@ export default function PlaytestSimulator({
           ) : (
             <div className="w-full" id="playtest-story-stage">
               {/* Standard dialogue box player */}
-              <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
+              <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl relative" style={{ minHeight: "160px" }}>
                 
                 {/* Scene Outline Indicator */}
                 <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase">
@@ -609,9 +608,13 @@ export default function PlaytestSimulator({
                         )}
                       </div>
 
-                      <p className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }}>
-                        {(activeLine.speaker === "Narrator" || !activeLine.speaker) ? activeLine.text : `"${activeLine.text}"`}
-                      </p>
+                      {activeLine.formattedText ? (
+                        <div className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }} dangerouslySetInnerHTML={{ __html: activeLine.formattedText }} />
+                      ) : (
+                        <p className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }}>
+                          {(activeLine.speaker === "Narrator" || !activeLine.speaker) ? activeLine.text : `"${activeLine.text}"`}
+                        </p>
+                      )}
                     </div>
 
                     {/* Lines pager */}

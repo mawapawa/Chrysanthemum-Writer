@@ -38,4 +38,11 @@
     opacity: 0.6;
     font-style: italic;
   }
+
+  .text-redacted {
+    background: #000;
+    color: #000;
+    border-radius: 2px;
+    user-select: none;
+  }
 }
