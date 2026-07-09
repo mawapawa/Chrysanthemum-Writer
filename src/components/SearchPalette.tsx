@@ -45,7 +45,7 @@ export default function SearchPalette({ project, onSelectNode, onSwitchTab, onCl
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  });
+  }, [query, selectedIdx, onClose]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

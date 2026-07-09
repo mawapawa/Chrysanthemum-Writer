@@ -74,27 +74,14 @@
 - Type normally to write prose
 - **Right-click** selected text to open the context menu
 
+> **Note:** TipTap is used for text aesthetics only (text style and color marks).
+
 #### Context Menu Actions
 | Menu | What it does |
 |---|---|
-| **📝 Assign Speaker** | Sets the paragraph's speaker badge — pick an entity or Narration |
-| **🎒 Items** | Insert an item chip (Give) or item removal chip (Take) inline |
-| **🏁 Flag** | Insert a flag requirement chip inline (for reference) |
-| **📊 Adjust Stat** | Insert a tracker adjustment chip (Set, +1, -1) |
-| **🎨 Text Style** | Apply visual effects to selected text: Shake, Glitch, Glow, Whisper |
+| **🎨 Text Style** | Apply visual effects to selected text: Shake, Glitch, Glow, Whisper, Redacted |
 | **🎨 Text Color** | Apply color to selected text — presets (Red, Blue, Green, Purple) or custom hex |
 | **✕ Remove Effects** | Strip all text styles and colors from selection |
-
-#### Inline Autocomplete
-| Type | Behavior |
-|---|---|
-| `$trackerName` | Type `$courage` → popup shows matching trackers/flags → Enter inserts chip |
-| `[[Node Title]]` | Type `[[Cellar Key]]` → popup shows existing nodes → Enter links, or offers to create |
-
-#### WikiLink / Chip Styling
-- **Linked text** (via right-click → Assign Speaker or wikilink) shows as colored badge inline
-- **Item chips** show as indigo styled pills inside the text
-- **Styled text** (Shake, Glow, etc.) animates in the editor
 
 ### 🔒 Choice Trees & Requirements
 | Control | Description |
@@ -186,7 +173,7 @@ Results grouped by category. Use ↑↓ to navigate, Enter to open. Esc to close
 | **New From Template** | Click logo → "Mystery Template" |
 | **Switch projects** | Click logo → select from list |
 | **Delete project** | Click logo → hover non-active project → click X |
-| **Auto-save** | Every 2 seconds of inactivity — saved to `{appData}/Data/*.chrysanthemum` |
+| **Auto-save** | Every 2 seconds of inactivity — saved to `{documents}/Chrysanthemum/Data/*.chrysanthemum` |
 | **Export** | "Export Story" button → downloads raw JSON file |
 
 ---
@@ -194,8 +181,8 @@ Results grouped by category. Use ↑↓ to navigate, Enter to open. Esc to close
 ## Local File Storage
 
 Projects are saved as `.chrysanthemum` files in:
-- **Windows:** `C:\Users\{name}\AppData\Roaming\com.chrysanthemum.editor\Data\`
-- **macOS:** `~/Library/Application Support/com.chrysanthemum.editor/Data/`
-- **Linux:** `~/.local/share/com.chrysanthemum.editor/Data/`
+- **Windows:** `C:\Users\{name}\Documents\Chrysanthemum\Data\`
+- **macOS:** `~/Documents/Chrysanthemum/Data/`
+- **Linux:** `~/Documents/Chrysanthemum/Data/`
 
 To back up: copy the entire `Data\` folder. To restore: paste it back.

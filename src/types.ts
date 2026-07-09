@@ -1,4 +1,4 @@
-export interface VNVariable {
+interface VNVariable {
   id?: string;
   name: string;
   type: "number" | "boolean";
@@ -7,7 +7,7 @@ export interface VNVariable {
   displayId?: string;
 }
 
-export interface VNCharacter {
+interface VNCharacter {
   id: string;
   name: string;
   color: string;
@@ -15,7 +15,7 @@ export interface VNCharacter {
   displayId?: string;
 }
 
-export interface ChoiceCondition {
+interface ChoiceCondition {
   variableName: string;
   operator: "==" | "!=" | ">=" | "<=" | ">" | "<";
   value: number | boolean | string;

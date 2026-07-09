@@ -9,30 +9,37 @@ function sanitize(name: string): string {
   return name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
 }
 
-async function ensureDataDir(): Promise<string> {
-  const base = await documentDir();
-  const dir = `${base}\\Chrysanthemum\\${DATA_DIR}`;
-  if (!(await exists(dir))) {
-    await mkdir(dir, { recursive: true });
+async function ensureDataDir(): Promise<string | null> {
+  try {
+    const base = await documentDir();
+    const dir = `${base}\\Chrysanthemum\\${DATA_DIR}`;
+    if (!(await exists(dir))) {
+      await mkdir(dir, { recursive: true });
+    }
+    return dir;
+  } catch {
+    return null;
   }
-  return dir;
 }
 
-export async function saveProject(project: VNProject, fileName?: string): Promise<string> {
+export async function saveProject(project: VNProject, fileName?: string): Promise<string | null> {
   const dir = await ensureDataDir();
+  if (!dir) return null;
   const name = fileName || `${sanitize(project.name)}.chrysanthemum`;
   await writeTextFile(`${dir}\\${name}`, JSON.stringify(project, null, 2));
   return name;
 }
 
-export async function loadProject(fileName: string): Promise<VNProject> {
+export async function loadProject(fileName: string): Promise<VNProject | null> {
   const dir = await ensureDataDir();
+  if (!dir) return null;
   const raw = await readTextFile(`${dir}\\${fileName}`);
   return migrateProject(JSON.parse(raw));
 }
 
 export async function listProjectFiles(): Promise<string[]> {
   const dir = await ensureDataDir();
+  if (!dir) return [];
   const entries = await readDir(dir);
   return entries
     .filter(e => e.name?.endsWith(".chrysanthemum"))
@@ -41,25 +48,33 @@ export async function listProjectFiles(): Promise<string[]> {
 
 export async function deleteProjectFile(fileName: string): Promise<void> {
   const dir = await ensureDataDir();
+  if (!dir) return;
   await remove(`${dir}\\${fileName}`);
 }
 
+export function migrateLocalStorageKeys(): void {
+  const oldVal = localStorage.getItem("storyweaver_vn_project");
+  if (oldVal) {
+    if (!localStorage.getItem("chrysanthemum_project")) {
+      localStorage.setItem("chrysanthemum_project", oldVal);
+    }
+    localStorage.removeItem("storyweaver_vn_project");
+    localStorage.removeItem("storyweaver_all_projects");
+  }
+}
+
 export async function migrateFromLocalStorage(): Promise<string | null> {
-  const saved = localStorage.getItem("storyweaver_vn_project");
+  migrateLocalStorageKeys();
+  const saved = localStorage.getItem("chrysanthemum_project");
   if (!saved) return null;
   try {
     const project = migrateProject(JSON.parse(saved));
     const name = await saveProject(project);
-    localStorage.removeItem("storyweaver_vn_project");
-    localStorage.removeItem("storyweaver_all_projects");
+    localStorage.removeItem("chrysanthemum_project");
     return name;
   } catch {
     return null;
   }
-}
-
-export function isTauri(): boolean {
-  return typeof window !== "undefined" && "isTauri" in window;
 }
 
 export function fileNameForProject(project: VNProject): string {

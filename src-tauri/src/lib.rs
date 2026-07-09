@@ -19,14 +19,12 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_oauth::init())
+    .plugin(
+      tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Warn)
+        .build(),
+    )
     .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![

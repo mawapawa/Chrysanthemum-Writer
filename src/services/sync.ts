@@ -3,13 +3,9 @@ import { saveProjectToDrive, createBackup } from "./drive";
 
 export type SyncStatus = "idle" | "saving" | "syncing" | "error";
 
-export type SyncEventListener = (status: SyncStatus, error?: string) => void;
-
-const listeners: SyncEventListener[] = [];
+const listeners: Array<(status: SyncStatus, error?: string) => void> = [];
 
 let currentStatus: SyncStatus = "idle";
-let lastProject: VNProject | null = null;
-let driveSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 function setStatus(status: SyncStatus, error?: string): void {
   currentStatus = status;
@@ -20,7 +16,7 @@ export function getSyncStatus(): SyncStatus {
   return currentStatus;
 }
 
-export function onSyncStatusChange(fn: SyncEventListener): () => void {
+export function onSyncStatusChange(fn: (status: SyncStatus, error?: string) => void): () => void {
   listeners.push(fn);
   return () => {
     const idx = listeners.indexOf(fn);
@@ -28,20 +24,8 @@ export function onSyncStatusChange(fn: SyncEventListener): () => void {
   };
 }
 
-export function triggerLocalSave(project: VNProject): Promise<string | null> {
-  lastProject = project;
-  setStatus("saving");
-
-  if (driveSyncTimer) clearTimeout(driveSyncTimer);
-  return new Promise<string | null>((resolve) => {
-    driveSyncTimer = setTimeout(async () => {
-      const fileId = await triggerDriveSync(project);
-      resolve(fileId);
-    }, 20000);
-  });
-}
-
 export async function triggerDriveSync(project: VNProject): Promise<string | null> {
+  if (!project.driveFolderId) return null;
   setStatus("syncing");
   try {
     const fileId = await saveProjectToDrive(project);
@@ -54,9 +38,4 @@ export async function triggerDriveSync(project: VNProject): Promise<string | nul
     setStatus("error", "Drive sync failed");
     return null;
   }
-}
-
-export async function triggerFullSync(project: VNProject): Promise<void> {
-  if (driveSyncTimer) clearTimeout(driveSyncTimer);
-  await triggerDriveSync(project);
 }

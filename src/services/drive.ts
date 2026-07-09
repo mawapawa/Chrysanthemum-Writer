@@ -1,7 +1,6 @@
 import { VNProject } from "../types";
 import { getAccessToken } from "./auth";
 
-const DRIVE_FOLDER_ID = "1TPuiVoT45CqMCzomIKg94bXkRzMT5EhV";
 const BACKUP_MAX = 50;
 const API_BASE = "https://www.googleapis.com/drive/v3";
 
@@ -22,25 +21,6 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   return resp.status === 204 ? null : resp.json();
 }
 
-async function ensureProjectFolder(projectName: string): Promise<string> {
-  const folderName = encodeURIComponent(projectName);
-  const resp = await apiFetch(
-    `/files?q=name='${folderName}' and '${DRIVE_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`
-  );
-  if (resp.files?.length > 0) return resp.files[0].id;
-
-  const created = await apiFetch("/files", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: projectName,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [DRIVE_FOLDER_ID],
-    }),
-  });
-  return created.id;
-}
-
 export async function loadProjectFromDrive(fileId: string): Promise<VNProject | null> {
   try {
     const resp = await apiFetch(`/files/${fileId}?alt=media`);
@@ -51,9 +31,13 @@ export async function loadProjectFromDrive(fileId: string): Promise<VNProject | 
 }
 
 export async function saveProjectToDrive(project: VNProject): Promise<string | null> {
+  if (!project.driveFolderId) return null;
   try {
-    const folderId = await ensureProjectFolder(project.name);
+    const folderId = project.driveFolderId;
     const fileContent = JSON.stringify(project, null, 2);
+
+    const sanitizedName = project.name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
+    const fileName = `${sanitizedName}.chrysanthemum`;
 
     if (project.driveFileId) {
       const blob = new Blob([fileContent], { type: "application/json" });
@@ -72,7 +56,7 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
       `--${boundary}`,
       'Content-Type: application/json; charset=UTF-8',
       '',
-      JSON.stringify({ name: "story-project.json", parents: [folderId] }),
+      JSON.stringify({ name: fileName, parents: [folderId] }),
       `--${boundary}`,
       'Content-Type: application/json',
       '',
@@ -96,26 +80,6 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
   } catch {
     return null;
   }
-}
-
-export async function listProjectsInDrive(): Promise<Array<{ id: string; name: string; modified: number }>> {
-  try {
-    const folderName = encodeURIComponent(DRIVE_FOLDER_ID);
-    const resp = await apiFetch(
-      `/files?q='${folderName}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name,modifiedTime)`
-    );
-    return (resp.files || []).map((f: any) => ({
-      id: f.id,
-      name: f.name,
-      modified: new Date(f.modifiedTime).getTime(),
-    }));
-  } catch {
-    return [];
-  }
-}
-
-export async function deleteProjectFromDrive(fileId: string): Promise<void> {
-  await apiFetch(`/files/${fileId}`, { method: "DELETE" });
 }
 
 export async function createBackup(project: VNProject): Promise<void> {
@@ -168,9 +132,8 @@ export async function createBackup(project: VNProject): Promise<void> {
 
 export async function listBackups(driveFolderId: string): Promise<Array<{ id: string; name: string; modified: number }>> {
   try {
-    const folderId = encodeURIComponent(driveFolderId);
     const resp = await apiFetch(
-      `/files?q='${folderId}' in parents and name contains 'backup-' and trashed=false&fields=files(id,name,modifiedTime)&orderBy=createdTime`
+      `/files?q='${driveFolderId}' in parents and name contains 'backup-' and trashed=false&fields=files(id,name,modifiedTime)&orderBy=createdTime`
     );
     return (resp.files || []).map((f: any) => ({
       id: f.id,
@@ -182,4 +145,24 @@ export async function listBackups(driveFolderId: string): Promise<Array<{ id: st
   }
 }
 
-export { DRIVE_FOLDER_ID };
+export async function listUserFolders(): Promise<Array<{ id: string; name: string }>> {
+  try {
+    const resp = await apiFetch(
+      `/files?q=mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)&orderBy=name`
+    );
+    return resp.files || [];
+  } catch {
+    return [];
+  }
+}
+
+export function driveFolderUrl(folderId: string): string {
+  return `https://drive.google.com/drive/folders/${folderId}`;
+}
+
+export function parseFolderIdFromUrl(url: string): string | null {
+  const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+

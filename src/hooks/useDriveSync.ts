@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { VNProject } from "../types";
-import { SyncStatus, getSyncStatus, onSyncStatusChange, triggerLocalSave, triggerDriveSync } from "../services/sync";
+import { SyncStatus, getSyncStatus, onSyncStatusChange, triggerDriveSync } from "../services/sync";
 
 export function useDriveSync(project: VNProject | null, onFileId?: (fileId: string) => void) {
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
@@ -13,10 +13,11 @@ export function useDriveSync(project: VNProject | null, onFileId?: (fileId: stri
   useEffect(() => {
     if (!project) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!project.driveFolderId) return;
     debounceRef.current = setTimeout(async () => {
-      const fileId = await triggerLocalSave(project);
+      const fileId = await triggerDriveSync(project);
       if (fileId) onFileId?.(fileId);
-    }, 2000);
+    }, 5000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };

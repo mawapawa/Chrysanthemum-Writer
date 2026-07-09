@@ -46,6 +46,7 @@ export default function FlowchartCanvas({
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const dragStart = useRef({ x: 0, y: 0 });
   const nodeOffset = useRef({ x: 0, y: 0 });
+  const dragDelta = useRef({ x: 0, y: 0 });
 
   // New connection drawing (visual only or click-to-connect)
   const [connectionSource, setConnectionSource] = useState<{ nodeId: string; choiceId: string } | null>(null);
@@ -181,28 +182,32 @@ export default function FlowchartCanvas({
         y: e.clientY - panStart.current.y,
       });
     } else if (draggedNodeId && project.nodes[draggedNodeId]) {
-      // Scale drag displacement back to canvas coordinate space based on current zoom
-      const deltaX = (e.clientX - dragStart.current.x) / zoom;
-      const deltaY = (e.clientY - dragStart.current.y) / zoom;
-
-      const updatedNodes = { ...project.nodes };
-      updatedNodes[draggedNodeId] = {
-        ...updatedNodes[draggedNodeId],
-        position: {
-          x: Math.round(nodeOffset.current.x + deltaX),
-          y: Math.round(nodeOffset.current.y + deltaY),
-        },
+      wasDragged.current = true;
+      dragDelta.current = {
+        x: (e.clientX - dragStart.current.x) / zoom,
+        y: (e.clientY - dragStart.current.y) / zoom,
       };
-
-      onUpdateProject({
-        ...project,
-        nodes: updatedNodes,
-      });
+      forceUpdate({});
     }
   };
 
   const handleMouseUp = () => {
     const wasDrag = wasDragged.current;
+    if (wasDrag && draggedNodeId) {
+      const node = project.nodes[draggedNodeId];
+      if (node) {
+        const updatedNodes = { ...project.nodes };
+        updatedNodes[draggedNodeId] = {
+          ...node,
+          position: {
+            x: Math.round(nodeOffset.current.x + dragDelta.current.x),
+            y: Math.round(nodeOffset.current.y + dragDelta.current.y),
+          },
+        };
+        onUpdateProject({ ...project, nodes: updatedNodes, lastModified: Date.now() });
+      }
+    }
+    dragDelta.current = { x: 0, y: 0 };
     setIsPanning(false);
     setDraggedNodeId(null);
     if (!wasDrag) {
@@ -575,14 +580,14 @@ export default function FlowchartCanvas({
                   nodeRefs.current[node.id] = el;
                 }}
                 onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
-                className={`node-card absolute pointer-events-auto w-[240px] bg-slate-800 border-2 rounded-xl shadow-xl transition-all duration-150 cursor-grab active:cursor-grabbing hover:shadow-2xl overflow-hidden ${
+                className={`node-card absolute pointer-events-auto w-[240px] bg-slate-800 border-2 rounded-xl shadow-xl ${draggedNodeId !== node.id ? "transition-all duration-150" : ""} cursor-grab active:cursor-grabbing hover:shadow-2xl overflow-hidden ${
                   isSelected
-                    ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-102 z-40"
+                    ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-105 z-40"
                     : "border-slate-700/80 hover:border-slate-600 z-10"
                 }`}
                 style={{
-                  transform: `translate(${node.position.x * zoom + pan.x}px, ${
-                    node.position.y * zoom + pan.y
+                  transform: `translate(${node.position.x * zoom + pan.x + (draggedNodeId === node.id ? dragDelta.current.x * zoom : 0)}px, ${
+                    node.position.y * zoom + pan.y + (draggedNodeId === node.id ? dragDelta.current.y * zoom : 0)
                   }px) scale(${zoom})`,
                   transformOrigin: "top left",
                 }}

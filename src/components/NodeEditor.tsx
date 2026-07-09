@@ -5,15 +5,11 @@ import ScriptEditor from "./ScriptEditor";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import LocationEditor from "./LocationEditor";
 import EncounterEditor from "./EncounterEditor";
-
-function textColorForHex(hex: string): string {
-  const val = parseInt(hex.replace("#", ""), 16);
-  const r = (val >> 16) & 0xff, g = (val >> 8) & 0xff, b = val & 0xff;
-  return (r * 0.299 + g * 0.587 + b * 0.114) > 160 ? "text-slate-950" : "text-white";
-}
+import { textColorForHex } from "../utils/color";
 
 function CollapsibleSection({ title, defaultExpanded, children }: { title: string; defaultExpanded?: boolean; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? true);
+  useEffect(() => { setExpanded(defaultExpanded ?? true); }, [defaultExpanded]);
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -332,11 +328,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
               node.dialogueLines.map((line, idx) => {
                 const entity = project.entities.find(e => e.name === line.speaker);
                 const color = entity?.color || "#64748b";
-                const textColor = entity ? (() => {
-                  const val = parseInt(color.replace("#", ""), 16);
-                  const r = (val >> 16) & 0xff, g = (val >> 8) & 0xff, b = val & 0xff;
-                  return (r * 0.299 + g * 0.587 + b * 0.114) > 160 ? "text-slate-950" : "text-white";
-                })() : "text-white";
+                const textColor = entity ? textColorForHex(color) : "text-white";
                 return (
                   <div key={line.id} className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs ${editingLineIdx === idx ? "bg-indigo-950/40 border-indigo-500/40" : "bg-slate-900 border-slate-800/40"}`}>
                     <span className="text-slate-500 cursor-grab text-[10px] select-none">⠿</span>
@@ -389,6 +381,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
           <div className="flex gap-1.5">
             <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
               <ScriptEditor
+                key={editingLineIdx !== null ? `edit-${editingLineIdx}` : 'new'}
                 initialContent={dialogueHTML}
                 onChange={(html) => setDialogueHTML(html)}
                 placeholder="Write dialogue..."

@@ -694,8 +694,8 @@ export default function SceneDirectory({
   };
 
   return (
-    <div className="w-[280px] h-full bg-slate-950 border-r border-slate-850 flex flex-col shrink-0 select-none" id="expanded-directory">
-      <div className="p-4 border-b border-slate-850 space-y-3 shrink-0">
+    <div className="w-[280px] h-full bg-slate-950 border-r border-slate-800 flex flex-col shrink-0 select-none" id="expanded-directory">
+      <div className="p-4 border-b border-slate-800 space-y-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Folder className="w-4 h-4 text-indigo-400" />
@@ -735,7 +735,7 @@ export default function SceneDirectory({
         {renderFolderContent()}
       </div>
 
-      <div className="p-3 border-t border-slate-850 bg-slate-900/40 space-y-2 shrink-0">
+      <div className="p-3 border-t border-slate-800 bg-slate-900/40 space-y-2 shrink-0">
         {!isEditMode ? (
           <button
             onClick={() => {

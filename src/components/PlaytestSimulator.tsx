@@ -319,7 +319,7 @@ export default function PlaytestSimulator({
   });
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-slate-950 text-slate-100 divide-y md:divide-y-0 md:divide-x divide-slate-850" id="vn-player-screen">
+    <div className="h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 divide-y md:divide-y-0 md:divide-x divide-slate-800" id="vn-player-screen">
       
       {/* Left variables registry bar */}
       <div className="md:w-72 bg-slate-900 p-5 flex flex-col overflow-y-auto" id="vn-player-sidebar">
@@ -389,7 +389,7 @@ export default function PlaytestSimulator({
         {/* Dynamic Action Audit Trail Log */}
         <div className="mt-4 border-t border-slate-800 pt-4" id="vn-player-logs">
           <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Live Operation Feed</h4>
-          <div className="space-y-1.5 max-h-40 overflow-y-auto bg-slate-950/80 p-2.5 rounded-xl border border-slate-850">
+          <div className="space-y-1.5 max-h-40 overflow-y-auto bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
             {logs.length === 0 ? (
               <p className="text-[10px] text-slate-600 italic">Logs are empty. Feed will record stat updates live as you navigate choice branches.</p>
             ) : (
@@ -546,8 +546,8 @@ export default function PlaytestSimulator({
                 <div className="flex gap-2">
                   <button onClick={() => {
                     const ed = node.encounterData!;
-                    const playerAtk = 10;
-                    const playerDef = 5;
+                    const playerAtk = vars["atk"] ?? 10;
+                    const playerDef = vars["def"] ?? 5;
                     const dmgToEnemy = Math.max(1, playerAtk - ed.defense);
                     const dmgToPlayer = Math.max(1, ed.attack - playerDef);
                     const newHp = Math.max(0, ed.hp - dmgToEnemy);
@@ -671,7 +671,7 @@ export default function PlaytestSimulator({
                             onClick={() => handleSelectChoice(choice)}
                             className={`relative text-left p-4 rounded-xl border transition-all text-xs font-bold cursor-pointer group ${
                               canSelect
-                                ? "bg-slate-900 border-slate-800 text-white hover:border-indigo-500 hover:bg-slate-850 shadow-md hover:shadow-lg hover:scale-101"
+                                ? "bg-slate-900 border-slate-800 text-white hover:border-indigo-500 hover:bg-slate-800 shadow-md hover:shadow-lg hover:scale-105"
                                 : "bg-slate-950 border-red-950/20 text-slate-500 cursor-not-allowed"
                             }`}
                           >

@@ -5,6 +5,7 @@ import FlowchartCanvas from "./components/FlowchartCanvas";
 import NodeEditor from "./components/NodeEditor";
 import PlaytestSimulator from "./components/PlaytestSimulator";
 import SyncIndicator from "./components/SyncIndicator";
+import TutorialDialog from "./components/TutorialDialog";
 import BackupDialog from "./components/BackupDialog";
 import SettingsDialog from "./components/SettingsDialog";
 import SceneDirectory from "./components/SceneDirectory";
@@ -13,10 +14,11 @@ import FlagsManager from "./components/FlagsManager";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
 import { migrateProject } from "./utils/schemaMigration";
-import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath, fileNameForProject } from "./services/fileStore";
+import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
+import { loadProjectFromDrive } from "./services/drive";
 import {
-  Sliders, Flag, Package, Users, Download,
-  RefreshCw, Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
+  Sliders, Flag, Package, Users,
+  Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -160,16 +162,24 @@ export default function App() {
       try {
         await migrateFromOldPath();
         const files = await listProjectFiles();
-        if (files.length > 0) {
-          const proj = await loadProject(files[0]);
-          setProject(proj);
+        const loaded: VNProject[] = [];
+        for (const f of files) {
+          const proj = await loadProject(f);
+          if (proj) loaded.push(proj);
+        }
+        if (loaded.length > 0) {
+          setAllProjects(loaded);
+          setProject(loaded[0]);
           setCurrentFileName(files[0]);
         } else {
           const migrated = await migrateFromLocalStorage();
           if (migrated) {
             const proj = await loadProject(migrated);
-            setProject(proj);
-            setCurrentFileName(migrated);
+            if (proj) {
+              setAllProjects([proj]);
+              setProject(proj);
+              setCurrentFileName(migrated);
+            }
           }
         }
       } catch (e) {
@@ -179,13 +189,13 @@ export default function App() {
     })();
   }, []);
 
-  // Auto-save to disk (debounced)
+  // Auto-save to disk (debounced) — guard against blank project overwriting real data
   useEffect(() => {
-    if (loading) return;
+    if (loading || project === BLANK_PROJECT) return;
     const timer = setTimeout(async () => {
       try {
         const name = await saveProject(project, currentFileName || undefined);
-        if (!currentFileName) setCurrentFileName(name);
+        if (name && !currentFileName) setCurrentFileName(name);
       } catch (e) {
         console.error("Auto-save failed", e);
       }
@@ -193,10 +203,26 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [project, loading]);
 
+  // On-load Drive version check — picks the newer version without blocking startup
+  useEffect(() => {
+    if (loading || !project.driveFolderId || !project.driveFileId) return;
+    (async () => {
+      const driveProject = await loadProjectFromDrive(project.driveFileId!);
+      if (driveProject && driveProject.lastModified > project.lastModified) {
+        setProject(driveProject);
+      }
+    })();
+  }, [loading]);
+
+  // Sync project name to document title
+  useEffect(() => {
+    document.title = `${project.name} — Chrysanthemum`;
+  }, [project.name]);
+
   // Web fallback: also save to localStorage
   useEffect(() => {
     if (loading) return;
-    localStorage.setItem("storyweaver_vn_project", JSON.stringify(project));
+    localStorage.setItem("chrysanthemum_project", JSON.stringify(project));
   }, [project, loading]);
 
   const handleFileId = useCallback((fileId: string) => {
@@ -206,10 +232,6 @@ export default function App() {
   const { status: syncStatus, syncNow } = useDriveSync(project, handleFileId);
 
   const [allProjects, setAllProjects] = useState<VNProject[]>([]);
-
-  useEffect(() => {
-    setAllProjects([project]);
-  }, [project]);
 
   const handleUpdateProject = (updatedProject: VNProject) => {
     setProject(updatedProject);
@@ -222,6 +244,7 @@ export default function App() {
     if (type === "template") {
       const template: VNProject = { ...RAVENWOOD_TEMPLATE, id: crypto.randomUUID(), name: name.trim(), lastModified: Date.now() };
       setProject(template);
+      setAllProjects(prev => [...prev, template]);
       setSelectedNodeId("node-start");
       setIsProjectsModalOpen(false);
       return;
@@ -256,6 +279,7 @@ export default function App() {
     };
 
     setProject(newProj);
+    setAllProjects(prev => [...prev, newProj]);
     setSelectedNodeId("node-start");
     setIsProjectsModalOpen(false);
   };
@@ -305,7 +329,9 @@ export default function App() {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed && parsed.nodes) {
-          setProject(migrateProject(parsed));
+          const imported = migrateProject(parsed);
+          setProject(imported);
+          setAllProjects(prev => [...prev, imported]);
           setSelectedNodeId(parsed.startNodeId || Object.keys(parsed.nodes)[0] || null);
           alert("Blueprint imported successfully!");
         } else {
@@ -566,7 +592,7 @@ export default function App() {
             </div>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
               {allProjects.map((proj) => (
-                <div key={proj.id} onClick={() => handleSelectProject(proj)} className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${proj.id === project.id ? "bg-indigo-600/15 border-indigo-500/50 text-white" : "bg-slate-950/50 border-slate-850 hover:bg-slate-950 hover:border-slate-700 text-slate-400"}`}>
+                <div key={proj.id} onClick={() => handleSelectProject(proj)} className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${proj.id === project.id ? "bg-indigo-600/15 border-indigo-500/50 text-white" : "bg-slate-950/50 border-slate-800 hover:bg-slate-950 hover:border-slate-700 text-slate-400"}`}>
                   <div className="min-w-0 flex-1 pr-4">
                     <p className={`font-bold text-xs truncate ${proj.id === project.id ? "text-indigo-300" : "text-slate-200"}`}>{proj.name}</p>
                     <p className="text-[10px] text-slate-500 truncate mt-0.5">{proj.description}</p>
@@ -583,6 +609,12 @@ export default function App() {
               <button onClick={() => handleCreateNewProject("blank")} className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white font-bold text-xs p-3 rounded-2xl cursor-pointer transition-colors">+ New Blank Project</button>
               <button onClick={() => handleCreateNewProject("template")} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs p-3 rounded-2xl cursor-pointer shadow-lg shadow-indigo-600/20 transition-all">+ Mystery Template</button>
             </div>
+            <div className="border-t border-slate-800 pt-3">
+              <label className="flex items-center justify-center gap-2 p-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 border-dashed rounded-xl cursor-pointer transition-colors text-xs text-slate-400 hover:text-slate-200 font-bold">
+                <span>📂 Import Project from File</span>
+                <input type="file" accept=".json,.chrysanthemum" onChange={handleImportJSON} className="hidden" />
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -594,6 +626,7 @@ export default function App() {
       {isSettingsOpen && (
         <SettingsDialog
           project={project}
+          onUpdateProject={handleUpdateProject}
           onClose={() => setIsSettingsOpen(false)}
           user={user}
           signIn={signIn}
@@ -601,6 +634,10 @@ export default function App() {
           onOpenTutorial={() => setShowTutorial(true)}
           onExportProject={handleExportJSON}
         />
+      )}
+
+      {showTutorial && (
+        <TutorialDialog onClose={() => setShowTutorial(false)} />
       )}
 
       {searchOpen && (

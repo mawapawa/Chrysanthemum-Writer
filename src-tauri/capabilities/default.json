@@ -7,7 +7,9 @@
   ],
   "permissions": [
     "core:default",
+    "core:event:allow-listen",
     "opener:default",
+    "oauth:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-exists",

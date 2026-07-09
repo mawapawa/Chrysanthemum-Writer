@@ -3,6 +3,7 @@ import { VNProject, VNEntity } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
 import { Plus, Trash2, Users, Check, Edit2 } from "lucide-react";
 import TagInput from "./TagInput";
+import { textColorForHex } from "../utils/color";
 
 interface EntitiesManagerProps {
   project: VNProject;
@@ -10,12 +11,6 @@ interface EntitiesManagerProps {
 }
 
 const ENTITY_PALETTE_COLORS = ["#f43f5e", "#3b82f6", "#10b981", "#a855f7", "#f59e0b", "#ea580c", "#ec4899", "#64748b"];
-
-function textColorForHex(hex: string): string {
-  const val = parseInt(hex.replace("#", ""), 16);
-  const r = (val >> 16) & 0xff, g = (val >> 8) & 0xff, b = val & 0xff;
-  return (r * 0.299 + g * 0.587 + b * 0.114) > 160 ? "text-slate-950" : "text-white";
-}
 
 export default function EntitiesManager({ project, onUpdateProject }: EntitiesManagerProps) {
   const allEntityTags = [...new Set(project.entities.flatMap(e => e.tags))];
@@ -157,7 +152,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
               {ENTITY_PALETTE_COLORS.map(c => (
                 <button key={c} type="button" onClick={() => { setColor(c); setUseCustomHex(false); }}
                   style={{ backgroundColor: c }}
-                  className={`h-10 rounded-xl flex items-center justify-center cursor-pointer transition-transform ${color === c && !useCustomHex ? "ring-4 ring-indigo-500/35 scale-105" : "hover:scale-102"}`}>
+                  className={`h-10 rounded-xl flex items-center justify-center cursor-pointer transition-transform ${color === c && !useCustomHex ? "ring-4 ring-indigo-500/35 scale-105" : "hover:scale-105"}`}>
                   {color === c && !useCustomHex && <Check className="w-4 h-4 text-white drop-shadow-md" />}
                 </button>
               ))}

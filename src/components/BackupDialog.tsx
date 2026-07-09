@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { listBackups } from "../services/drive";
-import { X, Clock, Download, RotateCcw } from "lucide-react";
+import { X, Clock, RotateCcw } from "lucide-react";
 
 interface BackupDialogProps {
   driveFolderId: string;

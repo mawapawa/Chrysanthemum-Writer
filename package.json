@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "chrysanthemum",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,6 @@
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tiptap/core": "^3.27.1",
-    "@tiptap/extension-paragraph": "^3.27.1",
     "@tiptap/extension-placeholder": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
