@@ -10,6 +10,7 @@ const STATUS_CONFIG: Record<SyncStatus, { icon: typeof Cloud; label: string; col
   idle: { icon: Cloud, label: "Saved", color: "text-emerald-400" },
   saving: { icon: RefreshCw, label: "Saving...", color: "text-amber-400" },
   syncing: { icon: RefreshCw, label: "Syncing...", color: "text-blue-400" },
+  synced: { icon: Cloud, label: "Synced to Drive ✓", color: "text-emerald-400" },
   error: { icon: AlertTriangle, label: "Sync error", color: "text-rose-400" },
 };
 

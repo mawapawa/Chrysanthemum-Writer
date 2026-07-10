@@ -32,54 +32,47 @@ export async function loadProjectFromDrive(fileId: string): Promise<VNProject | 
 
 export async function saveProjectToDrive(project: VNProject): Promise<string | null> {
   if (!project.driveFolderId) return null;
-  try {
-    const folderId = project.driveFolderId;
-    const fileContent = JSON.stringify(project, null, 2);
+  const folderId = project.driveFolderId;
+  const fileContent = JSON.stringify(project, null, 2);
 
-    const sanitizedName = project.name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
-    const fileName = `${sanitizedName}.json`;
+  const sanitizedName = project.name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
+  const fileName = `${sanitizedName}.json`;
 
-    if (project.driveFileId) {
-      const blob = new Blob([fileContent], { type: "application/json" });
-      await apiFetch(
-        `/files/${project.driveFileId}?uploadType=media`,
-        {
-          method: "PATCH",
-          body: blob,
-        }
-      );
-      return project.driveFileId;
-    }
-
-    const boundary = `boundary_${Date.now()}`;
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      JSON.stringify({ name: fileName, parents: [folderId] }),
-      `--${boundary}`,
-      'Content-Type: application/json',
-      '',
-      fileContent,
-      `--${boundary}--`,
-    ].join("\r\n");
-
-    const token = await getAccessToken();
-    if (!token) throw new Error("No access token");
-    const resp = await fetch(`${API_BASE}/files?uploadType=multipart`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": `multipart/related; boundary=${boundary}`,
-      },
-      body,
+  if (project.driveFileId) {
+    const blob = new Blob([fileContent], { type: "application/json" });
+    await apiFetch(`/files/${project.driveFileId}?uploadType=media`, {
+      method: "PATCH",
+      body: blob,
     });
-    if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
-    const data = await resp.json();
-    return data.id;
-  } catch {
-    return null;
+    return project.driveFileId;
   }
+
+  const boundary = `boundary_${Date.now()}`;
+  const body = [
+    `--${boundary}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify({ name: fileName, parents: [folderId] }),
+    `--${boundary}`,
+    'Content-Type: application/json',
+    '',
+    fileContent,
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  const token = await getAccessToken();
+  if (!token) throw new Error("No access token");
+  const resp = await fetch(`${API_BASE}/files?uploadType=multipart`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+    },
+    body,
+  });
+  if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+  const data = await resp.json();
+  return data.id;
 }
 
 export async function createBackup(project: VNProject): Promise<void> {

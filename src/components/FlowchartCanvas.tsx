@@ -441,70 +441,103 @@ export default function FlowchartCanvas({
             </marker>
           </defs>
 
-          {/* Draw lines — cases 1 & 3: visible source to visible/hidden target */}
-          {visibleNodes.map((node) => {
-            return node.choices.map((choice) => {
-              const targetNode = project.nodes[choice.targetNodeId];
-              if (!targetNode) return null;
-
-              const targetVisible = visibleNodesMap.has(targetNode.id);
-              if (!targetVisible && !hiddenSet.has(targetNode.sceneId ?? "")) {
-                // Target is neither visible nor in a hidden folder — normal hidden case
-                return null;
+          {/* Build incoming connection map for merged rendering */}
+          {(() => {
+            const incoming: Record<string, Array<{ node: typeof visibleNodes[0]; choice: StoryChoice; conditioned: boolean }>> = {};
+            for (const node of visibleNodes) {
+              for (const choice of node.choices) {
+                const targetNode = project.nodes[choice.targetNodeId];
+                if (!targetNode) continue;
+                const targetVisible = visibleNodesMap.has(targetNode.id);
+                if (!targetVisible && !hiddenSet.has(targetNode.sceneId ?? "")) continue;
+                if (!incoming[choice.targetNodeId]) incoming[choice.targetNodeId] = [];
+                incoming[choice.targetNodeId].push({ node, choice, conditioned: !!(choice.condition || choice.requirement) });
               }
+            }
 
-              // Calculate visual anchor points based on flow direction
-              let sX = 0, sY = 0, tX = 0, tY = 0, pathD = "";
+            const renderWires: Array<React.ReactElement> = [];
 
-              if (flowDirection === "vertical") {
-                sX = node.position.x * zoom + pan.x + 120 * zoom;
-                sY = node.position.y * zoom + pan.y + 115 * zoom;
-                tX = targetNode.position.x * zoom + pan.x + 120 * zoom;
-                tY = targetNode.position.y * zoom + pan.y;
-                const dy = Math.abs(tY - sY) * 0.5;
-                pathD = `M ${sX} ${sY} C ${sX} ${sY + dy}, ${tX} ${tY - dy}, ${tX} ${tY}`;
-              } else {
-                sX = node.position.x * zoom + pan.x + 240 * zoom;
-                sY = node.position.y * zoom + pan.y + 70 * zoom;
-                tX = targetNode.position.x * zoom + pan.x;
-                tY = targetNode.position.y * zoom + pan.y + 40 * zoom;
-                const dx = Math.abs(tX - sX) * 0.5;
-                pathD = `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
-              }
+            for (const [targetId, entries] of Object.entries(incoming)) {
+              const targetNode = project.nodes[targetId];
+              if (!targetNode) continue;
+              const targetVisible = visibleNodesMap.has(targetId);
+              const count = entries.length;
 
-              const isConditioned = !!(choice.condition || choice.requirement);
+              entries.forEach(({ node, choice, conditioned }, idx) => {
+                const isVertical = flowDirection === "vertical";
 
-              if (targetVisible) {
-                // Case 1: both visible — normal line
-                return (
-                  <g key={choice.id}>
-                    <path d={pathD} fill="none" stroke={isConditioned ? "#f59e0b" : "#4f46e5"} strokeOpacity="0.15" strokeWidth="5" />
-                    <path d={pathD} fill="none" stroke={isConditioned ? "#d97706" : "#6366f1"} strokeWidth="2.5" strokeDasharray={isConditioned ? "4 4" : "none"} markerEnd={`url(#${isConditioned ? "arrow-conditioned" : "arrow"})`} />
-                    <g transform={`translate(${(sX + tX) / 2}, ${(sY + tY) / 2 - 8})`}>
-                      <rect x="-45" y="-8" width="90" height="16" rx="8" fill="#1e293b" stroke={isConditioned ? "#d97706" : "#475569"} strokeWidth="1" className="opacity-90" />
-                      <text textAnchor="middle" dominantBaseline="middle" fill={isConditioned ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
-                        {choice.text.length > 12 ? choice.text.substring(0, 10) + ".." : choice.text}
-                      </text>
+                let sX: number, sY: number, tX: number, tY: number;
+
+                if (isVertical) {
+                  sX = node.position.x * zoom + pan.x + 120 * zoom;
+                  sY = node.position.y * zoom + pan.y + 115 * zoom;
+
+                  const targetMidX = targetNode.position.x * zoom + pan.x + 120 * zoom;
+                  const targetTop = targetNode.position.y * zoom + pan.y;
+                  const spacing = count > 1 ? 40 * zoom : 0;
+                  const offset = (idx - (count - 1) / 2) * spacing;
+
+                  tX = targetMidX + offset;
+                  tY = targetTop;
+
+                  const dy = Math.abs(tY - sY) * 0.5;
+                  const pathD = `M ${sX} ${sY} C ${sX} ${sY + dy}, ${tX} ${tY - dy}, ${tX} ${tY}`;
+
+                  const isCond = conditioned;
+                  const color1 = isCond ? "#f59e0b" : "#4f46e5";
+                  const color2 = isCond ? "#d97706" : "#6366f1";
+                  const arrowId = isCond ? "arrow-conditioned" : "arrow";
+
+                  renderWires.push(
+                    <g key={choice.id}>
+                      <path d={pathD} fill="none" stroke={color1} strokeOpacity="0.12" strokeWidth="5" />
+                      <path d={pathD} fill="none" stroke={color2} strokeWidth="2" strokeDasharray={isCond ? "4 4" : "none"} markerEnd={`url(#${arrowId})`} />
+                      <g transform={`translate(${(sX + tX) / 2}, ${(sY + tY) / 2 - 14})`}>
+                        <rect x="-52" y="-10" width="104" height="18" rx="9" fill="#1e293b" stroke={isCond ? "#d97706" : "#475569"} strokeWidth="1" className="opacity-95" />
+                        <text textAnchor="middle" dominantBaseline="middle" fill={isCond ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
+                          {choice.text.length > 14 ? choice.text.substring(0, 12) + ".." : choice.text}
+                        </text>
+                      </g>
                     </g>
-                  </g>
-                );
-              } else {
-                // Case 3: source visible → target hidden — line fades out
-                return (
-                  <g key={choice.id}>
-                    <path d={pathD} fill="none" stroke={isConditioned ? "#f59e0b" : "#4f46e5"} strokeOpacity="0.06" strokeWidth="5" />
-                    <path d={pathD} fill="none" stroke={isConditioned ? "#d97706" : "#6366f1"} strokeWidth="2.5" strokeDasharray={isConditioned ? "4 4" : "none"} strokeOpacity="0.25" />
-                    <g transform={`translate(${(sX + tX) / 2}, ${(sY + tY) / 2 - 8})`} opacity="0.25">
-                      <rect x="-45" y="-8" width="90" height="16" rx="8" fill="#1e293b" stroke={isConditioned ? "#d97706" : "#475569"} strokeWidth="1" />
-                      <text textAnchor="middle" dominantBaseline="middle" fill={isConditioned ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
-                        {choice.text.length > 12 ? choice.text.substring(0, 10) + ".." : choice.text}
-                      </text>
+                  );
+                } else {
+                  sX = node.position.x * zoom + pan.x + 240 * zoom;
+                  sY = node.position.y * zoom + pan.y + 70 * zoom;
+
+                  const targetLeft = targetNode.position.x * zoom + pan.x;
+                  const targetMidY = targetNode.position.y * zoom + pan.y + 40 * zoom;
+                  const spacing = count > 1 ? 36 * zoom : 0;
+                  const offset = (idx - (count - 1) / 2) * spacing;
+
+                  tX = targetLeft;
+                  tY = targetMidY + offset;
+
+                  const dx = Math.abs(tX - sX) * 0.5;
+                  const pathD = `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
+
+                  const isCond = conditioned;
+                  const color1 = isCond ? "#f59e0b" : "#4f46e5";
+                  const color2 = isCond ? "#d97706" : "#6366f1";
+                  const arrowId = isCond ? "arrow-conditioned" : "arrow";
+
+                  renderWires.push(
+                    <g key={choice.id}>
+                      <path d={pathD} fill="none" stroke={color1} strokeOpacity="0.12" strokeWidth="5" />
+                      <path d={pathD} fill="none" stroke={color2} strokeWidth="2" strokeDasharray={isCond ? "4 4" : "none"} markerEnd={`url(#${arrowId})`} />
+                      <g transform={`translate(${(sX + tX) / 2}, ${(sY + tY) / 2 - 14})`}>
+                        <rect x="-52" y="-10" width="104" height="18" rx="9" fill="#1e293b" stroke={isCond ? "#d97706" : "#475569"} strokeWidth="1" className="opacity-95" />
+                        <text textAnchor="middle" dominantBaseline="middle" fill={isCond ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
+                          {choice.text.length > 14 ? choice.text.substring(0, 12) + ".." : choice.text}
+                        </text>
+                      </g>
                     </g>
-                  </g>
-                );
-              }
-            });
-          })}
+                  );
+                }
+              });
+            }
+
+            return renderWires;
+          })()}
 
           {/* Case 2: hidden → visible — faded arrow stubs */}
           {hiddenNodesWithOutgoing.map((node) => {

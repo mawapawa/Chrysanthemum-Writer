@@ -1,7 +1,7 @@
 import { VNProject } from "../types";
 import { saveProjectToDrive, createBackup } from "./drive";
 
-export type SyncStatus = "idle" | "saving" | "syncing" | "error";
+export type SyncStatus = "idle" | "saving" | "syncing" | "synced" | "error";
 
 const listeners: Array<(status: SyncStatus, error?: string) => void> = [];
 
@@ -31,9 +31,12 @@ export async function triggerDriveSync(project: VNProject): Promise<string | nul
     const fileId = await saveProjectToDrive(project);
     if (fileId) {
       await createBackup(project);
+      setStatus("synced");
+      setTimeout(() => setStatus("idle"), 3000);
+      return fileId;
     }
     setStatus("idle");
-    return fileId;
+    return null;
   } catch {
     setStatus("error", "Drive sync failed");
     return null;
