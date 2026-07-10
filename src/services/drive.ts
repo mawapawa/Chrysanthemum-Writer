@@ -1,7 +1,6 @@
 import { VNProject } from "../types";
 import { getAccessToken } from "./auth";
 
-const BACKUP_MAX = 50;
 const API_BASE = "https://www.googleapis.com/drive/v3";
 
 async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
@@ -83,18 +82,6 @@ export async function createBackup(project: VNProject): Promise<void> {
     const backupName = `backup-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.json`;
     const fileContent = JSON.stringify(project, null, 2);
 
-    const existing = await apiFetch(
-      `/files?q='${project.driveFolderId}' in parents and name contains 'backup-' and trashed=false&fields=files(id,name)&orderBy=createdTime`
-    );
-
-    const files: Array<{ id: string; name: string }> = existing.files || [];
-    if (files.length >= BACKUP_MAX) {
-      const toDelete = files.slice(0, files.length - BACKUP_MAX + 1);
-      for (const file of toDelete) {
-        await apiFetch(`/files/${file.id}`, { method: "DELETE" });
-      }
-    }
-
     const boundary = `backup_${Date.now()}`;
     const body = [
       `--${boundary}`,
@@ -120,21 +107,6 @@ export async function createBackup(project: VNProject): Promise<void> {
     });
   } catch {
     // Backup failures are non-critical
-  }
-}
-
-export async function listBackups(driveFolderId: string): Promise<Array<{ id: string; name: string; modified: number }>> {
-  try {
-    const resp = await apiFetch(
-      `/files?q='${driveFolderId}' in parents and name contains 'backup-' and trashed=false&fields=files(id,name,modifiedTime)&orderBy=createdTime`
-    );
-    return (resp.files || []).map((f: any) => ({
-      id: f.id,
-      name: f.name,
-      modified: new Date(f.modifiedTime).getTime(),
-    }));
-  } catch {
-    return [];
   }
 }
 

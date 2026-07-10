@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, NodeLock } from "../types";
 import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
 import ScriptEditor from "./ScriptEditor";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import LocationEditor from "./LocationEditor";
 import EncounterEditor from "./EncounterEditor";
 import { textColorForHex } from "../utils/color";
@@ -50,6 +49,23 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
   const [dialogueExpression, setDialogueExpression] = useState("Neutral");
   const [dialogueHTML, setDialogueHTML] = useState("");
   const [editingLineIdx, setEditingLineIdx] = useState<number | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = editorWidth || 420;
+    const onMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(280, Math.min(700, startWidth + (startX - ev.clientX)));
+      onResizeEditor?.(newWidth);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [editorWidth, onResizeEditor]);
 
   if (!node) {
     return (
@@ -161,24 +177,6 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     }
   };
 
-  const resizeRef = useRef<HTMLDivElement>(null);
-
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = editorWidth || 420;
-    const onMove = (ev: MouseEvent) => {
-      const newWidth = Math.max(280, Math.min(700, startWidth + (startX - ev.clientX)));
-      onResizeEditor?.(newWidth);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }, [editorWidth, onResizeEditor]);
-
   const nodeLock: NodeLock | undefined = (project.locks || []).find(l => l.nodeId === selectedNodeId);
 
   return (
@@ -273,7 +271,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                   <label className="block text-[10px] text-slate-400 mb-1">Ending Style</label>
                   <select
                     value={node.endingType || "NORMAL"}
-                    onChange={(e) => updateNode({ endingType: e.target.value as any })}
+                    onChange={(e) => updateNode({ endingType: e.target.value as "GOOD" | "BAD" | "NEUTRAL" | "NORMAL" })}
                     className="w-full bg-slate-950 border border-slate-800 text-xs rounded-lg p-1.5 text-slate-200"
                   >
                     <option value="GOOD">Good Ending</option>
@@ -464,7 +462,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                                   className="bg-transparent text-emerald-300 focus:outline-none cursor-pointer text-[9px]">
                                   {project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                 </select>
-                                <select value={ef.operation || "add"} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { operation: e.target.value as any })}
+                                <select value={ef.operation || "add"} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { operation: e.target.value as "add" | "subtract" | "set" })}
                                   className="bg-transparent text-emerald-300 focus:outline-none cursor-pointer text-[9px]">
                                   <option value="add">+</option>
                                   <option value="subtract">-</option>
@@ -492,7 +490,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                           }
                           return null;
                         })}
-                        <select value="" onChange={(e) => { if (e.target.value) { handleAddEffect(choice.id, e.target.value as any); } }}
+                        <select value="" onChange={(e) => { if (e.target.value) { handleAddEffect(choice.id, e.target.value as "give_item" | "take_item" | "adjust_tracker" | "set_flag" | "clear_flag"); } }}
                           className="text-[9px] bg-slate-900 border border-slate-800 text-slate-400 rounded px-1 py-0.5 cursor-pointer">
                           <option value="">+ Add Reward</option>
                           <option value="give_item">🎒 Give Item</option>
@@ -532,7 +530,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                                   className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
                                   {project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                 </select>
-                                <select value={choice.requirement.operator || ">="} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, operator: e.target.value as any } })}
+                                <select value={choice.requirement.operator || ">="} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, operator: e.target.value as ">=" | "<=" | ">" | "<" | "==" | "!=" } })}
                                   className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
                                   <option value=">=">≥</option><option value="<=">≤</option><option value=">">&gt;</option>
                                   <option value="<">&lt;</option><option value="==">=</option><option value="!=">≠</option>

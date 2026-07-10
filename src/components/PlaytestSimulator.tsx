@@ -486,7 +486,24 @@ export default function PlaytestSimulator({
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">🏪</span>
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
-                  <span className="text-[9px] font-mono text-amber-400 ml-auto">{node.locationData.openTime === "day" ? "☀️ Daytime" : node.locationData.openTime === "night" ? "🌙 Nighttime" : "🕐 Any Time"}</span>
+                  <span className="text-[9px] font-mono text-amber-400 ml-auto">{(() => {
+                    const period = node.locationData.openPeriodId ? (project.calendar || []).find(p => p.id === node.locationData.openPeriodId) : null;
+                    if (period) {
+                      const open = period.conditions.every(c => {
+                        const val = vars[project.trackers.find(t => t.id === c.trackerId)?.name || ""];
+                        if (val === undefined) return false;
+                        if (c.operator === ">=") return Number(val) >= c.value;
+                        if (c.operator === "<=") return Number(val) <= c.value;
+                        if (c.operator === ">") return Number(val) > c.value;
+                        if (c.operator === "<") return Number(val) < c.value;
+                        if (c.operator === "==") return Number(val) === c.value;
+                        if (c.operator === "!=") return Number(val) !== c.value;
+                        return false;
+                      });
+                      return open ? `✅ ${period.name}` : `🔒 ${period.name}`;
+                    }
+                    return "🕐 Any Time";
+                  })()}</span>
                 </div>
                 <p className="text-xs text-slate-300 mb-4">{node.description}</p>
                 <div className="space-y-2">

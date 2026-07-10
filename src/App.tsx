@@ -13,11 +13,12 @@ import TrackersManager from "./components/TrackersManager";
 import FlagsManager from "./components/FlagsManager";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
+import CalendarManager from "./components/CalendarManager";
 import { migrateProject } from "./utils/schemaMigration";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
 import { loadProjectFromDrive } from "./services/drive";
 import {
-  Sliders, Flag, Package, Users,
+  Sliders, Flag, Package, Users, Clock,
   Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
@@ -117,7 +118,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"storyboard" | "stats" | "flags" | "items" | "entities">("storyboard");
+  const [activeTab, setActiveTab] = useState<"storyboard" | "stats" | "flags" | "items" | "entities" | "calendar">("storyboard");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("node-start");
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
@@ -429,6 +430,7 @@ export default function App() {
   const flagCount = project.flags.length;
   const itemCount = project.inventory.length;
   const entityCount = project.entities.length;
+  const calendarCount = (project.calendar || []).length;
 
   if (loading) {
     return (
@@ -503,7 +505,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="bg-white border-b border-gray-150 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs z-10">
+      <div className="bg-white border-b border-gray-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs z-10">
         <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
           <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
             <Layers className="w-4 h-4 text-indigo-500" /> Storyboard
@@ -519,6 +521,9 @@ export default function App() {
           </button>
           <button onClick={() => setActiveTab("entities")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "entities" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
             <Users className="w-4 h-4 text-indigo-500" /> Entities ({entityCount})
+          </button>
+          <button onClick={() => setActiveTab("calendar")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "calendar" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
+            <Clock className="w-4 h-4 text-cyan-500" /> Calendar ({calendarCount})
           </button>
         </div>
       </div>
@@ -578,10 +583,11 @@ export default function App() {
         {activeTab === "flags" && <FlagsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "items" && <ItemsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "entities" && <EntitiesManager project={project} onUpdateProject={handleUpdateProject} />}
+        {activeTab === "calendar" && <CalendarManager project={project} onUpdateProject={handleUpdateProject} />}
       </main>
 
       {isProjectsModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="projects-modal-container">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50" id="projects-modal-container">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -620,7 +626,7 @@ export default function App() {
       )}
 
       {backupDialogOpen && project.driveFolderId && (
-        <BackupDialog driveFolderId={project.driveFolderId} onClose={() => setBackupDialogOpen(false)} onRestore={() => setBackupDialogOpen(false)} />
+        <BackupDialog driveFolderId={project.driveFolderId} onClose={() => setBackupDialogOpen(false)} />
       )}
 
       {isSettingsOpen && (
@@ -648,7 +654,7 @@ export default function App() {
             setCenterNodeTrigger({ id, timestamp: Date.now() });
             setRightSidebarOpen(true);
           }}
-          onSwitchTab={(tab) => setActiveTab(tab as any)}
+          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "stats" | "flags" | "items" | "entities" | "calendar")}
           onClose={() => setSearchOpen(false)}
         />
       )}

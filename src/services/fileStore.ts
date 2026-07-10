@@ -77,10 +77,6 @@ export async function migrateFromLocalStorage(): Promise<string | null> {
   }
 }
 
-export function fileNameForProject(project: VNProject): string {
-  return `${sanitize(project.name)}.chrysanthemum`;
-}
-
 export async function migrateFromOldPath(): Promise<void> {
   try {
     const oldBase = await appDataDir();

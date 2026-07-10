@@ -20,7 +20,7 @@ const USER_KEY = "chrysanthemum_user";
 
 import { isTauri, invoke } from "@tauri-apps/api/core";
 
-const AUTH_DEBUG = false;
+const AUTH_DEBUG = true;
 function log(...args: unknown[]) {
   if (AUTH_DEBUG) console.log("[AUTH]", ...args);
 }
@@ -41,7 +41,9 @@ async function sha256(plain: string): Promise<ArrayBuffer> {
 function generateCodeVerifier(): string {
   const arr = new Uint8Array(64);
   crypto.getRandomValues(arr);
-  return base64UrlEncode(arr.buffer);
+  const verifier = base64UrlEncode(arr.buffer);
+  log("generateCodeVerifier() — length:", verifier.length, "preview:", verifier.substring(0, 10) + "...");
+  return verifier;
 }
 
 function getStoredTokens(): TokenStore | null {
@@ -69,6 +71,7 @@ async function refreshAccessToken(refreshToken: string): Promise<TokenStore> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
       grant_type: "refresh_token",
       refresh_token: refreshToken,
     }),

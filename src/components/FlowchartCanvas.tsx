@@ -49,8 +49,6 @@ export default function FlowchartCanvas({
   const nodeOffset = useRef({ x: 0, y: 0 });
   const dragDelta = useRef({ x: 0, y: 0 });
 
-  // New connection drawing (visual only or click-to-connect)
-  const [connectionSource, setConnectionSource] = useState<{ nodeId: string; choiceId: string } | null>(null);
   const { confirmId: nodeConfirmId, ref: nodeConfirmRef, requestDelete: requestNodeDelete } = useConfirmDelete();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -265,12 +263,16 @@ export default function FlowchartCanvas({
       if (visited.has(nodeId)) return;
       visited.add(nodeId);
 
-      levels[nodeId] = currentLevel;
-      colsAtLevel[currentLevel] = (colsAtLevel[currentLevel] || 0) + 1;
-
       const node = project.nodes[nodeId];
+      const isHidden = node && node.sceneId && hiddenSet.has(node.sceneId);
+
+      if (!isHidden) {
+        levels[nodeId] = currentLevel;
+        colsAtLevel[currentLevel] = (colsAtLevel[currentLevel] || 0) + 1;
+      }
+
       if (node && node.choices) {
-        node.choices.forEach((choice, idx) => {
+        node.choices.forEach((choice) => {
           if (choice.targetNodeId && project.nodes[choice.targetNodeId]) {
             traverse(choice.targetNodeId, currentLevel + 1);
           }
@@ -291,36 +293,33 @@ export default function FlowchartCanvas({
     });
 
     // Arrange nodes based on flow direction
-    const levelCounts: Record<number, number> = {};
+    const levelCounts: Record<string, number> = {};
     Object.keys(updatedNodes).forEach((nodeId) => {
-      // Skip nodes in hidden folders during auto-tidy
-      if (updatedNodes[nodeId].sceneId && hiddenSet.has(updatedNodes[nodeId].sceneId)) {
-        return;
-      }
+      if (updatedNodes[nodeId].sceneId && hiddenSet.has(updatedNodes[nodeId].sceneId)) return;
 
       const lvl = levels[nodeId] !== undefined ? levels[nodeId] : 0;
-      const count = levelCounts[lvl] || 0;
-      levelCounts[lvl] = count + 1;
+      const node = updatedNodes[nodeId];
+      const nodeType = node.nodeType || "story";
+      const key = `${lvl}-${nodeType}`;
+      const count = levelCounts[key] || 0;
+      levelCounts[key] = count + 1;
 
       const totalNodesAtLvl = colsAtLevel[lvl] || 1;
-      
-      let x = 0;
-      let y = 0;
+      let typeOffset = 0;
+      if (nodeType === "location") typeOffset = 1;
+      else if (nodeType === "encounter") typeOffset = 2;
+
+      let x = 0, y = 0;
 
       if (flowDirection === "vertical") {
-        // Vertical Top-to-Bottom / Org-Chart layout
-        x = (count - (totalNodesAtLvl - 1) / 2) * 280 + 400;
-        y = lvl * 220 + 120;
+        x = (count - (totalNodesAtLvl - 1) / 2) * 280 + 400 + typeOffset * 160;
+        y = lvl * 260 + 120;
       } else {
-        // Horizontal Left-to-Right layout
         x = lvl * 320 + 80;
-        y = (count - (totalNodesAtLvl - 1) / 2) * 180 + 240;
+        y = (count - (totalNodesAtLvl - 1) / 2) * 220 + 240 + typeOffset * 160;
       }
 
-      updatedNodes[nodeId] = {
-        ...updatedNodes[nodeId],
-        position: { x, y },
-      };
+      updatedNodes[nodeId] = { ...node, position: { x, y } };
     });
 
     onUpdateProject({
@@ -370,8 +369,8 @@ export default function FlowchartCanvas({
       statChanges: [],
       position: { x: newChildX, y: newChildY },
       isEnding: false,
-      nodeType: "story",
-      sceneId: parentNode.sceneId, // inherit scene folder from parent node!
+      nodeType: parentNode.nodeType || "story",
+      sceneId: parentNode.sceneId,
     };
 
     const newChoice: StoryChoice = {

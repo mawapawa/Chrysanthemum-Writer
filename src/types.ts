@@ -115,8 +115,21 @@ export interface EncounterDrop {
   quantity: number;
 }
 
+export interface CalendarCondition {
+  trackerId: string;
+  operator: ">=" | "<=" | ">" | "<" | "==" | "!=";
+  value: number;
+}
+
+export interface CalendarPeriod {
+  id: string;
+  name: string;
+  conditions: CalendarCondition[];
+}
+
 export interface LocationData {
-  openTime: "day" | "night" | "any";
+  openTime?: "day" | "night" | "any";
+  openPeriodId?: string;
   statusFlagId?: string;
   inventory: LocationItem[];
   tags: string[];
@@ -196,6 +209,7 @@ export interface VNProject {
   driveSyncVersion?: number;
   lastModifiedBy?: { id: string; name: string };
   locks?: NodeLock[];
+  calendar?: CalendarPeriod[];
   scenes?: VNScene[];
   flowDirection?: "horizontal" | "vertical";
   variables?: VNVariable[];

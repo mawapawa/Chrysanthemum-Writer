@@ -178,15 +178,23 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
               </div>
             ) : (
               <div className="space-y-2">
+                {!user && (
+                  <div className="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <p className="text-[10px] text-amber-300">Sign in with Google above first to enable Drive sync.</p>
+                  </div>
+                )}
                 <p className="text-xs text-slate-500">No Drive folder linked. Project saves locally only.</p>
                 <div className="flex gap-2">
                   <button onClick={() => setPickerMode("browse")}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                    disabled={!user}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white disabled:text-slate-500 text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
                     <FolderOpen className="w-3.5 h-3.5" />
                     Browse Folders
                   </button>
                   <button onClick={() => setPickerMode("paste")}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                    disabled={!user}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 disabled:text-slate-600 text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
                     <Link className="w-3.5 h-3.5" />
                     Paste Link
                   </button>

@@ -8,7 +8,8 @@ interface LocationEditorProps {
 }
 
 export default function LocationEditor({ project, node, onUpdateNode }: LocationEditorProps) {
-  const ld = node.locationData || { openTime: "any" as const, inventory: [], tags: [] };
+  const calendar = project.calendar || [];
+  const ld = node.locationData || { inventory: [], tags: [] };
 
   const updateLD = (fields: Partial<typeof ld>) => {
     onUpdateNode({ locationData: { ...ld, ...fields } });
@@ -28,6 +29,8 @@ export default function LocationEditor({ project, node, onUpdateNode }: Location
     updateLD({ inventory: ld.inventory.map((item, i) => (i === idx ? { ...item, ...fields } : item)) });
   };
 
+  const currentPeriodName = ld.openPeriodId ? calendar.find(p => p.id === ld.openPeriodId)?.name : null;
+
   return (
     <div className="space-y-4">
       <div>
@@ -38,13 +41,18 @@ export default function LocationEditor({ project, node, onUpdateNode }: Location
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1">Open Time</label>
-          <select value={ld.openTime} onChange={(e) => updateLD({ openTime: e.target.value as any })}
+          <label className="block text-xs font-semibold text-slate-400 mb-1">Open During</label>
+          <select value={ld.openPeriodId || ""} onChange={(e) => updateLD({ openPeriodId: e.target.value || undefined })}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-200">
-            <option value="day">Daytime</option>
-            <option value="night">Nighttime</option>
-            <option value="any">Any Time</option>
+            <option value="">— Always Open —</option>
+            {calendar.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          {currentPeriodName && (
+            <p className="text-[9px] text-slate-500 mt-1 font-mono">Open during: {currentPeriodName}</p>
+          )}
+          {calendar.length === 0 && (
+            <p className="text-[9px] text-amber-400 mt-1">No calendar periods defined. Add them in the Calendar tab.</p>
+          )}
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-400 mb-1">Status Milestone (optional)</label>
