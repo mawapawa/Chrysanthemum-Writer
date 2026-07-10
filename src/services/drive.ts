@@ -55,28 +55,49 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
   const sanitizedName = project.name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
   const fileName = `${sanitizedName}.json`;
 
-  if (project.driveFileId) {
+  const uploadContent = async (fileId: string): Promise<void> => {
     const blob = new Blob([fileContent], { type: "application/json" });
-    await uploadFetch(`/files/${project.driveFileId}?uploadType=media`, {
+    await uploadFetch(`/files/${fileId}?uploadType=media`, {
       method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: blob,
     });
+  };
+
+  // If we already have a file ID, just update it in place
+  if (project.driveFileId) {
+    await uploadContent(project.driveFileId);
     return project.driveFileId;
   }
 
-  // Step 1: Create file metadata in the target folder (uses API_BASE — no upload)
+  // Sanity check: search for an existing file with the same name in the target folder
+  try {
+    const escapedName = fileName.replace(/'/g, "\\'");
+    const search = await apiFetch(
+      `/files?q=name='${escapedName}' and '${folderId}' in parents and trashed=false&fields=files(id,name)&pageSize=1`
+    );
+    if (search.files && search.files.length > 0) {
+      const existingId = search.files[0].id;
+      await uploadContent(existingId);
+      return existingId;
+    }
+  } catch {
+    // Search failed — fall through to create a new file
+  }
+
+  // Step 1: Create file metadata in the target folder
   const meta = await apiFetch("/files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: fileName, parents: [folderId] }),
+    body: JSON.stringify({ name: fileName, mimeType: "application/json", parents: [folderId] }),
   });
 
-  // Step 2: Upload content via simple media upload (uses UPLOAD_BASE)
-  const uploadBlob = new Blob([fileContent], { type: "application/json" });
-  await uploadFetch(`/files/${meta.id}?uploadType=media`, {
-    method: "PATCH",
-    body: uploadBlob,
-  });
+  // Step 2: Upload content via simple media upload
+  try {
+    await uploadContent(meta.id);
+  } catch {
+    return meta.id;
+  }
   return meta.id;
 }
 

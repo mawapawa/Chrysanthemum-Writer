@@ -178,6 +178,7 @@ export default function FlowchartCanvas({
 
   const handleMouseUp = () => {
     const wasDrag = wasDragged.current;
+    const wasPanning = isPanning;
     if (wasDrag && draggedNodeId) {
       const node = project.nodes[draggedNodeId];
       if (node) {
@@ -195,7 +196,7 @@ export default function FlowchartCanvas({
     dragDelta.current = { x: 0, y: 0 };
     setIsPanning(false);
     setDraggedNodeId(null);
-    if (!wasDrag) {
+    if (!wasDrag && wasPanning) {
       onCanvasBackgroundClick?.();
     }
   };
