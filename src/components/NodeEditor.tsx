@@ -414,16 +414,16 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                       <input type="text" value={choice.text} onChange={(e) => handleUpdateChoice(choice.id, { text: e.target.value })}
                         className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-semibold flex-1 focus:outline-none"
                         placeholder="Choice text..." />
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[9px] text-slate-500 font-mono">→</span>
                         <select value={choice.targetNodeId} onChange={(e) => handleUpdateChoice(choice.id, { targetNodeId: e.target.value })}
-                          className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 max-w-[130px]">
+                          className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 max-w-[110px]">
                           <option value="">-- None --</option>
                           {Object.values(project.nodes).map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
                         </select>
-                        <div ref={choiceConfirmRef}>
+                        <div ref={choiceConfirmRef} className="shrink-0">
                           <button onClick={() => handleDeleteChoice(choice.id)}
-                            className={`text-xs px-2 py-1 rounded-lg cursor-pointer border font-bold ${choiceConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
+                            className={`text-xs px-2 py-1 rounded-lg cursor-pointer border font-bold whitespace-nowrap ${choiceConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
                             {choiceConfirmId === choice.id ? "Confirm?" : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
                         </div>

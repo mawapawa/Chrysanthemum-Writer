@@ -253,24 +253,30 @@ export default function FlowchartCanvas({
   };
 
   const autoArrangeNodes = () => {
-    // Basic auto-arrange using a simple layout tree mapping
     const updatedNodes = { ...project.nodes };
+
+    // --- Graph traversal for story nodes (flowchart spread) ---
     const visited = new Set<string>();
     const levels: Record<string, number> = {};
     const colsAtLevel: Record<number, number> = {};
 
+    // Only traverse through story nodes — location/encounter nodes are dead ends for traversal
     const traverse = (nodeId: string, currentLevel: number) => {
       if (visited.has(nodeId)) return;
       visited.add(nodeId);
 
       const node = project.nodes[nodeId];
-      const isHidden = node && node.sceneId && hiddenSet.has(node.sceneId);
+      if (!node) return;
+      const isHidden = node.sceneId && hiddenSet.has(node.sceneId);
 
-      if (!isHidden) {
+      // Only assign levels to story nodes
+      if (!isHidden && (!node.nodeType || node.nodeType === "story")) {
         levels[nodeId] = currentLevel;
         colsAtLevel[currentLevel] = (colsAtLevel[currentLevel] || 0) + 1;
       }
 
+      // Only traverse through story node choices
+      if (node.nodeType && node.nodeType !== "story") return;
       if (node && node.choices) {
         node.choices.forEach((choice) => {
           if (choice.targetNodeId && project.nodes[choice.targetNodeId]) {
@@ -280,46 +286,79 @@ export default function FlowchartCanvas({
       }
     };
 
-    // Start with start node
     if (project.startNodeId && project.nodes[project.startNodeId]) {
       traverse(project.startNodeId, 0);
     }
-
-    // Process unreached nodes (orphans)
+    // Orphan story nodes
     Object.keys(project.nodes).forEach((nodeId) => {
-      if (!visited.has(nodeId)) {
+      const n = project.nodes[nodeId];
+      if (!visited.has(nodeId) && n && (!n.nodeType || n.nodeType === "story")) {
         traverse(nodeId, 0);
       }
     });
 
-    // Arrange nodes based on flow direction
-    const levelCounts: Record<string, number> = {};
+    // --- Position nodes ---
+    const storyCounts: Record<string, number> = {};
+    const nonStoryCounts: Record<string, number> = {};
+
+    // Process story nodes: spread by level (flowchart style)
     Object.keys(updatedNodes).forEach((nodeId) => {
-      if (updatedNodes[nodeId].sceneId && hiddenSet.has(updatedNodes[nodeId].sceneId)) return;
-
-      const lvl = levels[nodeId] !== undefined ? levels[nodeId] : 0;
       const node = updatedNodes[nodeId];
-      const nodeType = node.nodeType || "story";
-      const key = `${lvl}-${nodeType}`;
-      const count = levelCounts[key] || 0;
-      levelCounts[key] = count + 1;
+      if (node.sceneId && hiddenSet.has(node.sceneId)) return;
+      const isStory = !node.nodeType || node.nodeType === "story";
 
-      const totalNodesAtLvl = colsAtLevel[lvl] || 1;
-      let typeOffset = 0;
-      if (nodeType === "location") typeOffset = 1;
-      else if (nodeType === "encounter") typeOffset = 2;
+      if (isStory) {
+        const lvl = levels[nodeId] !== undefined ? levels[nodeId] : 0;
+        const total = colsAtLevel[lvl] || 1;
+        const key = String(lvl);
+        const count = storyCounts[key] || 0;
+        storyCounts[key] = count + 1;
 
-      let x = 0, y = 0;
+        if (flowDirection === "vertical") {
+          updatedNodes[nodeId] = {
+            ...node,
+            position: {
+              x: (count - (total - 1) / 2) * 280 + 400,
+              y: lvl * 260 + 120,
+            },
+          };
+        } else {
+          updatedNodes[nodeId] = {
+            ...node,
+            position: {
+              x: lvl * 320 + 80,
+              y: (count - (total - 1) / 2) * 220 + 240,
+            },
+          };
+        }
+      }
+    });
+
+    // Process location/encounter nodes: stack in their own lane
+    Object.keys(updatedNodes).forEach((nodeId) => {
+      const node = updatedNodes[nodeId];
+      if (node.sceneId && hiddenSet.has(node.sceneId)) return;
+      const nodeType = node.nodeType;
+      if (!nodeType || nodeType === "story") return;
+
+      const count = nonStoryCounts[nodeType] || 0;
+      nonStoryCounts[nodeType] = count + 1;
+
+      const typeOffset = nodeType === "location" ? 1 : 2;
 
       if (flowDirection === "vertical") {
-        x = (count - (totalNodesAtLvl - 1) / 2) * 280 + 400 + typeOffset * 160;
-        y = lvl * 260 + 120;
+        // Fixed column offset, stack top to bottom
+        updatedNodes[nodeId] = {
+          ...node,
+          position: { x: 400 + typeOffset * 280, y: count * 220 + 120 },
+        };
       } else {
-        x = lvl * 320 + 80;
-        y = (count - (totalNodesAtLvl - 1) / 2) * 220 + 240 + typeOffset * 160;
+        // Fixed row offset, stack left to right
+        updatedNodes[nodeId] = {
+          ...node,
+          position: { x: (count - 1) * 320 + 80, y: 240 + typeOffset * 200 },
+        };
       }
-
-      updatedNodes[nodeId] = { ...node, position: { x, y } };
     });
 
     onUpdateProject({

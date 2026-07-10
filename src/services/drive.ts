@@ -2,11 +2,29 @@ import { VNProject } from "../types";
 import { getAccessToken } from "./auth";
 
 const API_BASE = "https://www.googleapis.com/drive/v3";
+const UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3";
 
 async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const token = await getAccessToken();
   if (!token) throw new Error("No access token");
   const resp = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => "(no body)");
+    throw new Error(`Drive API error ${resp.status}: ${errBody}`);
+  }
+  return resp.status === 204 ? null : resp.json();
+}
+
+async function uploadFetch(path: string, options: RequestInit = {}): Promise<any> {
+  const token = await getAccessToken();
+  if (!token) throw new Error("No access token");
+  const resp = await fetch(`${UPLOAD_BASE}${path}`, {
     ...options,
     headers: {
       ...options.headers,
@@ -39,42 +57,27 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
 
   if (project.driveFileId) {
     const blob = new Blob([fileContent], { type: "application/json" });
-    await apiFetch(`/files/${project.driveFileId}?uploadType=media`, {
+    await uploadFetch(`/files/${project.driveFileId}?uploadType=media`, {
       method: "PATCH",
       body: blob,
     });
     return project.driveFileId;
   }
 
-  const boundary = `boundary_${Date.now()}`;
-  const body = [
-    `--${boundary}`,
-    'Content-Type: application/json; charset=UTF-8',
-    '',
-    JSON.stringify({ name: fileName, parents: [folderId] }),
-    `--${boundary}`,
-    'Content-Type: application/json',
-    '',
-    fileContent,
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  const token = await getAccessToken();
-  if (!token) throw new Error("No access token");
-  const resp = await fetch(`${API_BASE}/files?uploadType=multipart`, {
+  // Step 1: Create file metadata in the target folder (uses API_BASE — no upload)
+  const meta = await apiFetch("/files", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
-    },
-    body,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: fileName, parents: [folderId] }),
   });
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => "(no body)");
-    throw new Error(`Upload failed: ${resp.status} — ${errBody}`);
-  }
-  const data = await resp.json();
-  return data.id;
+
+  // Step 2: Upload content via simple media upload (uses UPLOAD_BASE)
+  const uploadBlob = new Blob([fileContent], { type: "application/json" });
+  await uploadFetch(`/files/${meta.id}?uploadType=media`, {
+    method: "PATCH",
+    body: uploadBlob,
+  });
+  return meta.id;
 }
 
 export async function createBackup(project: VNProject): Promise<void> {
@@ -85,28 +88,15 @@ export async function createBackup(project: VNProject): Promise<void> {
     const backupName = `backup-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.json`;
     const fileContent = JSON.stringify(project, null, 2);
 
-    const boundary = `backup_${Date.now()}`;
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      JSON.stringify({ name: backupName, parents: [project.driveFolderId] }),
-      `--${boundary}`,
-      'Content-Type: application/json',
-      '',
-      fileContent,
-      `--${boundary}--`,
-    ].join("\r\n");
-
-    const token = await getAccessToken();
-    if (!token) return;
-    await fetch(`${API_BASE}/files?uploadType=multipart`, {
+    const meta = await apiFetch("/files", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": `multipart/related; boundary=${boundary}`,
-      },
-      body,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: backupName, parents: [project.driveFolderId] }),
+    });
+    const uploadBlob = new Blob([fileContent], { type: "application/json" });
+    await uploadFetch(`/files/${meta.id}?uploadType=media`, {
+      method: "PATCH",
+      body: uploadBlob,
     });
   } catch {
     // Backup failures are non-critical
