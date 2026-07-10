@@ -421,10 +421,11 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                           <option value="">-- None --</option>
                           {Object.values(project.nodes).map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
                         </select>
-                        <div ref={choiceConfirmRef} className="shrink-0">
+                        <div ref={choiceConfirmRef}>
                           <button onClick={() => handleDeleteChoice(choice.id)}
-                            className={`text-xs px-2 py-1 rounded-lg cursor-pointer border font-bold whitespace-nowrap ${choiceConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
-                            {choiceConfirmId === choice.id ? "Confirm?" : <Trash2 className="w-3.5 h-3.5" />}
+                            className={`text-xs p-1.5 rounded-lg cursor-pointer border font-bold transition-all ${choiceConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
+                            title={choiceConfirmId === choice.id ? "Click again to confirm" : "Delete choice"}>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
