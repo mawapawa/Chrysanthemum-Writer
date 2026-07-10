@@ -6,7 +6,6 @@ import NodeEditor from "./components/NodeEditor";
 import PlaytestSimulator from "./components/PlaytestSimulator";
 import SyncIndicator from "./components/SyncIndicator";
 import TutorialDialog from "./components/TutorialDialog";
-import BackupDialog from "./components/BackupDialog";
 import SettingsDialog from "./components/SettingsDialog";
 import SceneDirectory from "./components/SceneDirectory";
 import TrackersManager from "./components/TrackersManager";
@@ -19,7 +18,7 @@ import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateF
 import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
   Sliders, Flag, Package, Users, Clock,
-  Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
+  Layers, Plus, BookOpen, Settings, Pencil, ChevronLeft, ChevronRight
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -129,7 +128,6 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
 
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
-  const [backupDialogOpen, setBackupDialogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
@@ -362,6 +360,13 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  const handleLoadTemplate = () => {
+    const template: VNProject = { ...RAVENWOOD_TEMPLATE, id: crypto.randomUUID(), name: "Mystery of Ravenwood Manor", lastModified: Date.now() };
+    setProject(template);
+    setAllProjects(prev => [...prev, template]);
+    setSelectedNodeId("node-start");
+  };
+
   const handleAddLocation = () => {
     const newId = crypto.randomUUID();
     const newNode: StoryNode = {
@@ -511,11 +516,6 @@ export default function App() {
         </div>
         <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
           <SyncIndicator status={syncStatus} errorMsg={syncError} onSyncNow={syncNow} />
-          {project.driveFolderId && (
-            <button onClick={() => setBackupDialogOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
-              <History className="w-3.5 h-3.5" />
-            </button>
-          )}
           <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
             <Settings className="w-3.5 h-3.5" />
           </button>
@@ -642,10 +642,6 @@ export default function App() {
         </div>
       )}
 
-      {backupDialogOpen && project.driveFolderId && (
-        <BackupDialog driveFolderId={project.driveFolderId} onClose={() => setBackupDialogOpen(false)} />
-      )}
-
       {isSettingsOpen && (
         <SettingsDialog
           project={project}
@@ -655,6 +651,7 @@ export default function App() {
           signIn={signIn}
           signOut={signOut}
           onOpenTutorial={() => setShowTutorial(true)}
+          onLoadTemplate={handleLoadTemplate}
           onExportProject={handleExportJSON}
         />
       )}

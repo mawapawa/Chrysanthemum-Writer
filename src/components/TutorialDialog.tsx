@@ -153,6 +153,21 @@ export default function TutorialDialog({ onClose }: { onClose: () => void }) {
             </table>
           </Section>
 
+          <Section title="Calendar System">
+            <p className="text-slate-300 mb-2">Define named time periods to control when locations are open or closed.</p>
+            <table className="w-full text-[11px]">
+              <thead><tr className="text-slate-500 font-mono text-[10px]"><th className="text-left pr-4 pb-1">Step</th><th className="text-left pb-1">How</th></tr></thead>
+              <tbody className="text-slate-300">
+                <tr><td className="pr-4 py-1 font-semibold">1. Create trackers</td><td>Define numeric trackers like <span className="font-mono text-indigo-400">hour</span> (default 8) and <span className="font-mono text-indigo-400">day</span> (default 1) in the Stats tab</td></tr>
+                <tr><td className="pr-4 py-1 font-semibold">2. Define periods</td><td>In the Calendar tab, create periods with conditions: <span className="font-mono text-indigo-400">hour &gt;= 6 and hour &lt; 12</span> (Morning), <span className="font-mono text-indigo-400">hour &gt;= 18</span> (Night)</td></tr>
+                <tr><td className="pr-4 py-1 font-semibold">3. Assign to location</td><td>Open a Location card → "Open During" dropdown → pick a period</td></tr>
+                <tr><td className="pr-4 py-1 font-semibold">4. Time advances</td><td>In playtest, each choice advances <span className="font-mono text-indigo-400">hour</span> by 1. When hour reaches 24, <span className="font-mono text-indigo-400">day</span> increments and hour resets to 0</td></tr>
+                <tr><td className="pr-4 py-1 font-semibold">5. Live evaluation</td><td>Location cards in playtest show ✅ (open) or 🔒 (closed) based on current tracker values</td></tr>
+              </tbody>
+            </table>
+            <p className="text-xs text-slate-500 mt-2">Combine multiple conditions with AND logic. All conditions must be true for the period to be active.</p>
+          </Section>
+
           <Section title="Keyboard Shortcuts">
             <table className="w-full text-[11px]">
               <thead><tr className="text-slate-500 font-mono text-[10px]"><th className="text-left pr-4 pb-1">Shortcut</th><th className="text-left pb-1">Action</th></tr></thead>

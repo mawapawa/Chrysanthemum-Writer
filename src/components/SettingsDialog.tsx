@@ -13,12 +13,13 @@ interface SettingsDialogProps {
   signIn: () => Promise<AuthUser>;
   signOut: () => Promise<void>;
   onOpenTutorial?: () => void;
+  onLoadTemplate?: () => void;
   onExportProject?: () => void;
 }
 
 type PickerMode = null | "browse" | "paste";
 
-export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportProject }: SettingsDialogProps) {
+export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onLoadTemplate, onExportProject }: SettingsDialogProps) {
   const { status, syncNow } = useDriveSync(project);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
@@ -224,6 +225,10 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
               className="w-full py-2 px-3 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-xl cursor-pointer">
               📚 View Tutorial
             </button>
+            <button onClick={() => { onClose(); onLoadTemplate?.(); }}
+              className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer mt-2">
+              🏰 Load Test Project (Ravenwood Manor)
+            </button>
           </div>
         </div>
 
@@ -232,7 +237,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">About</h3>
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-sm font-bold text-slate-200">Chrysanthemum</p>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">Version 0.2.0</p>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">Version 1.0.2</p>
             <p className="text-xs text-slate-500 font-mono">Built with Tauri + React</p>
           </div>
         </div>
