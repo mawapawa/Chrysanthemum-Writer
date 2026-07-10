@@ -14,8 +14,8 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
     },
   });
   if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Drive API error: ${resp.status} ${err}`);
+    const errBody = await resp.text().catch(() => "(no body)");
+    throw new Error(`Drive API error ${resp.status}: ${errBody}`);
   }
   return resp.status === 204 ? null : resp.json();
 }
@@ -69,7 +69,10 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
     },
     body,
   });
-  if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => "(no body)");
+    throw new Error(`Upload failed: ${resp.status} — ${errBody}`);
+  }
   const data = await resp.json();
   return data.id;
 }
