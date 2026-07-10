@@ -97,3 +97,18 @@
 ---
 
 ## Data Flow
+- Edit → Auto-save (2s debounce) → Local .chrysanthemum file ↓ 5s debounce → Drive sync ↓ chrysanthemum-{uuid}.json in linked folder
+
+- New machine: Sign in → Scan Drive for chrysanthemum-*.json → Load project → Auto-save locally → Sync back to same Drive file
+
+---
+
+## Built With
+- Tauri v2 (Rust backend)
+- React 19 + TypeScript
+- Tailwind CSS v4
+- TipTap (rich text editor)
+- @dnd-kit (drag-and-drop)
+- Lucide React (icons)
+- Google Drive API v3
+- Vite (bundler)
