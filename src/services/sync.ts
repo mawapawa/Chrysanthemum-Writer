@@ -35,10 +35,12 @@ export async function triggerDriveSync(project: VNProject): Promise<string | nul
       setTimeout(() => setStatus("idle"), 3000);
       return fileId;
     }
-    setStatus("idle");
+    setStatus("error", "Drive sync returned no file ID");
     return null;
-  } catch {
-    setStatus("error", "Drive sync failed");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[DRIVE SYNC]", msg);
+    setStatus("error", msg);
     return null;
   }
 }

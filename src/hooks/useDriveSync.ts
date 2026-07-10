@@ -4,10 +4,15 @@ import { SyncStatus, getSyncStatus, onSyncStatusChange, triggerDriveSync } from 
 
 export function useDriveSync(project: VNProject | null, onFileId?: (fileId: string) => void) {
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    return onSyncStatusChange(setStatus);
+    return onSyncStatusChange((s, err) => {
+      setStatus(s);
+      if (err) setErrorMsg(err);
+      if (s !== "error") setErrorMsg(null);
+    });
   }, []);
 
   useEffect(() => {
@@ -32,5 +37,5 @@ export function useDriveSync(project: VNProject | null, onFileId?: (fileId: stri
     return null;
   }, [project, onFileId]);
 
-  return { status, syncNow };
+  return { status, errorMsg, syncNow };
 }

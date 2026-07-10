@@ -441,99 +441,93 @@ export default function FlowchartCanvas({
             </marker>
           </defs>
 
-          {/* Build incoming connection map for merged rendering */}
+          {/* Group choices by source→target pair for merged wire rendering */}
           {(() => {
-            const incoming: Record<string, Array<{ node: typeof visibleNodes[0]; choice: StoryChoice; conditioned: boolean }>> = {};
+            const pairs: Array<{ sourceNode: typeof visibleNodes[0]; targetNode: typeof project.nodes[string]; choices: StoryChoice[] }> = [];
             for (const node of visibleNodes) {
+              const grouped: Record<string, StoryChoice[]> = {};
               for (const choice of node.choices) {
                 const targetNode = project.nodes[choice.targetNodeId];
                 if (!targetNode) continue;
                 const targetVisible = visibleNodesMap.has(targetNode.id);
                 if (!targetVisible && !hiddenSet.has(targetNode.sceneId ?? "")) continue;
-                if (!incoming[choice.targetNodeId]) incoming[choice.targetNodeId] = [];
-                incoming[choice.targetNodeId].push({ node, choice, conditioned: !!(choice.condition || choice.requirement) });
+                if (!grouped[targetNode.id]) grouped[targetNode.id] = [];
+                grouped[targetNode.id].push(choice);
+              }
+              for (const [targetId, choices] of Object.entries(grouped)) {
+                const targetNode = project.nodes[targetId];
+                if (targetNode) pairs.push({ sourceNode: node, targetNode, choices });
               }
             }
 
             const renderWires: Array<React.ReactElement> = [];
+            const isVertical = flowDirection === "vertical";
 
-            for (const [targetId, entries] of Object.entries(incoming)) {
-              const targetNode = project.nodes[targetId];
-              if (!targetNode) continue;
-              const targetVisible = visibleNodesMap.has(targetId);
-              const count = entries.length;
+            for (const { sourceNode, targetNode, choices } of pairs) {
+              const hasConditioned = choices.some(c => c.condition || c.requirement);
+              const isCond = hasConditioned;
+              const color1 = isCond ? "#f59e0b" : "#4f46e5";
+              const color2 = isCond ? "#d97706" : "#6366f1";
+              const arrowId = isCond ? "arrow-conditioned" : "arrow";
+              const targetVisible = visibleNodesMap.has(targetNode.id) ? 1 : 0.25;
 
-              entries.forEach(({ node, choice, conditioned }, idx) => {
-                const isVertical = flowDirection === "vertical";
+              let sX: number, sY: number, tX: number, tY: number, pathD: string;
 
-                let sX: number, sY: number, tX: number, tY: number;
+              if (isVertical) {
+                sX = sourceNode.position.x * zoom + pan.x + 120 * zoom;
+                sY = sourceNode.position.y * zoom + pan.y + 115 * zoom;
+                tX = targetNode.position.x * zoom + pan.x + 120 * zoom;
+                tY = targetNode.position.y * zoom + pan.y;
+                const dy = Math.abs(tY - sY) * 0.5;
+                const midY = (sY + tY) / 2;
+                pathD = `M ${sX} ${sY} C ${sX} ${sY + dy}, ${tX} ${tY - dy}, ${tX} ${tY}`;
 
-                if (isVertical) {
-                  sX = node.position.x * zoom + pan.x + 120 * zoom;
-                  sY = node.position.y * zoom + pan.y + 115 * zoom;
+                // Stack labels vertically along the midpoint
+                renderWires.push(
+                  <g key={`${sourceNode.id}-${targetNode.id}`}>
+                    <path d={pathD} fill="none" stroke={color1} strokeOpacity={0.12 * targetVisible} strokeWidth="5" />
+                    <path d={pathD} fill="none" stroke={color2} strokeWidth="2" strokeOpacity={targetVisible} strokeDasharray={isCond ? "4 4" : "none"} markerEnd={`url(#${arrowId})`} />
+                    {choices.map((c, i) => {
+                      const labelY = midY - ((choices.length - 1) * 11) / 2 + i * 11;
+                      return (
+                        <g key={c.id} transform={`translate(${(sX + tX) / 2}, ${labelY})`} opacity={targetVisible}>
+                          <rect x="-52" y="-8" width="104" height="16" rx="8" fill="#1e293b" stroke={c.condition || c.requirement ? "#d97706" : "#475569"} strokeWidth="1" />
+                          <text textAnchor="middle" dominantBaseline="middle" fill={c.condition || c.requirement ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
+                            {c.text.length > 14 ? c.text.substring(0, 12) + ".." : c.text}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                );
+              } else {
+                sX = sourceNode.position.x * zoom + pan.x + 240 * zoom;
+                sY = sourceNode.position.y * zoom + pan.y + 70 * zoom;
+                tX = targetNode.position.x * zoom + pan.x;
+                tY = targetNode.position.y * zoom + pan.y + 40 * zoom;
+                const dx = Math.abs(tX - sX) * 0.5;
+                const midY = (sY + tY) / 2;
+                pathD = `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
 
-                  const targetMidX = targetNode.position.x * zoom + pan.x + 120 * zoom;
-                  const targetTop = targetNode.position.y * zoom + pan.y;
-                  const spacing = count > 1 ? 40 * zoom : 0;
-                  const offset = (idx - (count - 1) / 2) * spacing;
-
-                  tX = targetMidX + offset;
-                  tY = targetTop;
-
-                  const dy = Math.abs(tY - sY) * 0.5;
-                  const pathD = `M ${sX} ${sY} C ${sX} ${sY + dy}, ${tX} ${tY - dy}, ${tX} ${tY}`;
-
-                  const isCond = conditioned;
-                  const color1 = isCond ? "#f59e0b" : "#4f46e5";
-                  const color2 = isCond ? "#d97706" : "#6366f1";
-                  const arrowId = isCond ? "arrow-conditioned" : "arrow";
-
-                  renderWires.push(
-                    <g key={choice.id}>
-                      <path d={pathD} fill="none" stroke={color1} strokeOpacity="0.12" strokeWidth="5" />
-                      <path d={pathD} fill="none" stroke={color2} strokeWidth="2" strokeDasharray={isCond ? "4 4" : "none"} markerEnd={`url(#${arrowId})`} />
-                      <g transform={`translate(${(sX + tX) / 2}, ${(sY + tY) / 2 - 14})`}>
-                        <rect x="-52" y="-10" width="104" height="18" rx="9" fill="#1e293b" stroke={isCond ? "#d97706" : "#475569"} strokeWidth="1" className="opacity-95" />
-                        <text textAnchor="middle" dominantBaseline="middle" fill={isCond ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
-                          {choice.text.length > 14 ? choice.text.substring(0, 12) + ".." : choice.text}
-                        </text>
-                      </g>
-                    </g>
-                  );
-                } else {
-                  sX = node.position.x * zoom + pan.x + 240 * zoom;
-                  sY = node.position.y * zoom + pan.y + 70 * zoom;
-
-                  const targetLeft = targetNode.position.x * zoom + pan.x;
-                  const targetMidY = targetNode.position.y * zoom + pan.y + 40 * zoom;
-                  const spacing = count > 1 ? 36 * zoom : 0;
-                  const offset = (idx - (count - 1) / 2) * spacing;
-
-                  tX = targetLeft;
-                  tY = targetMidY + offset;
-
-                  const dx = Math.abs(tX - sX) * 0.5;
-                  const pathD = `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
-
-                  const isCond = conditioned;
-                  const color1 = isCond ? "#f59e0b" : "#4f46e5";
-                  const color2 = isCond ? "#d97706" : "#6366f1";
-                  const arrowId = isCond ? "arrow-conditioned" : "arrow";
-
-                  renderWires.push(
-                    <g key={choice.id}>
-                      <path d={pathD} fill="none" stroke={color1} strokeOpacity="0.12" strokeWidth="5" />
-                      <path d={pathD} fill="none" stroke={color2} strokeWidth="2" strokeDasharray={isCond ? "4 4" : "none"} markerEnd={`url(#${arrowId})`} />
-                      <g transform={`translate(${(sX + tX) / 2}, ${(sY + tY) / 2 - 14})`}>
-                        <rect x="-52" y="-10" width="104" height="18" rx="9" fill="#1e293b" stroke={isCond ? "#d97706" : "#475569"} strokeWidth="1" className="opacity-95" />
-                        <text textAnchor="middle" dominantBaseline="middle" fill={isCond ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
-                          {choice.text.length > 14 ? choice.text.substring(0, 12) + ".." : choice.text}
-                        </text>
-                      </g>
-                    </g>
-                  );
-                }
-              });
+                // Stack labels vertically along the midpoint
+                renderWires.push(
+                  <g key={`${sourceNode.id}-${targetNode.id}`}>
+                    <path d={pathD} fill="none" stroke={color1} strokeOpacity={0.12 * targetVisible} strokeWidth="5" />
+                    <path d={pathD} fill="none" stroke={color2} strokeWidth="2" strokeOpacity={targetVisible} strokeDasharray={isCond ? "4 4" : "none"} markerEnd={`url(#${arrowId})`} />
+                    {choices.map((c, i) => {
+                      const labelY = midY - ((choices.length - 1) * 11) / 2 + i * 11;
+                      return (
+                        <g key={c.id} transform={`translate(${(sX + tX) / 2}, ${labelY})`} opacity={targetVisible}>
+                          <rect x="-52" y="-8" width="104" height="16" rx="8" fill="#1e293b" stroke={c.condition || c.requirement ? "#d97706" : "#475569"} strokeWidth="1" />
+                          <text textAnchor="middle" dominantBaseline="middle" fill={c.condition || c.requirement ? "#f59e0b" : "#e2e8f0"} className="text-[9px] font-mono font-medium">
+                            {c.text.length > 14 ? c.text.substring(0, 12) + ".." : c.text}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                );
+              }
             }
 
             return renderWires;

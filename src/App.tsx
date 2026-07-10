@@ -229,7 +229,7 @@ export default function App() {
     setProject(prev => ({ ...prev, driveFileId: fileId }));
   }, []);
 
-  const { status: syncStatus, syncNow } = useDriveSync(project, handleFileId);
+  const { status: syncStatus, errorMsg: syncError, syncNow } = useDriveSync(project, handleFileId);
 
   const [allProjects, setAllProjects] = useState<VNProject[]>([]);
 
@@ -491,7 +491,7 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
-          <SyncIndicator status={syncStatus} onSyncNow={syncNow} />
+          <SyncIndicator status={syncStatus} errorMsg={syncError} onSyncNow={syncNow} />
           {project.driveFolderId && (
             <button onClick={() => setBackupDialogOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
               <History className="w-3.5 h-3.5" />

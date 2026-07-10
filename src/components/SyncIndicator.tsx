@@ -3,6 +3,7 @@ import { Cloud, RefreshCw, AlertTriangle } from "lucide-react";
 
 interface SyncIndicatorProps {
   status: SyncStatus;
+  errorMsg?: string | null;
   onSyncNow: () => void;
 }
 
@@ -14,19 +15,26 @@ const STATUS_CONFIG: Record<SyncStatus, { icon: typeof Cloud; label: string; col
   error: { icon: AlertTriangle, label: "Sync error", color: "text-rose-400" },
 };
 
-export default function SyncIndicator({ status, onSyncNow }: SyncIndicatorProps) {
+export default function SyncIndicator({ status, errorMsg, onSyncNow }: SyncIndicatorProps) {
   const config = STATUS_CONFIG[status];
   const Icon = config.icon;
 
   return (
-    <button
-      onClick={onSyncNow}
-      disabled={status === "saving" || status === "syncing"}
-      className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 hover:text-slate-300 transition-colors cursor-pointer disabled:opacity-50"
-      title="Click to sync now"
-    >
-      <Icon className={`w-3 h-3 ${config.color} ${status === "saving" || status === "syncing" ? "animate-spin" : ""}`} />
-      <span>{config.label}</span>
-    </button>
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={onSyncNow}
+        disabled={status === "saving" || status === "syncing"}
+        className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 hover:text-slate-300 transition-colors cursor-pointer disabled:opacity-50"
+        title={errorMsg || "Click to sync now"}
+      >
+        <Icon className={`w-3 h-3 ${config.color} ${status === "saving" || status === "syncing" ? "animate-spin" : ""}`} />
+        <span>{config.label}</span>
+      </button>
+      {status === "error" && errorMsg && (
+        <span className="text-[9px] text-rose-400 max-w-[200px] truncate font-mono" title={errorMsg}>
+          {errorMsg}
+        </span>
+      )}
+    </div>
   );
 }
