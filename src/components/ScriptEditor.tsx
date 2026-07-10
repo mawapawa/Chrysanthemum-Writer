@@ -51,7 +51,7 @@ export default function ScriptEditor({ initialContent, onChange, placeholder }: 
       Placeholder.configure({ placeholder: placeholder || "Write your scene script here..." }),
     ],
     editorProps: {
-      attributes: { class: "prose prose-invert max-w-none focus:outline-none min-h-[60px] p-2 text-sm leading-relaxed" },
+      attributes: { class: "max-w-none focus:outline-none min-h-[60px] p-2 text-sm leading-relaxed" },
       handleDOMEvents: {
         contextmenu: (view, event) => {
           event.preventDefault();

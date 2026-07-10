@@ -719,7 +719,7 @@ export default function FlowchartCanvas({
 
                   {node.nodeType === "location" && node.locationData && (
                     <div className="mt-2 space-y-0.5">
-                      <div className="text-[9px] text-amber-300 font-mono">Items: {node.locationData.inventory.length} | Open: {node.locationData.openTime}</div>
+                      <div className="text-[9px] text-amber-300 font-mono">Items: {node.locationData.inventory.length} | Open: {node.locationData.openTime || "any"}</div>
                       {node.locationData.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {node.locationData.tags.map(tag => (

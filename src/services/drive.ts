@@ -52,8 +52,7 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
   const folderId = project.driveFolderId;
   const fileContent = JSON.stringify(project, null, 2);
 
-  const sanitizedName = project.name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
-  const fileName = `${sanitizedName}.json`;
+  const fileName = `chrysanthemum-${project.id}.json`;
 
   const uploadContent = async (fileId: string): Promise<void> => {
     const blob = new Blob([fileContent], { type: "application/json" });
@@ -70,7 +69,7 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
     return project.driveFileId;
   }
 
-  // Sanity check: search for an existing file with the same name in the target folder
+  // Search for existing UUID-based file in the target folder
   try {
     const escapedName = fileName.replace(/'/g, "\\'");
     const search = await apiFetch(
@@ -82,17 +81,17 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
       return existingId;
     }
   } catch {
-    // Search failed — fall through to create a new file
+    // Search failed — fall through to create new file
   }
 
-  // Step 1: Create file metadata in the target folder
+  // Create file metadata in the target folder
   const meta = await apiFetch("/files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: fileName, mimeType: "application/json", parents: [folderId] }),
   });
 
-  // Step 2: Upload content via simple media upload
+  // Upload content
   try {
     await uploadContent(meta.id);
   } catch {
@@ -101,26 +100,14 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
   return meta.id;
 }
 
-export async function createBackup(project: VNProject): Promise<void> {
-  if (!project.driveFolderId) return;
+export async function scanDriveForProjects(): Promise<Array<{ fileId: string; name: string }>> {
   try {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const backupName = `backup-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.json`;
-    const fileContent = JSON.stringify(project, null, 2);
-
-    const meta = await apiFetch("/files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: backupName, parents: [project.driveFolderId] }),
-    });
-    const uploadBlob = new Blob([fileContent], { type: "application/json" });
-    await uploadFetch(`/files/${meta.id}?uploadType=media`, {
-      method: "PATCH",
-      body: uploadBlob,
-    });
+    const resp = await apiFetch(
+      `/files?q=name contains 'chrysanthemum-' and trashed=false&fields=files(id,name)`
+    );
+    return (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name }));
   } catch {
-    // Backup failures are non-critical
+    return [];
   }
 }
 

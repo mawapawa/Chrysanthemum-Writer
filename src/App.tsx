@@ -16,7 +16,7 @@ import EntitiesManager from "./components/EntitiesManager";
 import CalendarManager from "./components/CalendarManager";
 import { migrateProject } from "./utils/schemaMigration";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
-import { loadProjectFromDrive } from "./services/drive";
+import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
   Sliders, Flag, Package, Users, Clock,
   Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
@@ -220,6 +220,21 @@ export default function App() {
     document.title = `${project.name} — Chrysanthemum`;
   }, [project.name]);
 
+  // After sign-in: scan Drive for project files
+  useEffect(() => {
+    if (loading || !user || project !== BLANK_PROJECT) return;
+    (async () => {
+      const found = await scanDriveForProjects();
+      if (found.length > 0) {
+        const proj = await loadProjectFromDrive(found[0].fileId);
+        if (proj) {
+          setProject(proj);
+          setAllProjects([proj]);
+        }
+      }
+    })();
+  }, [user, loading]);
+
   // Web fallback: also save to localStorage
   useEffect(() => {
     if (loading || project === BLANK_PROJECT) return;
@@ -297,11 +312,13 @@ export default function App() {
         const blank = { ...BLANK_PROJECT, id: crypto.randomUUID() };
         setProject(blank);
         setSelectedNodeId("node-start");
-      } else if (project.id === projId) {
+        return [blank];
+      }
+      if (project.id === projId) {
         setProject(next[0]);
         setSelectedNodeId(next[0].startNodeId);
       }
-      return next.length ? next : [project];
+      return next;
     });
   };
 

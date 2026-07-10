@@ -43,7 +43,7 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     ...project.flags.map(f => ({ name: f.name, type: "boolean" as const })),
   ];
 
-  const { confirmId: choiceConfirmId, ref: choiceConfirmRef, requestDelete: requestChoiceDelete } = useConfirmDelete();
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { confirmId: lineConfirmId, ref: lineConfirmRef, requestDelete: requestLineDelete } = useConfirmDelete();
   const [dialogueSpeaker, setDialogueSpeaker] = useState("Narrator");
   const [dialogueExpression, setDialogueExpression] = useState("Neutral");
@@ -118,7 +118,12 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
   };
 
   const handleDeleteChoice = (choiceId: string) => {
-    if (!requestChoiceDelete(choiceId)) return;
+    if (deleteConfirmId !== choiceId) {
+      setDeleteConfirmId(choiceId);
+      setTimeout(() => setDeleteConfirmId(null), 4000);
+      return;
+    }
+    setDeleteConfirmId(null);
     updateNode({ choices: node.choices.filter((c) => c.id !== choiceId) });
   };
 
@@ -421,11 +426,11 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                           <option value="">-- None --</option>
                           {Object.values(project.nodes).map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
                         </select>
-                        <div ref={choiceConfirmRef}>
+                        <div className="shrink-0">
                           <button onClick={() => handleDeleteChoice(choice.id)}
-                            className={`text-xs p-1.5 rounded-lg cursor-pointer border font-bold transition-all ${choiceConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
-                            title={choiceConfirmId === choice.id ? "Click again to confirm" : "Delete choice"}>
-                            <Trash2 className="w-3.5 h-3.5" />
+                            className={`text-[10px] px-1.5 py-1 rounded-lg cursor-pointer border font-bold transition-all whitespace-nowrap ${deleteConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}
+                            title={deleteConfirmId === choice.id ? "Click again to confirm" : "Delete choice"}>
+                            {deleteConfirmId === choice.id ? "Confirm?" : <Trash2 className="w-3 h-3" />}
                           </button>
                         </div>
                       </div>
