@@ -162,15 +162,15 @@ export default function App() {
       try {
         await migrateFromOldPath();
         const files = await listProjectFiles();
-        const loaded: VNProject[] = [];
+        const loaded: Array<{ proj: VNProject; file: string }> = [];
         for (const f of files) {
           const proj = await loadProject(f);
-          if (proj) loaded.push(proj);
+          if (proj) loaded.push({ proj, file: f });
         }
         if (loaded.length > 0) {
-          setAllProjects(loaded);
-          setProject(loaded[0]);
-          setCurrentFileName(files[0]);
+          setAllProjects(loaded.map(e => e.proj));
+          setProject(loaded[0].proj);
+          setCurrentFileName(loaded[0].file);
         } else {
           const migrated = await migrateFromLocalStorage();
           if (migrated) {
@@ -221,7 +221,7 @@ export default function App() {
 
   // Web fallback: also save to localStorage
   useEffect(() => {
-    if (loading) return;
+    if (loading || project === BLANK_PROJECT) return;
     localStorage.setItem("chrysanthemum_project", JSON.stringify(project));
   }, [project, loading]);
 

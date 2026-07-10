@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { VNProject, StoryNode, StoryChoice } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
 import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star } from "lucide-react";
+import { useConfirmDelete } from "../hooks/useConfirmDelete";
 
 interface FlowchartCanvasProps {
   project: VNProject;
@@ -50,23 +51,9 @@ export default function FlowchartCanvas({
 
   // New connection drawing (visual only or click-to-connect)
   const [connectionSource, setConnectionSource] = useState<{ nodeId: string; choiceId: string } | null>(null);
-  const [nodeToConfirmDelete, setNodeToConfirmDelete] = useState<string | null>(null);
+  const { confirmId: nodeConfirmId, ref: nodeConfirmRef, requestDelete: requestNodeDelete } = useConfirmDelete();
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const nodeConfirmRef = useRef<HTMLDivElement>(null);
-
-  // Click-away dismiss for node delete confirmation
-  useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      if (nodeConfirmRef.current && !nodeConfirmRef.current.contains(event.target as Node)) {
-        setNodeToConfirmDelete(null);
-      }
-    };
-    if (nodeToConfirmDelete !== null) {
-      document.addEventListener("mousedown", handler);
-      return () => document.removeEventListener("mousedown", handler);
-    }
-  }, [nodeToConfirmDelete]);
 
   const flowDirection = project.flowDirection || "horizontal";
   const hiddenSet = new Set(hiddenFolderIds);
@@ -235,15 +222,7 @@ export default function FlowchartCanvas({
 
   const handleDeleteNode = (nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (nodeToConfirmDelete !== nodeId) {
-      setNodeToConfirmDelete(nodeId);
-      setTimeout(() => {
-        setNodeToConfirmDelete((current) => (current === nodeId ? null : current));
-      }, 4000);
-      return;
-    }
-
-    setNodeToConfirmDelete(null);
+    if (!requestNodeDelete(nodeId)) return;
     const updatedNodes = { ...project.nodes };
     delete updatedNodes[nodeId];
 
@@ -652,13 +631,13 @@ export default function FlowchartCanvas({
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => handleDeleteNode(node.id, e)}
                           className={`p-1 rounded-md cursor-pointer transition-all flex items-center justify-center ${
-                            nodeToConfirmDelete === node.id
+                            nodeConfirmId === node.id
                               ? "bg-rose-600 text-white px-2 animate-pulse"
                               : "text-slate-400 hover:text-rose-400 hover:bg-slate-700"
                           }`}
-                          title={nodeToConfirmDelete === node.id ? "Click again to confirm deletion" : "Delete scene node"}
+                          title={nodeConfirmId === node.id ? "Click again to confirm deletion" : "Delete scene node"}
                         >
-                          {nodeToConfirmDelete === node.id ? (
+                          {nodeConfirmId === node.id ? (
                             <span className="text-[9px] font-bold">Confirm?</span>
                           ) : (
                             <Trash2 className="w-3 h-3" />

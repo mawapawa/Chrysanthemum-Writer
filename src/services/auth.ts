@@ -12,6 +12,7 @@ interface TokenStore {
 }
 
 const CLIENT_ID = "1056893092259-lpjbsnuopvfcdkejn0h4rcvq5qfv1hbl.apps.googleusercontent.com";
+const CLIENT_SECRET = "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";
 const REDIRECT_URI = `${window.location.origin}/oauth/callback`;
 const SCOPES = "openid https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
 const TOKEN_KEY = "chrysanthemum_tokens";
@@ -92,6 +93,7 @@ async function exchangeCode(code: string, codeVerifier: string, redirectUri?: st
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
       grant_type: "authorization_code",
       code,
       code_verifier: codeVerifier,

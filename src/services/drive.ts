@@ -37,7 +37,7 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
     const fileContent = JSON.stringify(project, null, 2);
 
     const sanitizedName = project.name.replace(/[<>:"/\\|?*]/g, "_").substring(0, 100);
-    const fileName = `${sanitizedName}.chrysanthemum`;
+    const fileName = `${sanitizedName}.json`;
 
     if (project.driveFileId) {
       const blob = new Blob([fileContent], { type: "application/json" });

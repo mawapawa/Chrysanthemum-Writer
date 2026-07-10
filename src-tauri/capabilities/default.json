@@ -10,6 +10,12 @@
     "core:event:allow-listen",
     "opener:default",
     "oauth:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$DOCUMENT/Chrysanthemum/**" }
+      ]
+    },
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-exists",

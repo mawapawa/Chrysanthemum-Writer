@@ -6,6 +6,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import LocationEditor from "./LocationEditor";
 import EncounterEditor from "./EncounterEditor";
 import { textColorForHex } from "../utils/color";
+import { useConfirmDelete } from "../hooks/useConfirmDelete";
 
 function CollapsibleSection({ title, defaultExpanded, children }: { title: string; defaultExpanded?: boolean; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? true);
@@ -43,25 +44,12 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
     ...project.flags.map(f => ({ name: f.name, type: "boolean" as const })),
   ];
 
-  const [choiceToConfirmDelete, setChoiceToConfirmDelete] = useState<string | null>(null);
-  const choiceConfirmRef = useRef<HTMLDivElement>(null);
+  const { confirmId: choiceConfirmId, ref: choiceConfirmRef, requestDelete: requestChoiceDelete } = useConfirmDelete();
+  const { confirmId: lineConfirmId, ref: lineConfirmRef, requestDelete: requestLineDelete } = useConfirmDelete();
   const [dialogueSpeaker, setDialogueSpeaker] = useState("Narrator");
   const [dialogueExpression, setDialogueExpression] = useState("Neutral");
   const [dialogueHTML, setDialogueHTML] = useState("");
   const [editingLineIdx, setEditingLineIdx] = useState<number | null>(null);
-  const [lineToConfirmDelete, setLineToConfirmDelete] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      if (choiceConfirmRef.current && !choiceConfirmRef.current.contains(event.target as Node)) {
-        setChoiceToConfirmDelete(null);
-      }
-    };
-    if (choiceToConfirmDelete !== null) {
-      document.addEventListener("mousedown", handler);
-      return () => document.removeEventListener("mousedown", handler);
-    }
-  }, [choiceToConfirmDelete]);
 
   if (!node) {
     return (
@@ -114,18 +102,8 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
   };
 
   const handleDeleteChoice = (choiceId: string) => {
-    if (choiceToConfirmDelete !== choiceId) {
-      setChoiceToConfirmDelete(choiceId);
-      setTimeout(() => {
-        setChoiceToConfirmDelete((current) => (current === choiceId ? null : current));
-      }, 4000);
-      return;
-    }
-
-    setChoiceToConfirmDelete(null);
-    updateNode({
-      choices: node.choices.filter((c) => c.id !== choiceId),
-    });
+    if (!requestChoiceDelete(choiceId)) return;
+    updateNode({ choices: node.choices.filter((c) => c.id !== choiceId) });
   };
 
   const handleAddRequirement = (choiceId: string, source: "flag" | "tracker") => {
@@ -345,15 +323,11 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                       setEditingLineIdx(idx);
                     }} className="p-0.5 text-slate-500 hover:text-indigo-400 cursor-pointer text-[10px]" title="Edit line">✏️</button>
                     <button onClick={() => {
-                      if (lineToConfirmDelete === line.id) {
+                      if (requestLineDelete(line.id)) {
                         updateNode({ dialogueLines: node.dialogueLines.filter(l => l.id !== line.id) });
-                        setLineToConfirmDelete(null);
-                      } else {
-                        setLineToConfirmDelete(line.id);
-                        setTimeout(() => setLineToConfirmDelete(c => c === line.id ? null : c), 3000);
                       }
-                    }} className={`p-0.5 cursor-pointer text-[10px] ${lineToConfirmDelete === line.id ? "text-rose-400 animate-pulse" : "text-slate-500 hover:text-rose-400"}`} title={lineToConfirmDelete === line.id ? "Confirm delete" : "Delete line"}>
-                      {lineToConfirmDelete === line.id ? "✕" : "🗑"}
+                    }} className={`p-0.5 cursor-pointer text-[10px] ${lineConfirmId === line.id ? "text-rose-400 animate-pulse" : "text-slate-500 hover:text-rose-400"}`} title={lineConfirmId === line.id ? "Confirm delete" : "Delete line"}>
+                      {lineConfirmId === line.id ? "✕" : "🗑"}
                     </button>
                   </div>
                 );
@@ -451,8 +425,8 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
                         </select>
                         <div ref={choiceConfirmRef}>
                           <button onClick={() => handleDeleteChoice(choice.id)}
-                            className={`text-xs px-2 py-1 rounded-lg cursor-pointer border font-bold ${choiceToConfirmDelete === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
-                            {choiceToConfirmDelete === choice.id ? "Confirm?" : <Trash2 className="w-3.5 h-3.5" />}
+                            className={`text-xs px-2 py-1 rounded-lg cursor-pointer border font-bold ${choiceConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
+                            {choiceConfirmId === choice.id ? "Confirm?" : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>

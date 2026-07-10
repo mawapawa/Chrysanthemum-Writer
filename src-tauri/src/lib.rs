@@ -24,7 +24,7 @@ pub fn run() {
         .level(log::LevelFilter::Warn)
         .build(),
     )
-    .setup(|app| {
+    .setup(|_app| {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![

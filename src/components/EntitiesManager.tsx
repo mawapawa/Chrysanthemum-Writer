@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import { VNProject, VNEntity } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
 import { Plus, Trash2, Users, Check, Edit2 } from "lucide-react";
 import TagInput from "./TagInput";
 import { textColorForHex } from "../utils/color";
+import { useConfirmDelete } from "../hooks/useConfirmDelete";
+import { EmptyState } from "./EmptyState";
 
 interface EntitiesManagerProps {
   project: VNProject;
@@ -23,20 +25,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
   const [formTags, setFormTags] = useState<string[]>([]);
   const [formStats, setFormStats] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
-  const [entityToConfirmDelete, setEntityToConfirmDelete] = useState<string | null>(null);
-  const entityConfirmRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      if (entityConfirmRef.current && !entityConfirmRef.current.contains(event.target as Node)) {
-        setEntityToConfirmDelete(null);
-      }
-    };
-    if (entityToConfirmDelete !== null) {
-      document.addEventListener("mousedown", handler);
-      return () => document.removeEventListener("mousedown", handler);
-    }
-  }, [entityToConfirmDelete]);
+  const { confirmId, ref, requestDelete } = useConfirmDelete();
 
   const resetForm = () => {
     setName("");
@@ -103,18 +92,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     resetForm();
   };
 
-  const handleDeleteEntity = (idToDelete: string) => {
-    if (entityToConfirmDelete !== idToDelete) {
-      setEntityToConfirmDelete(idToDelete);
-      setTimeout(() => setEntityToConfirmDelete((c) => (c === idToDelete ? null : c)), 4000);
-      return;
-    }
-    setEntityToConfirmDelete(null);
-    onUpdateProject({
-      ...project,
-      entities: project.entities.filter(ent => ent.id !== idToDelete),
-      lastModified: Date.now(),
-    });
+  const handleDeleteEntity = (id: string) => {
+    if (!requestDelete(id)) return;
+    onUpdateProject({ ...project, entities: project.entities.filter(ent => ent.id !== id), lastModified: Date.now() });
   };
 
   const addStat = (statName: string) => {
@@ -255,12 +235,12 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
                           className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer" title="Edit entity">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <div ref={entityConfirmRef}>
+                        <div ref={ref}>
                           <button onClick={() => handleDeleteEntity(entity.id)}
-                            className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${entityToConfirmDelete === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
-                            title={entityToConfirmDelete === entity.id ? "Click again to confirm" : "Delete entity"}>
+                            className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${confirmId === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
+                            title={confirmId === entity.id ? "Click again to confirm" : "Delete entity"}>
                             <Trash2 className="w-3.5 h-3.5" />
-                            {entityToConfirmDelete === entity.id && <span className="text-[9px]">Confirm?</span>}
+                            {confirmId === entity.id && <span className="text-[9px]">Confirm?</span>}
                           </button>
                         </div>
                       </div>

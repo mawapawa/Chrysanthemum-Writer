@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { VNProject, StoryNode, VNScene } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
+import { useConfirmDelete } from "../hooks/useConfirmDelete";
 import { 
   Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Trash2, 
   Plus, Search, Eye, EyeOff, CornerDownRight, Move, Check, HelpCircle, FolderOpen
@@ -85,27 +86,14 @@ export default function SceneDirectory({
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Record<string, boolean>>({});
-  const [sceneToConfirmDelete, setSceneToConfirmDelete] = useState<string | null>(null);
+  const { confirmId: sceneConfirmId, ref: sceneConfirmRef, requestDelete: requestSceneDelete } = useConfirmDelete();
   const [isBulkDeleteConfirming, setIsBulkDeleteConfirming] = useState(false);
-  const sceneConfirmRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     })
   );
-
-  useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      if (sceneConfirmRef.current && !sceneConfirmRef.current.contains(event.target as Node)) {
-        setSceneToConfirmDelete(null);
-      }
-    };
-    if (sceneToConfirmDelete !== null) {
-      document.addEventListener("mousedown", handler);
-      return () => document.removeEventListener("mousedown", handler);
-    }
-  }, [sceneToConfirmDelete]);
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
     root: true,
@@ -196,14 +184,7 @@ export default function SceneDirectory({
 
   const handleDeleteScene = (sceneId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (sceneToConfirmDelete !== sceneId) {
-      setSceneToConfirmDelete(sceneId);
-      setTimeout(() => {
-        setSceneToConfirmDelete((current) => (current === sceneId ? null : current));
-      }, 4000);
-      return;
-    }
-    setSceneToConfirmDelete(null);
+    if (!requestSceneDelete(sceneId)) return;
     const updatedNodes = { ...project.nodes };
     Object.keys(updatedNodes).forEach((k) => {
       if (updatedNodes[k].sceneId === sceneId) {
@@ -638,13 +619,13 @@ export default function SceneDirectory({
                       <button
                         onClick={(e) => handleDeleteScene(scene.id, e)}
                         className={`p-0.5 rounded transition-all duration-150 ${
-                          sceneToConfirmDelete === scene.id
+                          sceneConfirmId === scene.id
                             ? "text-rose-400 bg-rose-500/20 px-1.5 animate-pulse"
                             : "text-slate-500 hover:text-rose-400"
                         }`}
-                        title={sceneToConfirmDelete === scene.id ? "Click again to confirm delete" : "Delete Folder"}
+                        title={sceneConfirmId === scene.id ? "Click again to confirm delete" : "Delete Folder"}
                       >
-                        {sceneToConfirmDelete === scene.id ? (
+                        {sceneConfirmId === scene.id ? (
                           <span className="text-[9px] font-bold">Confirm?</span>
                         ) : (
                           <Trash2 className="w-3 h-3" />
