@@ -1048,25 +1048,35 @@ export default function FlowchartCanvas({
 
       {/* Expanded node editor panel */}
       {selectedNode && (() => {
-        const nodePos = selectedNode.position;
-        const panelX = nodePos.x * zoom + pan.x + 250 * zoom + 16;
-        const panelY = nodePos.y * zoom + pan.y;
-        const clampedX = Math.min(panelX, (canvasRef.current?.clientWidth ?? 1200) - 440);
-        const clampedY = Math.max(8, Math.min(panelY, (canvasRef.current?.clientHeight ?? 800) - 500));
+        const rect = canvasRef.current?.getBoundingClientRect();
+        const baseX = rect ? rect.left : 0;
+        const baseY = rect ? rect.top : 0;
+        const nodeScreenX = selectedNode.position.x * zoom + pan.x + baseX;
+        const nodeScreenY = selectedNode.position.y * zoom + pan.y + baseY;
+        const panelW = 420;
+        const panelH = Math.min(550, window.innerHeight - 32);
+        let px = nodeScreenX + 250 * zoom + 16;
+        let py = nodeScreenY;
+        if (px + panelW > window.innerWidth - 16) px = window.innerWidth - panelW - 16;
+        if (px < 8) px = 8;
+        if (py + panelH > window.innerHeight - 16) py = window.innerHeight - panelH - 16;
+        if (py < 8) py = 8;
         const scenes = project.scenes || [];
 
         return (
           <div
-            className="absolute z-30 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+            className="fixed z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl"
             style={{
-              left: clampedX,
-              top: clampedY,
-              width: 420,
-              maxHeight: Math.min(600, (canvasRef.current?.clientHeight ?? 800) - 16),
+              left: px,
+              top: py,
+              width: panelW,
+              height: panelH,
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0">
               <input
                 type="text"
                 value={selectedNode.title}
@@ -1109,8 +1119,8 @@ export default function FlowchartCanvas({
               </div>
             </div>
 
-            {/* Block editor */}
-            <div className="p-4 overflow-y-auto" style={{ maxHeight: 520 }}>
+            {/* Block editor — scrollable */}
+            <div className="flex-1 overflow-y-auto p-4">
               <BlockEditor
                 project={project}
                 blocks={expandedBlocks}

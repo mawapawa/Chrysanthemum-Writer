@@ -13,18 +13,19 @@ interface SettingsDialogProps {
   signIn: () => Promise<AuthUser>;
   signOut: () => Promise<void>;
   onOpenTutorial?: () => void;
-  onExportProject?: () => void;
+  onExportFolder?: (sceneId?: string) => void;
   onLoadFromDrive?: () => Promise<void>;
 }
 
 type PickerMode = null | "browse" | "paste";
 
-export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportProject, onLoadFromDrive }: SettingsDialogProps) {
+export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportFolder, onLoadFromDrive }: SettingsDialogProps) {
   const { status, syncNow } = useDriveSync(project);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [pasteLink, setPasteLink] = useState("");
+  const [exportMode, setExportMode] = useState(false);
 
   useEffect(() => {
     if (pickerMode === "browse") {
@@ -217,12 +218,32 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
         {/* Export */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Export</h3>
-          <div className="bg-slate-800/50 rounded-xl p-3 flex items-center justify-between">
-            <p className="text-xs text-slate-300">Download project as JSON file</p>
-            <button onClick={() => { onExportProject?.(); onClose(); }}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer">
-              Download
-            </button>
+          <div className="bg-slate-800/50 rounded-xl p-3 space-y-2">
+            {!exportMode ? (
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-300">Download a scene folder or the full project</p>
+                <button onClick={() => setExportMode(true)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer">
+                  Choose Folder...
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="text-[10px] text-slate-400 font-semibold mb-2">Select folder to export:</p>
+                <button onClick={() => { onExportFolder?.(undefined); setExportMode(false); onClose(); }}
+                  className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-indigo-600/20 rounded-lg transition-colors cursor-pointer border border-slate-700 hover:border-indigo-500/50">
+                  📦 Entire Project
+                </button>
+                {(project.scenes || []).map(scene => (
+                  <button key={scene.id} onClick={() => { onExportFolder?.(scene.id); setExportMode(false); onClose(); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-indigo-600/20 rounded-lg transition-colors cursor-pointer border border-slate-700 hover:border-indigo-500/50">
+                    📂 {scene.name}
+                  </button>
+                ))}
+                <button onClick={() => setExportMode(false)}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer pt-1">Cancel</button>
+              </div>
+            )}
           </div>
         </div>
 

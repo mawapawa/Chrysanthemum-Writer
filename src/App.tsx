@@ -413,11 +413,37 @@ export default function App() {
     setIsProjectsModalOpen(false);
   };
 
-  const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
+  const handleExportFolderJSON = (sceneId?: string) => {
+    let exportData: any;
+    let fileName: string;
+
+    if (sceneId) {
+      const scene = (project.scenes || []).find(s => s.id === sceneId);
+      const sceneNodes: Record<string, StoryNode> = {};
+      for (const [id, node] of Object.entries(project.nodes)) {
+        if (node.sceneId === sceneId) {
+          sceneNodes[id] = node;
+        }
+      }
+      exportData = {
+        scene,
+        nodes: sceneNodes,
+        entities: project.entities,
+        trackers: project.trackers,
+        flags: project.flags,
+        inventory: project.inventory,
+        schemaVersion: project.schemaVersion,
+      };
+      fileName = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${(scene?.name || "untitled").toLowerCase().replace(/[^a-z0-9]/g, "_")}.json`;
+    } else {
+      exportData = project;
+      fileName = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_full_storyboard.json`;
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_storyboard.json`);
+    downloadAnchor.setAttribute("download", fileName);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -719,7 +745,7 @@ export default function App() {
           signIn={signIn}
           signOut={signOut}
           onOpenTutorial={() => setShowTutorial(true)}
-          onExportProject={handleExportJSON}
+          onExportFolder={handleExportFolderJSON}
           onLoadFromDrive={handleLoadFromDrive}
         />
       )}
