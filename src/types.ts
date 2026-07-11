@@ -167,6 +167,16 @@ export interface StoryBeatTrigger {
   min?: number;
 }
 
+export type SceneBlock =
+  | { type: "dialogue"; speaker: string; expression?: string; text: string }
+  | { type: "narrative"; text: string }
+  | { type: "effect"; variableName: string; operation: "+" | "-" | "="; value: number }
+  | { type: "statDisplay"; variableName: string }
+  | { type: "choice"; text: string; targetNodeId: string; random?: number; effects?: InlineEffect[]; requirement?: ChoiceRequirement }
+  | { type: "entity"; entityId: string }
+  | { type: "condition"; source: "tracker" | "flag"; targetId: string; operator?: string; compareValue?: number }
+  | { type: "ending"; endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL"; endingName?: string };
+
 export interface StoryNode {
   id: string;
   title: string;
@@ -188,6 +198,7 @@ export interface StoryNode {
   encounterData?: EncounterData;
   continueToNodeId?: string;
   trigger?: StoryBeatTrigger;
+  blocks?: SceneBlock[];
 }
 
 export interface NodeLock {

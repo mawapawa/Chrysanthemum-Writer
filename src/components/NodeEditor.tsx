@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, NodeLock } from "../types";
+import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, NodeLock, SceneBlock } from "../types";
 import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus, GripVertical } from "lucide-react";
 import { DndContext, DragEndEvent, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import ScriptEditor from "./ScriptEditor";
+import BlockEditor from "./BlockEditor";
 import LocationEditor from "./LocationEditor";
 import EncounterEditor from "./EncounterEditor";
 import { textColorForHex } from "../utils/color";
+import { blocksToNode, nodeToBlocks } from "../utils/blockSerializer";
 import { useConfirmDelete } from "../hooks/useConfirmDelete";
 
 function CollapsibleSection({ title, defaultExpanded, children }: { title: string; defaultExpanded?: boolean; children: React.ReactNode }) {
@@ -105,6 +107,41 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
   const [dialogueHTML, setDialogueHTML] = useState("");
   const [editingLineIdx, setEditingLineIdx] = useState<number | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+
+  const [blocks, setBlocks] = useState<SceneBlock[]>(() => node.blocks || nodeToBlocks(node));
+
+  const handleBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
+    setBlocks(newBlocks);
+    const legacy = blocksToNode(newBlocks, node);
+    updateNode(legacy);
+  }, [node]);
+
+  const handleCreateNodeFromBlock = useCallback((): string => {
+    const childId = crypto.randomUUID();
+    const parentNode = project.nodes[node.id];
+    const childNode: StoryNode = {
+      id: childId,
+      displayId: undefined,
+      title: "New Scene",
+      description: "",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: {
+        x: parentNode.position.x + 320,
+        y: parentNode.position.y + (parentNode.choices.length * 120),
+      },
+      isEnding: false,
+      nodeType: "story",
+    };
+    onUpdateProject({
+      ...project,
+      nodes: { ...project.nodes, [childId]: childNode },
+      lastModified: Date.now(),
+    });
+    return childId;
+  }, [project, node]);
 
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
   const sensors = useSensors(pointerSensor);
@@ -387,272 +424,14 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
           )}
         </CollapsibleSection>
 
-        {/* 📝 Script & Dialogue Editor */}
-        <CollapsibleSection title="📝 Script & Dialogue Editor" defaultExpanded={true}>
-          <DndContext sensors={sensors} onDragEnd={handleDialogueDragEnd} collisionDetection={closestCenter}>
-            <SortableContext items={node.dialogueLines.map(l => `dialogue-${l.id}`)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
-                {node.dialogueLines.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 italic py-2 text-center">No dialogue yet. Write below and click "Add Line".</p>
-                ) : (
-                  node.dialogueLines.map((line, idx) => {
-                    const entity = project.entities.find(e => e.name === line.speaker);
-                    const color = entity?.color || "#64748b";
-                    const textColor = entity ? textColorForHex(color) : "text-white";
-                    return (
-                      <SortableDialogueLine
-                        key={line.id}
-                        line={line}
-                        idx={idx}
-                        editingLineIdx={editingLineIdx}
-                        lineConfirmId={lineConfirmId}
-                        lineConfirmRef={lineConfirmRef}
-                        requestLineDelete={requestLineDelete}
-                        entityColor={color}
-                        entityTextColor={textColor}
-                        onEdit={() => {
-                          setDialogueSpeaker(line.speaker);
-                          setDialogueExpression(line.expression || "Neutral");
-                          setDialogueHTML(line.formattedText || "");
-                          setEditingLineIdx(idx);
-                        }}
-                        onDelete={() => {
-                          if (requestLineDelete(line.id)) {
-                            updateNode({ dialogueLines: node.dialogueLines.filter(l => l.id !== line.id) });
-                          }
-                        }}
-                      />
-                    );
-                  })
-                )}
-              </div>
-            </SortableContext>
-          </DndContext>
-
-          <div className="flex gap-2 mb-2">
-            <select value={dialogueSpeaker} onChange={(e) => setDialogueSpeaker(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-800 text-[11px] text-slate-200 rounded-lg p-1.5">
-              <option value="Narrator">Narrator</option>
-              {project.entities.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-            </select>
-            <select value={dialogueExpression} onChange={(e) => setDialogueExpression(e.target.value)}
-              className="w-28 bg-slate-900 border border-slate-800 text-[11px] text-slate-200 rounded-lg p-1.5">
-              {(() => {
-                const entity = project.entities.find(e => e.name === dialogueSpeaker);
-                const tones = entity?.expressions?.length ? entity.expressions : ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
-                return tones.map(t => <option key={t} value={t}>{t}</option>);
-              })()}
-            </select>
-          </div>
-
-          <div className="flex gap-1.5">
-            <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-              <ScriptEditor
-                key={editingLineIdx !== null ? `edit-${editingLineIdx}` : 'new'}
-                initialContent={dialogueHTML}
-                onChange={(html) => setDialogueHTML(html)}
-                placeholder="Write dialogue..."
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <button onClick={() => {
-                const cleanHTML = dialogueHTML || `<p>${(node.title || "Dialogue")}</p>`;
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(cleanHTML, "text/html");
-                const plainText = doc.body.textContent || "";
-                if (editingLineIdx !== null) {
-                  const updated = [...node.dialogueLines];
-                  updated[editingLineIdx] = { ...updated[editingLineIdx], speaker: dialogueSpeaker, expression: dialogueExpression, text: plainText, formattedText: cleanHTML };
-                  updateNode({ dialogueLines: updated });
-                  setEditingLineIdx(null);
-                } else {
-                  const newLine: DialogueLine = { id: crypto.randomUUID(), speaker: dialogueSpeaker, text: plainText, expression: dialogueExpression, formattedText: cleanHTML };
-                  updateNode({ dialogueLines: [...node.dialogueLines, newLine] });
-                }
-                setDialogueHTML("");
-              }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2 rounded-lg cursor-pointer shrink-0">
-                {editingLineIdx !== null ? "Save" : "Add"}
-              </button>
-              {editingLineIdx !== null && (
-                <button onClick={() => { setEditingLineIdx(null); setDialogueHTML(""); }}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-2 rounded-lg cursor-pointer shrink-0">
-                  Cancel
-                </button>
-              )}
-            </div>
-          </div>
-        </CollapsibleSection>
-
-        {/* 🔒 Choice Trees & Requirements */}
-        <CollapsibleSection title="🔒 Choice Trees & Requirements" defaultExpanded={node.choices.length > 0}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5">
-              <ListPlus className="w-4 h-4 text-indigo-400" />
-              <label className="text-xs font-semibold text-slate-400">Choices ({node.choices.length})</label>
-            </div>
-            <button onClick={handleAddChoice} className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer">
-              <Plus className="w-3 h-3 inline" /> Add
-            </button>
-          </div>
-
-          {node.choices.length === 0 ? (
-            <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 rounded-xl text-[11px] leading-relaxed">
-              ⚠️ Dead end. Add a choice or mark as ending above.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {node.choices.map((choice) => {
-                const targetNode = project.nodes[choice.targetNodeId];
-                return (
-                  <div key={choice.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <input type="text" value={choice.text} onChange={(e) => handleUpdateChoice(choice.id, { text: e.target.value })}
-                        className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-semibold flex-1 focus:outline-none"
-                        placeholder="Choice text..." />
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[9px] text-slate-500 font-mono">→</span>
-                        <select value={choice.targetNodeId} onChange={(e) => handleUpdateChoice(choice.id, { targetNodeId: e.target.value })}
-                          className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 max-w-[110px]">
-                          <option value="">-- None --</option>
-                          {Object.values(project.nodes).map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
-                        </select>
-                        <div className="shrink-0">
-                          <button onClick={() => handleDeleteChoice(choice.id)}
-                            className={`text-[10px] px-1.5 py-1 rounded-lg cursor-pointer border font-bold transition-all whitespace-nowrap ${deleteConfirmId === choice.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}
-                            title={deleteConfirmId === choice.id ? "Click again to confirm" : "Delete choice"}>
-                            {deleteConfirmId === choice.id ? "Confirm?" : <Trash2 className="w-3 h-3" />}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Rewards */}
-                    <div>
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="text-[9px] text-indigo-400 font-semibold">Rewards</span>
-                        {(!choice.effects || choice.effects.length === 0) && (
-                          <span className="text-[9px] text-slate-600 italic">— none</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(choice.effects || []).map((ef) => {
-                          if (ef.type === "give_item" || ef.type === "take_item") {
-                            const item = project.inventory.find(i => i.id === ef.targetId);
-                            return (
-                              <span key={ef.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
-                                {ef.type === "give_item" ? "🎒" : "➖"}{" "}
-                                <select value={ef.targetId} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
-                                  className="bg-transparent text-indigo-300 focus:outline-none cursor-pointer text-[9px]">
-                                  {project.inventory.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                                </select>
-                                <button onClick={() => handleRemoveEffect(choice.id, ef.id)} className="text-indigo-400 hover:text-indigo-200">✕</button>
-                              </span>
-                            );
-                          }
-                          if (ef.type === "adjust_tracker") {
-                            const tracker = project.trackers.find(t => t.id === ef.targetId);
-                            return (
-                              <span key={ef.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
-                                ❤️
-                                <select value={ef.targetId} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
-                                  className="bg-transparent text-emerald-300 focus:outline-none cursor-pointer text-[9px]">
-                                  {project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </select>
-                                <select value={ef.operation || "add"} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { operation: e.target.value as "add" | "subtract" | "set" })}
-                                  className="bg-transparent text-emerald-300 focus:outline-none cursor-pointer text-[9px]">
-                                  <option value="add">+</option>
-                                  <option value="subtract">-</option>
-                                  <option value="set">=</option>
-                                </select>
-                                <input type="number" value={ef.value ?? 1} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { value: parseInt(e.target.value) || 0 })}
-                                  className="w-10 bg-slate-800 text-emerald-300 text-[9px] text-center rounded p-0.5" />
-                                <button onClick={() => handleRemoveEffect(choice.id, ef.id)} className="text-emerald-400 hover:text-emerald-200">✕</button>
-                              </span>
-                            );
-                          }
-                          if (ef.type === "set_flag" || ef.type === "clear_flag") {
-                            const flag = project.flags.find(f => f.id === ef.targetId);
-                            return (
-                              <span key={ef.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                                {ef.type === "set_flag" ? "🏁" : "🏳️"}{" "}
-                                <select value={ef.targetId} onChange={(e) => handleUpdateEffect(choice.id, ef.id, { targetId: e.target.value })}
-                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
-                                  {project.flags.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                </select>
-                                <span className="text-[9px] text-amber-400">{ef.type === "set_flag" ? "✔" : "✘"}</span>
-                                <button onClick={() => handleRemoveEffect(choice.id, ef.id)} className="text-amber-400 hover:text-amber-200">✕</button>
-                              </span>
-                            );
-                          }
-                          return null;
-                        })}
-                        <select value="" onChange={(e) => { if (e.target.value) { handleAddEffect(choice.id, e.target.value as "give_item" | "take_item" | "adjust_tracker" | "set_flag" | "clear_flag"); } }}
-                          className="text-[9px] bg-slate-900 border border-slate-800 text-slate-400 rounded px-1 py-0.5 cursor-pointer">
-                          <option value="">+ Add Reward</option>
-                          <option value="give_item">🎒 Give Item</option>
-                          <option value="take_item">➖ Take Item</option>
-                          <option value="adjust_tracker">❤️ Adjust Stat</option>
-                          <option value="set_flag">🏁 Set Milestone</option>
-                          <option value="clear_flag">🏳️ Clear Milestone</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Requirements */}
-                    <div>
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="text-[9px] text-amber-400 font-semibold">Requires</span>
-                        {!choice.requirement && <span className="text-[9px] text-slate-600 italic">— none</span>}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        {choice.requirement && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                            🔒
-                            {choice.requirement.source === "flag" ? (
-                              <>
-                                <select value={choice.requirement.targetId} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, targetId: e.target.value } })}
-                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
-                                  {project.flags.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                </select>
-                                <select value={String(choice.requirement.expect ?? true)} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, expect: e.target.value === "true" } })}
-                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
-                                  <option value="true">is checked</option>
-                                  <option value="false">is unchecked</option>
-                                </select>
-                              </>
-                            ) : (
-                              <>
-                                <select value={choice.requirement.targetId} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, targetId: e.target.value } })}
-                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
-                                  {project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </select>
-                                <select value={choice.requirement.operator || ">="} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, operator: e.target.value as ">=" | "<=" | ">" | "<" | "==" | "!=" } })}
-                                  className="bg-transparent text-amber-300 focus:outline-none cursor-pointer text-[9px]">
-                                  <option value=">=">≥</option><option value="<=">≤</option><option value=">">&gt;</option>
-                                  <option value="<">&lt;</option><option value="==">=</option><option value="!=">≠</option>
-                                </select>
-                                <input type="number" value={choice.requirement.compareValue ?? 1} onChange={(e) => handleUpdateChoice(choice.id, { requirement: { ...choice.requirement!, compareValue: parseInt(e.target.value) || 0 } })}
-                                  className="w-10 bg-slate-800 text-amber-300 text-[9px] text-center rounded p-0.5" />
-                              </>
-                            )}
-                            <button onClick={() => handleRemoveRequirement(choice.id)} className="text-amber-400 hover:text-amber-200">✕</button>
-                          </span>
-                        )}
-                        {!choice.requirement && (
-                          <select value="" onChange={(e) => { if (e.target.value === "flag") handleAddRequirement(choice.id, "flag"); if (e.target.value === "tracker") handleAddRequirement(choice.id, "tracker"); }}
-                            className="text-[9px] bg-slate-900 border border-slate-800 text-slate-400 rounded px-1 py-0.5 cursor-pointer">
-                            <option value="">+ Add Requirement</option>
-                            <option value="flag">🔒 Milestone</option>
-                            <option value="tracker">📊 Tracker</option>
-                          </select>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {/* 📝 Block Editor (dialogue, effects, choices, endings) */}
+        <CollapsibleSection title="📝 Scene Content" defaultExpanded={true}>
+          <BlockEditor
+            project={project}
+            blocks={blocks}
+            onChange={handleBlocksChange}
+            onCreateNode={handleCreateNodeFromBlock}
+          />
         </CollapsibleSection>
         </>
       )}

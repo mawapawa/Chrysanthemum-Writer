@@ -649,6 +649,37 @@ export default function PlaytestSimulator({
                       )}
                     </div>
 
+                    {/* Stat displays and entity cards from blocks */}
+                    {node.blocks && !hasDialogue && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {node.blocks.filter(b => b.type === "statDisplay" || b.type === "entity").map((block, i) => {
+                          if (block.type === "statDisplay") {
+                            const val = vars[block.variableName] ?? project.trackers.find(t => t.name === block.variableName)?.defaultValue ?? "?";
+                            return (
+                              <span key={`sd-${i}`} className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-mono font-bold">
+                                {block.variableName}: {String(val)}
+                              </span>
+                            );
+                          }
+                          if (block.type === "entity") {
+                            const entity = project.entities.find(e => e.id === block.entityId);
+                            if (!entity) return null;
+                            return (
+                              <div key={`ent-${i}`} className="px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-mono flex items-center gap-2">
+                                <span className="font-bold">{entity.name}</span>
+                                {entity.ownedTrackers?.map((t, ti) => {
+                                  const trackerName = `${entity.name.toLowerCase()}_${t.name}`.replace(/[^a-zA-Z0-9_]/g, "_");
+                                  const val = vars[trackerName] ?? t.defaultValue;
+                                  return <span key={ti} className="text-purple-400">{t.name}: {val}</span>;
+                                })}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    )}
+
                     {/* Lines pager */}
                     <div className="flex items-center justify-between border-t border-slate-800/60 pt-3 mt-4 text-xs">
                       <span className="text-slate-500 font-mono">
