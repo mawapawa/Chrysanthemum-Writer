@@ -17,6 +17,21 @@ interface PlaytestSimulatorProps {
   onUpdateProject?: (project: VNProject) => void;
 }
 
+function expandWiggleSpans(html: string): string {
+  return html.replace(
+    /<span([^>]*class="[^"]*animate-wiggle[^"]*"[^>]*)>([^<]+)<\/span>/g,
+    (_match, attrs, text: string) => {
+      const chars = text
+        .split("")
+        .map((ch: string, i: number) =>
+          `<span style="animation-delay:${(i * 0.12).toFixed(2)}s">${ch === " " ? "\u00A0" : ch}</span>`
+        )
+        .join("");
+      return `<span ${attrs} style="display:inline-flex">${chars}</span>`;
+    }
+  );
+}
+
 export default function PlaytestSimulator({ 
   project, 
   startNodeId, 
@@ -626,7 +641,7 @@ export default function PlaytestSimulator({
                       </div>
 
                       {activeLine.formattedText ? (
-                        <div className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }} dangerouslySetInnerHTML={{ __html: activeLine.formattedText }} />
+                        <div className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }} dangerouslySetInnerHTML={{ __html: expandWiggleSpans(activeLine.formattedText) }} />
                       ) : (
                         <p className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }}>
                           {(activeLine.speaker === "Narrator" || !activeLine.speaker) ? activeLine.text : `"${activeLine.text}"`}
@@ -669,6 +684,24 @@ export default function PlaytestSimulator({
                     </div>
                     <div className="border-t border-slate-800/60 pt-3 mt-4 text-[10px] text-slate-500 flex items-center justify-between">
                       <span>💡 Programming dialogue script lines under the designer panel will activate a speech box.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Continue-to auto-advance */}
+                {!node.isEnding && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && node.continueToNodeId && project.nodes[node.continueToNodeId] && (
+                  <div className="border-t border-slate-800/60 pt-4 mt-4">
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => {
+                          setHistory([...history, { nodeId: currentNodeId, variables: { ...vars } }]);
+                          setCurrentNodeId(node.continueToNodeId!);
+                          setLineIdx(0);
+                        }}
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105 cursor-pointer flex items-center gap-2"
+                      >
+                        Continue →
+                      </button>
                     </div>
                   </div>
                 )}

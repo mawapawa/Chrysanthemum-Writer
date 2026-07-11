@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { VNProject, VNEntity } from "../types";
+import { VNProject, VNEntity, VNEntityStat, VNEntityFlag } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
 import { Plus, Trash2, Users, Check, Edit2 } from "lucide-react";
 import TagInput from "./TagInput";
@@ -13,6 +13,7 @@ interface EntitiesManagerProps {
 }
 
 const ENTITY_PALETTE_COLORS = ["#f43f5e", "#3b82f6", "#10b981", "#a855f7", "#f59e0b", "#ea580c", "#ec4899", "#64748b"];
+const DEFAULT_EXPRESSIONS = ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
 
 export default function EntitiesManager({ project, onUpdateProject }: EntitiesManagerProps) {
   const allEntityTags = [...new Set(project.entities.flatMap(e => e.tags))];
@@ -24,6 +25,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
   const [description, setDescription] = useState("");
   const [formTags, setFormTags] = useState<string[]>([]);
   const [formStats, setFormStats] = useState<Record<string, number>>({});
+  const [formOwnedTrackers, setFormOwnedTrackers] = useState<VNEntityStat[]>([]);
+  const [formOwnedFlags, setFormOwnedFlags] = useState<VNEntityFlag[]>([]);
+  const [formExpressions, setFormExpressions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { confirmId, ref, requestDelete } = useConfirmDelete();
 
@@ -35,6 +39,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setDescription("");
     setFormTags([]);
     setFormStats({});
+    setFormOwnedTrackers([]);
+    setFormOwnedFlags([]);
+    setFormExpressions([]);
     setError(null);
     setEditingEntity(null);
   };
@@ -48,6 +55,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setDescription(entity.description || "");
     setFormTags([...entity.tags]);
     setFormStats(entity.stats ? { ...entity.stats } : {});
+    setFormOwnedTrackers(entity.ownedTrackers ? [...entity.ownedTrackers] : []);
+    setFormOwnedFlags(entity.ownedFlags ? [...entity.ownedFlags] : []);
+    setFormExpressions(entity.expressions ? [...entity.expressions] : []);
     setError(null);
   };
 
@@ -59,10 +69,23 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
 
     const finalColor = useCustomHex && /^#[0-9a-fA-F]{6}$/.test(customHex) ? customHex : color;
 
+    const cleanedTrackers = formOwnedTrackers.filter(t => t.name.trim());
+    const cleanedFlags = formOwnedFlags.filter(f => f.name.trim());
+
     if (editingEntity) {
       const updated = project.entities.map(ent =>
         ent.id === editingEntity.id
-          ? { ...ent, name: cleanName, color: finalColor, description: description.trim() || undefined, tags: [...formTags], stats: { ...formStats } }
+          ? {
+              ...ent,
+              name: cleanName,
+              color: finalColor,
+              description: description.trim() || undefined,
+              tags: [...formTags],
+              stats: Object.keys(formStats).length > 0 ? { ...formStats } : undefined,
+              ownedTrackers: cleanedTrackers.length > 0 ? cleanedTrackers : undefined,
+              ownedFlags: cleanedFlags.length > 0 ? cleanedFlags : undefined,
+              expressions: formExpressions.length > 0 ? formExpressions : undefined,
+            }
           : ent
       );
       onUpdateProject({ ...project, entities: updated, lastModified: Date.now() });
@@ -82,6 +105,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
       color: finalColor,
       description: description.trim() || undefined,
       tags: [...formTags],
+      ownedTrackers: cleanedTrackers.length > 0 ? cleanedTrackers : undefined,
+      ownedFlags: cleanedFlags.length > 0 ? cleanedFlags : undefined,
+      expressions: formExpressions.length > 0 ? formExpressions : undefined,
     };
 
     onUpdateProject({
@@ -97,13 +123,29 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     onUpdateProject({ ...project, entities: project.entities.filter(ent => ent.id !== id), lastModified: Date.now() });
   };
 
-  const addStat = (statName: string) => {
-    if (statName && !(statName in formStats)) {
-      setFormStats(prev => ({ ...prev, [statName]: 0 }));
-    }
+  const addTracker = () => {
+    setFormOwnedTrackers(prev => [...prev, { name: "", defaultValue: 0 }]);
   };
 
-  const unusedStats = project.trackers.filter(t => !(t.name in formStats));
+  const updateTracker = (idx: number, field: Partial<VNEntityStat>) => {
+    setFormOwnedTrackers(prev => prev.map((t, i) => i === idx ? { ...t, ...field } : t));
+  };
+
+  const removeTracker = (idx: number) => {
+    setFormOwnedTrackers(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const addFlag = () => {
+    setFormOwnedFlags(prev => [...prev, { name: "", defaultValue: false }]);
+  };
+
+  const updateFlag = (idx: number, field: Partial<VNEntityFlag>) => {
+    setFormOwnedFlags(prev => prev.map((f, i) => i === idx ? { ...f, ...field } : f));
+  };
+
+  const removeFlag = (idx: number) => {
+    setFormOwnedFlags(prev => prev.filter((_, i) => i !== idx));
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-full overflow-y-auto" id="entities-manager-container">
@@ -113,7 +155,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
           <h2 className="text-lg font-semibold text-gray-900">{editingEntity ? "Edit Entity" : "Define Entities"}</h2>
         </div>
         <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-          {editingEntity ? `Editing "${editingEntity.name}"` : "Create entities and assign stat overrides."}
+          {editingEntity ? `Editing "${editingEntity.name}"` : "Create characters, monsters, and NPCs."}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -121,7 +163,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Entity Name</label>
-            <input type="text" placeholder="e.g. Giant Rat, Astrid" value={name}
+            <input type="text" placeholder="e.g. Sonja, Giant Rat" value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
           </div>
@@ -163,37 +205,69 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
             <TagInput tags={formTags} onChange={setFormTags} existingTags={allEntityTags} placeholder="Add tag and press Enter..." />
           </div>
 
+          {/* Owned Trackers */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium text-gray-700">Stat Overrides</label>
-              {unusedStats.length > 0 && (
-                <select value="" onChange={(e) => { if (e.target.value) addStat(e.target.value); }}
-                  className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1 py-0.5 text-gray-600 cursor-pointer">
-                  <option value="">+ Add Stat</option>
-                  {unusedStats.map(s => <option key={s.name} value={s.name}>{s.name} (default: {s.defaultValue})</option>)}
-                </select>
-              )}
+              <label className="text-xs font-medium text-gray-700">Stats (numbers that change)</label>
+              <button type="button" onClick={addTracker}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer">
+                <Plus className="w-3 h-3 inline" /> Add Stat
+              </button>
             </div>
-            {Object.keys(formStats).length === 0 && (
-              <p className="text-[11px] text-gray-400 italic">No stat overrides. Add stats from the Stats tab.</p>
+            {formOwnedTrackers.length === 0 && (
+              <p className="text-[11px] text-gray-400 italic">No stats yet. Add ones like "affection", "jealousy", "rage".</p>
             )}
-            {Object.entries(formStats).map(([statName, val]) => {
-              const def = project.trackers.find(t => t.name === statName)?.defaultValue ?? 0;
-              return (
-                <div key={statName} className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-100 mb-1">
-                  <span className="text-xs font-semibold text-gray-700 w-20 truncate">{statName}</span>
-                  <input type="number" value={val}
-                    onChange={(e) => setFormStats(prev => ({ ...prev, [statName]: parseInt(e.target.value) || 0 }))}
-                    className="w-16 bg-white border border-gray-200 text-xs rounded p-0.5 text-center" />
-                  <span className="text-[9px] text-gray-400">(default: {def})</span>
-                  <button type="button" onClick={() => {
-                    const next = { ...formStats };
-                    delete next[statName];
-                    setFormStats(next);
-                  }} className="text-rose-400 hover:text-rose-600 text-xs ml-auto cursor-pointer">✕</button>
-                </div>
-              );
-            })}
+            {formOwnedTrackers.map((t, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-100 mb-1">
+                <input type="text" value={t.name} placeholder="stat name"
+                  onChange={(e) => updateTracker(idx, { name: e.target.value })}
+                  className="flex-1 bg-white border border-gray-200 text-xs rounded p-1" />
+                <span className="text-[10px] text-gray-500">default:</span>
+                <input type="number" value={t.defaultValue}
+                  onChange={(e) => updateTracker(idx, { defaultValue: parseInt(e.target.value) || 0 })}
+                  className="w-16 bg-white border border-gray-200 text-xs rounded p-1 text-center" />
+                <button type="button" onClick={() => removeTracker(idx)}
+                  className="text-rose-400 hover:text-rose-600 text-xs cursor-pointer">✕</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Owned Flags */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-700">States (on/off)</label>
+              <button type="button" onClick={addFlag}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer">
+                <Plus className="w-3 h-3 inline" /> Add State
+              </button>
+            </div>
+            {formOwnedFlags.length === 0 && (
+              <p className="text-[11px] text-gray-400 italic">No states yet. Add ones like "met_sonja", "has_key".</p>
+            )}
+            {formOwnedFlags.map((f, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-100 mb-1">
+                <input type="text" value={f.name} placeholder="state name"
+                  onChange={(e) => updateFlag(idx, { name: e.target.value })}
+                  className="flex-1 bg-white border border-gray-200 text-xs rounded p-1" />
+                <label className="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer">
+                  <input type="checkbox" checked={f.defaultValue}
+                    onChange={(e) => updateFlag(idx, { defaultValue: e.target.checked })}
+                    className="w-3 h-3" />
+                  default on
+                </label>
+                <button type="button" onClick={() => removeFlag(idx)}
+                  className="text-rose-400 hover:text-rose-600 text-xs cursor-pointer">✕</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Expressions */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Speech Tones</label>
+            <TagInput tags={formExpressions} onChange={setFormExpressions} existingTags={DEFAULT_EXPRESSIONS} placeholder="Type a tone and press Enter..." />
+            {formExpressions.length === 0 && (
+              <p className="text-[11px] text-gray-400 italic mt-1">Defaults to Neutral, Smile, Surprise, Serious, Sad, Angry.</p>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -219,54 +293,73 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
             <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-100 rounded-xl">
               <Users className="w-10 h-10 text-gray-300 mb-3" />
               <p className="text-sm font-medium text-gray-500">No entities defined yet</p>
-              <p className="text-xs text-gray-400 mt-1">Create entities to populate your story world.</p>
+              <p className="text-xs text-gray-400 mt-1">Create characters, monsters, and NPCs.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {project.entities.map((entity) => (
-                <div key={entity.id} className="p-4 border border-gray-100 rounded-2xl bg-gray-50/50 flex flex-col justify-between" id={`entity-card-${entity.id}`}>
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${textColorForHex(entity.color)}`} style={{ backgroundColor: entity.color }}>
-                        {entity.name}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => startEdit(entity)}
-                          className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer" title="Edit entity">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <div ref={ref}>
-                          <button onClick={() => handleDeleteEntity(entity.id)}
-                            className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${confirmId === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
-                            title={confirmId === entity.id ? "Click again to confirm" : "Delete entity"}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                            {confirmId === entity.id && <span className="text-[9px]">Confirm?</span>}
+              {project.entities.map((entity) => {
+                const trackers = entity.ownedTrackers || [];
+                const flags = entity.ownedFlags || [];
+                const expressions = entity.expressions || [];
+                return (
+                  <div key={entity.id} className="p-4 border border-gray-100 rounded-2xl bg-gray-50/50 flex flex-col justify-between" id={`entity-card-${entity.id}`}>
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${textColorForHex(entity.color)}`} style={{ backgroundColor: entity.color }}>
+                          {entity.name}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => startEdit(entity)}
+                            className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer" title="Edit entity">
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
+                          <div ref={ref}>
+                            <button onClick={() => handleDeleteEntity(entity.id)}
+                              className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${confirmId === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 hover:bg-red-50 border-transparent"}`}
+                              title={confirmId === entity.id ? "Click again to confirm" : "Delete entity"}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                              {confirmId === entity.id && <span className="text-[9px]">Confirm?</span>}
+                            </button>
+                          </div>
                         </div>
                       </div>
+                      {entity.description ? (
+                        <p className="text-xs text-gray-600 leading-relaxed mt-1">{entity.description}</p>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No description.</p>
+                      )}
+                      {trackers.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {trackers.map((t, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700">{t.name}: {t.defaultValue}</span>
+                          ))}
+                        </div>
+                      )}
+                      {flags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {flags.map((f, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700">{f.name}: {f.defaultValue ? "✓" : "✗"}</span>
+                          ))}
+                        </div>
+                      )}
+                      {expressions.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {expressions.map((ex, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">{ex}</span>
+                          ))}
+                        </div>
+                      )}
+                      {entity.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {entity.tags.map(tag => (
+                            <span key={tag} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700">{tag}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {entity.description ? (
-                      <p className="text-xs text-gray-600 leading-relaxed mt-1">{entity.description}</p>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">No description.</p>
-                    )}
-                    {entity.stats && Object.keys(entity.stats).length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {Object.entries(entity.stats).map(([k, v]) => (
-                          <span key={k} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700">{k}: {v}</span>
-                        ))}
-                      </div>
-                    )}
-                    {entity.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {entity.tags.map(tag => (
-                          <span key={tag} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">{tag}</span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

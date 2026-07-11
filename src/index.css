@@ -3,8 +3,8 @@
 @layer utilities {
   @keyframes shake {
     0%, 100% { transform: translate(0, 0); }
-    25% { transform: translate(calc(var(--anim-intensity, 2px) * -1), var(--anim-intensity, 2px)); }
-    75% { transform: translate(var(--anim-intensity, 2px), calc(var(--anim-intensity, 2px) * -1)); }
+    25% { transform: translate(calc(var(--anim-intensity, 3px) * -1), var(--anim-intensity, 3px)); }
+    75% { transform: translate(var(--anim-intensity, 3px), calc(var(--anim-intensity, 3px) * -1)); }
   }
 
   @keyframes glitch {
@@ -21,12 +21,29 @@
     50% { text-shadow: 0 0 16px var(--custom-color, #fff), 0 0 32px var(--custom-color, #fff); }
   }
 
+  @keyframes wiggle {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-3px) rotate(-1deg); }
+    50% { transform: translateY(-1px) rotate(1deg); }
+    75% { transform: translateY(-4px) rotate(-2deg); }
+  }
+
   .animate-shake {
-    animation: shake 0.15s infinite linear;
+    animation: shake 0.4s infinite linear;
   }
 
   .animate-glitch {
     animation: glitch 0.3s infinite linear;
+  }
+
+  .animate-wiggle {
+    animation: wiggle 1s ease-in-out infinite;
+    display: inline-block;
+  }
+
+  .animate-wiggle > span {
+    animation: wiggle 2.5s ease-in-out infinite;
+    display: inline-block;
   }
 
   .text-glow {

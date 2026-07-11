@@ -48,6 +48,24 @@ export default function FlowchartCanvas({
   const dragStart = useRef({ x: 0, y: 0 });
   const nodeOffset = useRef({ x: 0, y: 0 });
   const dragDelta = useRef({ x: 0, y: 0 });
+  const dragGroupRef = useRef<Array<{ id: string; startX: number; startY: number }>>([]);
+
+  const collectDescendants = useCallback((nodeId: string): Array<{ id: string; startX: number; startY: number }> => {
+    const collected = new Map<string, { x: number; y: number }>();
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (collected.has(id)) continue;
+      const node = project.nodes[id];
+      if (!node) continue;
+      collected.set(id, { x: node.position.x, y: node.position.y });
+      if (node.continueToNodeId && !collected.has(node.continueToNodeId)) queue.push(node.continueToNodeId);
+      for (const choice of node.choices) {
+        if (choice.targetNodeId && !collected.has(choice.targetNodeId)) queue.push(choice.targetNodeId);
+      }
+    }
+    return Array.from(collected.entries()).map(([id, pos]) => ({ id, startX: pos.x, startY: pos.y }));
+  }, [project.nodes]);
 
   const { confirmId: nodeConfirmId, ref: nodeConfirmRef, requestDelete: requestNodeDelete } = useConfirmDelete();
 
@@ -176,24 +194,35 @@ export default function FlowchartCanvas({
     }
   };
 
+  const getGroupNodes = (): Record<string, { x: number; y: number }> => {
+    if (!draggedNodeId || dragGroupRef.current.length === 0) return {};
+    const result: Record<string, { x: number; y: number }> = {};
+    for (const member of dragGroupRef.current) {
+      result[member.id] = {
+        x: Math.round(member.startX + dragDelta.current.x),
+        y: Math.round(member.startY + dragDelta.current.y),
+      };
+    }
+    return result;
+  };
+
   const handleMouseUp = () => {
     const wasDrag = wasDragged.current;
     const wasPanning = isPanning;
     if (wasDrag && draggedNodeId) {
-      const node = project.nodes[draggedNodeId];
-      if (node) {
+      const groupPositions = getGroupNodes();
+      if (Object.keys(groupPositions).length > 0) {
         const updatedNodes = { ...project.nodes };
-        updatedNodes[draggedNodeId] = {
-          ...node,
-          position: {
-            x: Math.round(nodeOffset.current.x + dragDelta.current.x),
-            y: Math.round(nodeOffset.current.y + dragDelta.current.y),
-          },
-        };
+        for (const [id, pos] of Object.entries(groupPositions)) {
+          if (updatedNodes[id]) {
+            updatedNodes[id] = { ...updatedNodes[id], position: pos };
+          }
+        }
         onUpdateProject({ ...project, nodes: updatedNodes, lastModified: Date.now() });
       }
     }
     dragDelta.current = { x: 0, y: 0 };
+    dragGroupRef.current = [];
     setIsPanning(false);
     setDraggedNodeId(null);
     if (!wasDrag && wasPanning) {
@@ -217,6 +246,7 @@ export default function FlowchartCanvas({
     const node = project.nodes[nodeId];
     dragStart.current = { x: e.clientX, y: e.clientY };
     nodeOffset.current = { ...node.position };
+    dragGroupRef.current = collectDescendants(nodeId);
   };
 
   const handleDeleteNode = (nodeId: string, e: React.MouseEvent) => {
@@ -256,111 +286,142 @@ export default function FlowchartCanvas({
   const autoArrangeNodes = () => {
     const updatedNodes = { ...project.nodes };
 
-    // --- Graph traversal for story nodes (flowchart spread) ---
+    // Collect connected nodes via BFS following both choices and continue-to
     const visited = new Set<string>();
     const levels: Record<string, number> = {};
-    const colsAtLevel: Record<number, number> = {};
+    const countsAtLevel: Record<number, Record<string, number>> = {};
 
-    // Only traverse through story nodes — location/encounter nodes are dead ends for traversal
-    const traverse = (nodeId: string, currentLevel: number) => {
+    const traverse = (nodeId: string, level: number, branchKey: string) => {
       if (visited.has(nodeId)) return;
       visited.add(nodeId);
-
       const node = project.nodes[nodeId];
       if (!node) return;
       const isHidden = node.sceneId && hiddenSet.has(node.sceneId);
 
-      // Only assign levels to story nodes
       if (!isHidden && (!node.nodeType || node.nodeType === "story")) {
-        levels[nodeId] = currentLevel;
-        colsAtLevel[currentLevel] = (colsAtLevel[currentLevel] || 0) + 1;
+        levels[nodeId] = level;
+        if (!countsAtLevel[level]) countsAtLevel[level] = {};
+        countsAtLevel[level][branchKey] = (countsAtLevel[level][branchKey] || 0) + 1;
       }
 
-      // Only traverse through story node choices
       if (node.nodeType && node.nodeType !== "story") return;
-      if (node && node.choices) {
-        node.choices.forEach((choice) => {
-          if (choice.targetNodeId && project.nodes[choice.targetNodeId]) {
-            traverse(choice.targetNodeId, currentLevel + 1);
-          }
-        });
+
+      // Follow continue-to link — same branch, half-level deeper (stays close)
+      if (node.continueToNodeId) {
+        traverse(node.continueToNodeId, level + 0.5, branchKey);
       }
+
+      // Follow choices — each spawns a new branch
+      node.choices.forEach((choice, ci) => {
+        if (choice.targetNodeId && project.nodes[choice.targetNodeId]) {
+          traverse(choice.targetNodeId, level + 1, `${branchKey}-ch${ci}`);
+        }
+      });
     };
 
     if (project.startNodeId && project.nodes[project.startNodeId]) {
-      traverse(project.startNodeId, 0);
+      traverse(project.startNodeId, 0, "spine");
     }
-    // Orphan story nodes
+    // Orphan nodes
     Object.keys(project.nodes).forEach((nodeId) => {
       const n = project.nodes[nodeId];
       if (!visited.has(nodeId) && n && (!n.nodeType || n.nodeType === "story")) {
-        traverse(nodeId, 0);
+        traverse(nodeId, 0, `orphan-${nodeId}`);
       }
     });
 
     // --- Position nodes ---
-    const storyCounts: Record<string, number> = {};
-    const nonStoryCounts: Record<string, number> = {};
+    const isVert = flowDirection === "vertical";
+    const storyPositions: Record<string, { x: number; y: number }> = {};
 
-    // Process story nodes: spread by level (flowchart style)
-    Object.keys(updatedNodes).forEach((nodeId) => {
-      const node = updatedNodes[nodeId];
-      if (node.sceneId && hiddenSet.has(node.sceneId)) return;
-      const isStory = !node.nodeType || node.nodeType === "story";
+    // Group story nodes by (level, branchKey) for clean placement
+    const grouped: Record<number, Array<{ id: string; branch: string }>> = {};
+    for (const [id, lvl] of Object.entries(levels)) {
+      if (!grouped[lvl]) grouped[lvl] = [];
+      const node = project.nodes[id];
+      const branch = node?.choices.length ? "choice" : "spine";
+      grouped[lvl].push({ id, branch });
+    }
 
-      if (isStory) {
-        const lvl = levels[nodeId] !== undefined ? levels[nodeId] : 0;
-        const total = colsAtLevel[lvl] || 1;
-        const key = String(lvl);
-        const count = storyCounts[key] || 0;
-        storyCounts[key] = count + 1;
-
-        if (flowDirection === "vertical") {
-          updatedNodes[nodeId] = {
-            ...node,
-            position: {
-              x: (count - (total - 1) / 2) * 280 + 400,
-              y: lvl * 260 + 120,
-            },
-          };
+    // Place spine nodes (continue-to chain) as the primary axis
+    const spineIds = new Set<string>();
+    let spineIdx = 0;
+    let spineNodeId = project.startNodeId;
+    while (spineNodeId && project.nodes[spineNodeId] && !spineIds.has(spineNodeId)) {
+      spineIds.add(spineNodeId);
+      if (!project.nodes[spineNodeId].sceneId || !hiddenSet.has(project.nodes[spineNodeId].sceneId!)) {
+        if (isVert) {
+          storyPositions[spineNodeId] = { x: 400, y: spineIdx * 260 + 120 };
         } else {
-          updatedNodes[nodeId] = {
-            ...node,
-            position: {
-              x: lvl * 320 + 80,
-              y: (count - (total - 1) / 2) * 220 + 240,
-            },
-          };
+          storyPositions[spineNodeId] = { x: spineIdx * 320 + 80, y: 240 };
         }
       }
-    });
+      spineIdx++;
+      spineNodeId = project.nodes[spineNodeId]?.continueToNodeId || "";
+    }
 
-    // Process location/encounter nodes: stack in their own lane
-    Object.keys(updatedNodes).forEach((nodeId) => {
-      const node = updatedNodes[nodeId];
-      if (node.sceneId && hiddenSet.has(node.sceneId)) return;
-      const nodeType = node.nodeType;
-      if (!nodeType || nodeType === "story") return;
+    // Place remaining nodes: spread around their level
+    const placedBranchOffsets: Record<string, number> = {};
+    for (const [lvlStr, entries] of Object.entries(grouped)) {
+      const lvl = Number(lvlStr);
+      let branchCount = 0;
+      for (const { id, branch } of entries) {
+        if (storyPositions[id]) continue; // already placed by spine
+        const node = project.nodes[id];
+        if (!node || (node.sceneId && hiddenSet.has(node.sceneId))) continue;
 
-      const count = nonStoryCounts[nodeType] || 0;
-      nonStoryCounts[nodeType] = count + 1;
+        const branchKey = `${lvl}-${branch}-${entries.indexOf({ id, branch })}`;
+        placedBranchOffsets[branchKey] = (placedBranchOffsets[branchKey] || 0) + 1;
 
-      const typeOffset = nodeType === "location" ? 1 : 2;
-
-      if (flowDirection === "vertical") {
-        // Fixed column offset, stack top to bottom
-        updatedNodes[nodeId] = {
-          ...node,
-          position: { x: 400 + typeOffset * 280, y: count * 220 + 120 },
-        };
-      } else {
-        // Fixed row offset, stack left to right
-        updatedNodes[nodeId] = {
-          ...node,
-          position: { x: (count - 1) * 320 + 80, y: 240 + typeOffset * 200 },
-        };
+        if (isVert) {
+          const baseX = 400 + (branchCount - entries.length / 2) * 280;
+          storyPositions[id] = { x: baseX, y: lvl * 260 + 120 };
+        } else {
+          const yOffset = (branchCount - entries.length / 2) * 220;
+          storyPositions[id] = { x: lvl * 320 + 80, y: 240 + yOffset };
+        }
+        branchCount++;
       }
-    });
+    }
+
+    // Apply story positions
+    for (const [id, pos] of Object.entries(storyPositions)) {
+      if (updatedNodes[id]) {
+        updatedNodes[id] = { ...updatedNodes[id], position: pos };
+      }
+    }
+
+    // Place location/encounter nodes next to the story node that links to them
+    const placedNonStory = new Set<string>();
+    for (const node of Object.values(project.nodes) as StoryNode[]) {
+      if (!node.nodeType || node.nodeType === "story") continue;
+      if (node.sceneId && hiddenSet.has(node.sceneId)) continue;
+      if (placedNonStory.has(node.id)) continue;
+      placedNonStory.add(node.id);
+
+      // Find the parent story node that points to this one
+      const parent = Object.values(project.nodes).find(n =>
+        (n.choices?.some(c => c.targetNodeId === node.id) || n.continueToNodeId === node.id)
+      );
+      const parentPos = parent ? storyPositions[parent.id] : null;
+
+      const typeOffset = node.nodeType === "location" ? 1 : 2;
+      if (parentPos) {
+        if (isVert) {
+          updatedNodes[node.id] = { ...node, position: { x: parentPos.x + typeOffset * 280, y: parentPos.y } };
+        } else {
+          updatedNodes[node.id] = { ...node, position: { x: parentPos.x, y: parentPos.y + typeOffset * 200 } };
+        }
+      } else {
+        // Orphan non-story node
+        const orphanIdx = Array.from(placedNonStory).indexOf(node.id);
+        if (isVert) {
+          updatedNodes[node.id] = { ...node, position: { x: 400 + typeOffset * 280, y: orphanIdx * 220 + 120 } };
+        } else {
+          updatedNodes[node.id] = { ...node, position: { x: orphanIdx * 320 + 80, y: 240 + typeOffset * 200 } };
+        }
+      }
+    }
 
     onUpdateProject({
       ...project,
@@ -478,6 +539,17 @@ export default function FlowchartCanvas({
             >
               <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
             </marker>
+            <marker
+              id="arrow-continue"
+              viewBox="0 0 10 10"
+              refX="6"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#14b8a6" />
+            </marker>
           </defs>
 
           {/* Group choices by source→target pair for merged wire rendering */}
@@ -572,6 +644,38 @@ export default function FlowchartCanvas({
             return renderWires;
           })()}
 
+          {/* Continue-to wires (teal dashed) */}
+          {visibleNodes.filter(n => n.continueToNodeId && visibleNodesMap.has(n.continueToNodeId)).map((node) => {
+            const targetNode = project.nodes[node.continueToNodeId!]!;
+            const isVertical = flowDirection === "vertical";
+            let sX: number, sY: number, tX: number, tY: number;
+
+            if (isVertical) {
+              sX = node.position.x * zoom + pan.x + 120 * zoom;
+              sY = node.position.y * zoom + pan.y + 115 * zoom;
+              tX = targetNode.position.x * zoom + pan.x + 120 * zoom;
+              tY = targetNode.position.y * zoom + pan.y;
+            } else {
+              sX = node.position.x * zoom + pan.x + 240 * zoom;
+              sY = node.position.y * zoom + pan.y + 70 * zoom;
+              tX = targetNode.position.x * zoom + pan.x;
+              tY = targetNode.position.y * zoom + pan.y + 40 * zoom;
+            }
+
+            const dy = Math.abs(tY - sY) * 0.5;
+            const dx = Math.abs(tX - sX) * 0.5;
+            const pathD = isVertical
+              ? `M ${sX} ${sY} C ${sX} ${sY + dy}, ${tX} ${tY - dy}, ${tX} ${tY}`
+              : `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
+
+            return (
+              <g key={`continue-${node.id}`}>
+                <path d={pathD} fill="none" stroke="#14b8a6" strokeOpacity={0.08} strokeWidth="5" />
+                <path d={pathD} fill="none" stroke="#14b8a6" strokeWidth="2" strokeOpacity={0.5} strokeDasharray="6 4" markerEnd="url(#arrow-continue)" />
+              </g>
+            );
+          })}
+
           {/* Case 2: hidden → visible — faded arrow stubs */}
           {hiddenNodesWithOutgoing.map((node) => {
             return node.choices
@@ -631,8 +735,8 @@ export default function FlowchartCanvas({
                     : "border-slate-700/80 hover:border-slate-600 z-10"
                 }`}
                 style={{
-                  transform: `translate(${node.position.x * zoom + pan.x + (draggedNodeId === node.id ? dragDelta.current.x * zoom : 0)}px, ${
-                    node.position.y * zoom + pan.y + (draggedNodeId === node.id ? dragDelta.current.y * zoom : 0)
+                  transform: `translate(${node.position.x * zoom + pan.x + (dragGroupRef.current.some(g => g.id === node.id) ? dragDelta.current.x * zoom : 0)}px, ${
+                    node.position.y * zoom + pan.y + (dragGroupRef.current.some(g => g.id === node.id) ? dragDelta.current.y * zoom : 0)
                   }px) scale(${zoom})`,
                   transformOrigin: "top left",
                 }}
@@ -749,6 +853,13 @@ export default function FlowchartCanvas({
                           {sc.variableName} {sc.operation}{sc.value}
                         </span>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Continue-to indicator */}
+                  {node.continueToNodeId && project.nodes[node.continueToNodeId] && (
+                    <div className="text-[9px] text-teal-400 font-mono font-semibold mb-1 flex items-center gap-1">
+                      <span className="text-teal-500/70">→</span> Continues to: {project.nodes[node.continueToNodeId].title}
                     </div>
                   )}
 
@@ -882,7 +993,7 @@ export default function FlowchartCanvas({
       {/* Play simulation shortcut */}
       {project.startNodeId && (
         <button
-          onClick={() => onEnterPlaytest(project.startNodeId)}
+          onClick={() => onEnterPlaytest(selectedNodeId ?? project.startNodeId)}
           className="absolute bottom-4 right-4 z-20 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl transition-all shadow-xl hover:shadow-2xl flex items-center gap-2 text-xs font-sans uppercase tracking-wider cursor-pointer"
         >
           <Play className="w-4 h-4 fill-current" />

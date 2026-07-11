@@ -432,9 +432,7 @@ export default function SceneDirectory({
             <input
               type="checkbox"
               checked={isChecked}
-              onChange={() => {}}
-              onClick={(e) => e.stopPropagation()}
-              className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+              className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer pointer-events-none"
             />
             <span className="truncate">{node.title}</span>
           </div>

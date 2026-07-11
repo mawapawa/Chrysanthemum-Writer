@@ -11,6 +11,7 @@ const STYLE_CLASS_MAP: Record<string, string> = {
   glow: "text-glow",
   whisper: "text-whisper",
   redacted: "text-redacted",
+  wiggle: "animate-wiggle",
 };
 
 interface ScriptEditorProps {
@@ -76,8 +77,19 @@ export default function ScriptEditor({ initialContent, onChange, placeholder }: 
 
   const handleApplyStyle = React.useCallback((style: string) => {
     if (!editor) return;
-    const { to } = editor.state.selection;
-    editor.chain().focus().toggleMark("textStyle", { styles: style }).setTextSelection(to).run();
+    const currentStyles = editor.getAttributes("textStyle").styles as string || "";
+    const styles = currentStyles ? currentStyles.split(" ").filter(Boolean) : [];
+    const idx = styles.indexOf(style);
+    if (idx >= 0) {
+      styles.splice(idx, 1);
+    } else {
+      styles.push(style);
+    }
+    if (styles.length > 0) {
+      editor.chain().focus().setMark("textStyle", { styles: styles.join(" ") }).setTextSelection(editor.state.selection.to).run();
+    } else {
+      editor.chain().focus().unsetMark("textStyle").setTextSelection(editor.state.selection.to).run();
+    }
     setMenuState(null);
   }, [editor]);
 

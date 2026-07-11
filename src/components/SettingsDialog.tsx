@@ -3,7 +3,7 @@ import { X, LogOut, RefreshCw, Cloud, AlertTriangle, FolderOpen, Link } from "lu
 import { useDriveSync } from "../hooks/useDriveSync";
 import { AuthUser } from "../services/auth";
 import { VNProject } from "../types";
-import { listUserFolders, driveFolderUrl, parseFolderIdFromUrl } from "../services/drive";
+import { listUserFolders, driveFolderUrl, parseFolderIdFromUrl, setLinkedDriveMeta, clearLinkedDriveMeta } from "../services/drive";
 
 interface SettingsDialogProps {
   project: VNProject | null;
@@ -14,11 +14,12 @@ interface SettingsDialogProps {
   signOut: () => Promise<void>;
   onOpenTutorial?: () => void;
   onExportProject?: () => void;
+  onLoadFromDrive?: () => Promise<void>;
 }
 
 type PickerMode = null | "browse" | "paste";
 
-export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportProject }: SettingsDialogProps) {
+export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportProject, onLoadFromDrive }: SettingsDialogProps) {
   const { status, syncNow } = useDriveSync(project);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
@@ -35,6 +36,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
   const handleSelectFolder = (folderId: string) => {
     if (project) {
       onUpdateProject({ ...project, driveFolderId: folderId, lastModified: Date.now() });
+      setLinkedDriveMeta({ folderId });
     }
     setPickerMode(null);
   };
@@ -50,6 +52,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
   const handleUnlink = () => {
     if (project) {
       onUpdateProject({ ...project, driveFolderId: undefined, driveFileId: undefined, lastModified: Date.now() });
+      clearLinkedDriveMeta();
     }
   };
 
@@ -118,19 +121,26 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
                     Unlink
                   </button>
                 </div>
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-2">
-                    {status === "idle" && <Cloud className="w-4 h-4 text-emerald-400" />}
-                    {status === "syncing" && <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />}
-                    {status === "error" && <AlertTriangle className="w-4 h-4 text-rose-400" />}
-                    <span className="text-xs text-slate-300 font-medium capitalize">{status}</span>
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-2">
+                      {status === "idle" && <Cloud className="w-4 h-4 text-emerald-400" />}
+                      {status === "syncing" && <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />}
+                      {status === "error" && <AlertTriangle className="w-4 h-4 text-rose-400" />}
+                      <span className="text-xs text-slate-300 font-medium capitalize">{status}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={syncNow} disabled={status === "syncing"}
+                        className="flex items-center gap-1 text-[10px] font-bold text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
+                        <RefreshCw className="w-3 h-3" />
+                        Sync Up
+                      </button>
+                      <button onClick={onLoadFromDrive} disabled={status === "syncing"}
+                        className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 disabled:text-slate-600 px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
+                        <RefreshCw className="w-3 h-3" />
+                        Load from Drive
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={syncNow} disabled={status === "syncing"}
-                    className="flex items-center gap-1 text-[10px] font-bold text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
-                    <RefreshCw className="w-3 h-3" />
-                    Sync Now
-                  </button>
-                </div>
               </>
             ) : pickerMode ? (
               <div className="space-y-3">

@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { VNProject, StoryNode, StoryChoice, ChoiceRequirement, InlineEffect, DialogueLine, NodeLock } from "../types";
-import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
+import { Plus, Trash2, HelpCircle, ChevronDown, ChevronRight, ListPlus, GripVertical } from "lucide-react";
+import { DndContext, DragEndEvent, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import ScriptEditor from "./ScriptEditor";
 import LocationEditor from "./LocationEditor";
 import EncounterEditor from "./EncounterEditor";
@@ -26,6 +29,58 @@ function CollapsibleSection({ title, defaultExpanded, children }: { title: strin
   );
 }
 
+const SortableDialogueLine = ({ line, idx, editingLineIdx, lineConfirmId, lineConfirmRef, requestLineDelete, entityColor, entityTextColor, onEdit, onDelete }: {
+  line: DialogueLine;
+  idx: number;
+  editingLineIdx: number | null;
+  lineConfirmId: string | null;
+  lineConfirmRef: React.RefObject<HTMLDivElement | null>;
+  requestLineDelete: (id: string) => boolean;
+  entityColor: string;
+  entityTextColor: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `dialogue-${line.id}`,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    position: "relative" as const,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs ${editingLineIdx === idx ? "bg-indigo-950/40 border-indigo-500/40" : "bg-slate-900 border-slate-800/40"}`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-slate-500 hover:text-indigo-400 cursor-grab active:cursor-grabbing text-[10px] p-0.5"
+        title="Drag to reorder"
+      >
+        <GripVertical className="w-3 h-3" />
+      </button>
+      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 max-w-[65px] truncate ${entityTextColor}`} style={{ backgroundColor: entityColor }}>
+        {line.speaker}
+      </span>
+      <span className="text-slate-300 flex-1 truncate text-[11px]">
+        {line.speaker === "Narrator" ? line.text : `"${line.text}"`}
+      </span>
+      <button onClick={onEdit} className="p-0.5 text-slate-500 hover:text-indigo-400 cursor-pointer text-[10px]" title="Edit line">✏️</button>
+      <button onClick={onDelete} className={`p-0.5 cursor-pointer text-[10px] ${lineConfirmId === line.id ? "text-rose-400 animate-pulse" : "text-slate-500 hover:text-rose-400"}`} title={lineConfirmId === line.id ? "Confirm delete" : "Delete line"}>
+        {lineConfirmId === line.id ? "✕" : "🗑"}
+      </button>
+    </div>
+  );
+};
+
 interface NodeEditorProps {
   project: VNProject;
   selectedNodeId: string;
@@ -50,6 +105,19 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
   const [dialogueHTML, setDialogueHTML] = useState("");
   const [editingLineIdx, setEditingLineIdx] = useState<number | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+
+  const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
+  const sensors = useSensors(pointerSensor);
+
+  const handleDialogueDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = node.dialogueLines.findIndex(l => `dialogue-${l.id}` === active.id);
+    const newIndex = node.dialogueLines.findIndex(l => `dialogue-${l.id}` === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(node.dialogueLines, oldIndex, newIndex);
+    updateNode({ dialogueLines: reordered });
+  }, [node?.dialogueLines]);
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -265,6 +333,25 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
             />
           </div>
 
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">After Dialogue Ends</label>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-500">Continue to</span>
+              <select
+                value={node.continueToNodeId || ""}
+                onChange={(e) => updateNode({ continueToNodeId: e.target.value || undefined })}
+                className="flex-1 bg-slate-950 border border-slate-800 text-xs rounded-lg p-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="">— End here (dead end) —</option>
+                {Object.values(project.nodes)
+                  .filter(n => n.id !== node.id)
+                  .map(n => (
+                    <option key={n.id} value={n.id}>{n.title}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
           {node.isEnding && (
             <div className="bg-rose-950/20 border border-rose-500/20 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -302,41 +389,45 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
 
         {/* 📝 Script & Dialogue Editor */}
         <CollapsibleSection title="📝 Script & Dialogue Editor" defaultExpanded={true}>
-          <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
-            {node.dialogueLines.length === 0 ? (
-              <p className="text-[11px] text-slate-500 italic py-2 text-center">No dialogue yet. Write below and click "Add Line".</p>
-            ) : (
-              node.dialogueLines.map((line, idx) => {
-                const entity = project.entities.find(e => e.name === line.speaker);
-                const color = entity?.color || "#64748b";
-                const textColor = entity ? textColorForHex(color) : "text-white";
-                return (
-                  <div key={line.id} className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs ${editingLineIdx === idx ? "bg-indigo-950/40 border-indigo-500/40" : "bg-slate-900 border-slate-800/40"}`}>
-                    <span className="text-slate-500 cursor-grab text-[10px] select-none">⠿</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 max-w-[65px] truncate ${textColor}`} style={{ backgroundColor: color }}>
-                      {line.speaker}
-                    </span>
-                    <span className="text-slate-300 flex-1 truncate text-[11px]">
-                      {line.speaker === "Narrator" ? line.text : `"${line.text}"`}
-                    </span>
-                    <button onClick={() => {
-                      setDialogueSpeaker(line.speaker);
-                      setDialogueExpression(line.expression || "Neutral");
-                      setDialogueHTML(line.formattedText || "");
-                      setEditingLineIdx(idx);
-                    }} className="p-0.5 text-slate-500 hover:text-indigo-400 cursor-pointer text-[10px]" title="Edit line">✏️</button>
-                    <button onClick={() => {
-                      if (requestLineDelete(line.id)) {
-                        updateNode({ dialogueLines: node.dialogueLines.filter(l => l.id !== line.id) });
-                      }
-                    }} className={`p-0.5 cursor-pointer text-[10px] ${lineConfirmId === line.id ? "text-rose-400 animate-pulse" : "text-slate-500 hover:text-rose-400"}`} title={lineConfirmId === line.id ? "Confirm delete" : "Delete line"}>
-                      {lineConfirmId === line.id ? "✕" : "🗑"}
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <DndContext sensors={sensors} onDragEnd={handleDialogueDragEnd} collisionDetection={closestCenter}>
+            <SortableContext items={node.dialogueLines.map(l => `dialogue-${l.id}`)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
+                {node.dialogueLines.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic py-2 text-center">No dialogue yet. Write below and click "Add Line".</p>
+                ) : (
+                  node.dialogueLines.map((line, idx) => {
+                    const entity = project.entities.find(e => e.name === line.speaker);
+                    const color = entity?.color || "#64748b";
+                    const textColor = entity ? textColorForHex(color) : "text-white";
+                    return (
+                      <SortableDialogueLine
+                        key={line.id}
+                        line={line}
+                        idx={idx}
+                        editingLineIdx={editingLineIdx}
+                        lineConfirmId={lineConfirmId}
+                        lineConfirmRef={lineConfirmRef}
+                        requestLineDelete={requestLineDelete}
+                        entityColor={color}
+                        entityTextColor={textColor}
+                        onEdit={() => {
+                          setDialogueSpeaker(line.speaker);
+                          setDialogueExpression(line.expression || "Neutral");
+                          setDialogueHTML(line.formattedText || "");
+                          setEditingLineIdx(idx);
+                        }}
+                        onDelete={() => {
+                          if (requestLineDelete(line.id)) {
+                            updateNode({ dialogueLines: node.dialogueLines.filter(l => l.id !== line.id) });
+                          }
+                        }}
+                      />
+                    );
+                  })
+                )}
+              </div>
+            </SortableContext>
+          </DndContext>
 
           <div className="flex gap-2 mb-2">
             <select value={dialogueSpeaker} onChange={(e) => setDialogueSpeaker(e.target.value)}
@@ -346,12 +437,11 @@ export default function NodeEditor({ project, selectedNodeId, onUpdateProject, o
             </select>
             <select value={dialogueExpression} onChange={(e) => setDialogueExpression(e.target.value)}
               className="w-28 bg-slate-900 border border-slate-800 text-[11px] text-slate-200 rounded-lg p-1.5">
-              <option value="Neutral">Neutral</option>
-              <option value="Smile">Smile</option>
-              <option value="Surprise">Surprise</option>
-              <option value="Serious">Serious</option>
-              <option value="Sad">Sad</option>
-              <option value="Angry">Angry</option>
+              {(() => {
+                const entity = project.entities.find(e => e.name === dialogueSpeaker);
+                const tones = entity?.expressions?.length ? entity.expressions : ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
+                return tones.map(t => <option key={t} value={t}>{t}</option>);
+              })()}
             </select>
           </div>
 

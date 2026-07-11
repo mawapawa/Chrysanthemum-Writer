@@ -27,6 +27,16 @@ export interface StatChange {
   value: number | boolean | string;
 }
 
+export interface VNEntityStat {
+  name: string;
+  defaultValue: number;
+}
+
+export interface VNEntityFlag {
+  name: string;
+  defaultValue: boolean;
+}
+
 export interface VNEntity {
   id: string;
   name: string;
@@ -35,6 +45,9 @@ export interface VNEntity {
   displayId?: string;
   tags: string[];
   stats?: Record<string, number>;
+  ownedTrackers?: VNEntityStat[];
+  ownedFlags?: VNEntityFlag[];
+  expressions?: string[];
 }
 
 export interface VNTracker {
@@ -173,6 +186,7 @@ export interface StoryNode {
   nodeType: "story" | "location" | "encounter";
   locationData?: LocationData;
   encounterData?: EncounterData;
+  continueToNodeId?: string;
   trigger?: StoryBeatTrigger;
 }
 

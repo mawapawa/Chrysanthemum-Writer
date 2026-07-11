@@ -16,7 +16,7 @@ import EntitiesManager from "./components/EntitiesManager";
 import CalendarManager from "./components/CalendarManager";
 import { migrateProject } from "./utils/schemaMigration";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
-import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
+import { loadProjectFromDrive, scanDriveForProjects, getLinkedDriveMeta, setLinkedDriveMeta } from "./services/drive";
 import {
   Sliders, Flag, Package, Users, Clock,
   Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
@@ -24,7 +24,7 @@ import {
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
 import { useAuth } from "./hooks/useAuth";
-import { tryHandleOAuthRedirect } from "./services/auth";
+import { tryHandleOAuthRedirect, getCurrentUser } from "./services/auth";
 
 const BLANK_PROJECT: VNProject = {
   id: crypto.randomUUID(),
@@ -157,34 +157,72 @@ export default function App() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  // Async init: load projects from disk, or migrate from localStorage, or start blank
+  // Async init: Drive first (source of truth), local as backup
   useEffect(() => {
     (async () => {
       try {
         await migrateFromOldPath();
-        const files = await listProjectFiles();
-        const loaded: Array<{ proj: VNProject; file: string }> = [];
-        for (const f of files) {
-          const proj = await loadProject(f);
-          if (proj) loaded.push({ proj, file: f });
-        }
-        if (loaded.length > 0) {
-          setAllProjects(loaded.map(e => e.proj));
-          setProject(loaded[0].proj);
-          setCurrentFileName(loaded[0].file);
-        } else {
-          const migrated = await migrateFromLocalStorage();
-          if (migrated) {
-            const proj = await loadProject(migrated);
+
+        // 1. Try loading from linked Drive folder first
+        const driveMeta = getLinkedDriveMeta();
+        const user = getCurrentUser();
+        let driveLoaded = false;
+
+        if (driveMeta && user) {
+          // If we know the exact file ID, fetch it directly
+          if (driveMeta.fileId) {
+            const proj = await loadProjectFromDrive(driveMeta.fileId);
             if (proj) {
-              setAllProjects([proj]);
               setProject(proj);
-              setCurrentFileName(migrated);
+              setAllProjects([proj]);
+              const name = await saveProject(proj);
+              if (name) setCurrentFileName(name);
+              driveLoaded = true;
+            }
+          }
+          // Otherwise scan the linked folder for project files
+          if (!driveLoaded) {
+            const found = await scanDriveForProjects(driveMeta.folderId);
+            if (found.length > 0) {
+              const proj = await loadProjectFromDrive(found[0].fileId);
+              if (proj) {
+                setProject(proj);
+                setAllProjects([proj]);
+                const name = await saveProject(proj);
+                if (name) setCurrentFileName(name);
+                setLinkedDriveMeta({ folderId: driveMeta.folderId, fileId: found[0].fileId });
+                driveLoaded = true;
+              }
+            }
+          }
+        }
+
+        // 2. Fall back to local files if Drive didn't load
+        if (!driveLoaded) {
+          const files = await listProjectFiles();
+          const loaded: Array<{ proj: VNProject; file: string }> = [];
+          for (const f of files) {
+            const proj = await loadProject(f);
+            if (proj) loaded.push({ proj, file: f });
+          }
+          if (loaded.length > 0) {
+            setAllProjects(loaded.map(e => e.proj));
+            setProject(loaded[0].proj);
+            setCurrentFileName(loaded[0].file);
+          } else {
+            const migrated = await migrateFromLocalStorage();
+            if (migrated) {
+              const proj = await loadProject(migrated);
+              if (proj) {
+                setAllProjects([proj]);
+                setProject(proj);
+                setCurrentFileName(migrated);
+              }
             }
           }
         }
       } catch (e) {
-        console.error("Failed to load project files", e);
+        console.error("Failed to load project", e);
       }
       setLoading(false);
     })();
@@ -220,6 +258,16 @@ export default function App() {
     document.title = `${project.name} — Chrysanthemum`;
   }, [project.name]);
 
+  // Sync Drive folder/file IDs to localStorage whenever they change
+  useEffect(() => {
+    if (project.driveFolderId) {
+      setLinkedDriveMeta({
+        folderId: project.driveFolderId,
+        fileId: project.driveFileId,
+      });
+    }
+  }, [project.driveFolderId, project.driveFileId]);
+
   // After sign-in: scan Drive for project files
   useEffect(() => {
     if (loading || !user || project !== BLANK_PROJECT) return;
@@ -244,6 +292,43 @@ export default function App() {
   const handleFileId = useCallback((fileId: string) => {
     setProject(prev => ({ ...prev, driveFileId: fileId }));
   }, []);
+
+  const handleLoadFromDrive = useCallback(async () => {
+    const folderId = project.driveFolderId;
+    const fileId = project.driveFileId;
+    if (!folderId) return;
+    try {
+      if (fileId) {
+        const proj = await loadProjectFromDrive(fileId);
+        if (proj) {
+          setProject(proj);
+          setAllProjects(prev => {
+            const idx = prev.findIndex(p => p.id === proj.id);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = proj;
+              return next;
+            }
+            return [...prev, proj];
+          });
+          saveProject(proj);
+        }
+      } else {
+        const found = await scanDriveForProjects(folderId);
+        if (found.length > 0) {
+          const proj = await loadProjectFromDrive(found[0].fileId);
+          if (proj) {
+            setProject(proj);
+            setAllProjects([proj]);
+            setLinkedDriveMeta({ folderId, fileId: found[0].fileId });
+            saveProject(proj);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[DRIVE] Load from Drive failed", e);
+    }
+  }, [project.driveFolderId, project.driveFileId]);
 
   const { status: syncStatus, errorMsg: syncError, syncNow } = useDriveSync(project, handleFileId);
 
@@ -656,6 +741,7 @@ export default function App() {
           signOut={signOut}
           onOpenTutorial={() => setShowTutorial(true)}
           onExportProject={handleExportJSON}
+          onLoadFromDrive={handleLoadFromDrive}
         />
       )}
 
