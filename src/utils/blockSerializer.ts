@@ -55,27 +55,15 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
     }
   }
 
-  // Preserve existing choices, effects, statChanges not represented in blocks
-  const result: Partial<StoryNode> = {
-    dialogueLines: dialogueLines.length > 0 ? dialogueLines : existing.dialogueLines,
-    choices: choices.length > 0 ? choices : existing.choices,
-    statChanges: statChanges.length > 0 ? statChanges : existing.statChanges,
+  return {
+    dialogueLines: dialogueLines.length > 0 ? dialogueLines : (choices.length > 0 ? [] : existing.dialogueLines),
+    choices: choices.length > 0 ? choices : (dialogueLines.length > 0 ? [] : existing.choices),
+    statChanges: statChanges.length > 0 ? statChanges : [],
     isEnding,
     endingType,
     endingName,
     continueToNodeId,
   };
-
-  // If we have explicit choices from blocks, merge with existing ones not in blocks
-  if (choices.length > 0) {
-    const blockTargets = new Set(choices.map(c => c.targetNodeId));
-    const uncleared = existing.choices.filter(c => !blockTargets.has(c.targetNodeId) && !choices.some(bc => bc.text === c.text));
-    if (uncleared.length > 0) {
-      result.choices = [...choices, ...uncleared];
-    }
-  }
-
-  return result;
 }
 
 export function nodeToBlocks(node: StoryNode): SceneBlock[] {

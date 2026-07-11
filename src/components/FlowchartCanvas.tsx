@@ -785,7 +785,7 @@ export default function FlowchartCanvas({
                   nodeRefs.current[node.id] = el;
                 }}
                 onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
-                className={`node-card absolute pointer-events-auto w-[240px] bg-slate-800 border-2 rounded-xl shadow-xl ${draggedNodeId !== node.id ? "transition-all duration-150" : ""} cursor-grab active:cursor-grabbing hover:shadow-2xl overflow-hidden ${
+                className={`node-card absolute pointer-events-auto ${isSelected ? "w-[400px]" : "w-[240px]"} bg-slate-800 border-2 rounded-xl shadow-xl ${draggedNodeId !== node.id ? "transition-all duration-150" : ""} cursor-grab active:cursor-grabbing hover:shadow-2xl ${isSelected ? "" : "overflow-hidden"} ${
                   isSelected
                     ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-105 z-40"
                     : "border-slate-700/80 hover:border-slate-600 z-10"
@@ -934,6 +934,25 @@ export default function FlowchartCanvas({
                       Branch Out
                     </button>
                   </div>
+
+                  {/* Expanded editor — shown when selected */}
+                  {isSelected && (
+                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono text-slate-500">Scene Content</span>
+                        <button onClick={() => onSelectNode(null)}
+                          className="p-0.5 text-slate-500 hover:text-white cursor-pointer">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <BlockEditor
+                        project={project}
+                        blocks={expandedBlocks}
+                        onChange={handleBlocksChange}
+                        onCreateNode={handleCreateNodeFromBlock}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1045,92 +1064,6 @@ export default function FlowchartCanvas({
           Tidy Layout
         </button>
       </div>
-
-      {/* Expanded node editor panel */}
-      {selectedNode && (() => {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        const baseX = rect ? rect.left : 0;
-        const baseY = rect ? rect.top : 0;
-        const nodeScreenX = selectedNode.position.x * zoom + pan.x + baseX;
-        const nodeScreenY = selectedNode.position.y * zoom + pan.y + baseY;
-        const panelW = 420;
-        const panelH = Math.min(550, window.innerHeight - 32);
-        let px = nodeScreenX + 250 * zoom + 16;
-        let py = nodeScreenY;
-        if (px + panelW > window.innerWidth - 16) px = window.innerWidth - panelW - 16;
-        if (px < 8) px = 8;
-        if (py + panelH > window.innerHeight - 16) py = window.innerHeight - panelH - 16;
-        if (py < 8) py = 8;
-        const scenes = project.scenes || [];
-
-        return (
-          <div
-            className="fixed z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl"
-            style={{
-              left: px,
-              top: py,
-              width: panelW,
-              height: panelH,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0">
-              <input
-                type="text"
-                value={selectedNode.title}
-                onChange={(e) => {
-                  onUpdateProject({
-                    ...project,
-                    nodes: { ...project.nodes, [selectedNode.id]: { ...selectedNode, title: e.target.value } },
-                    lastModified: Date.now(),
-                  });
-                }}
-                className="bg-transparent text-sm font-bold text-white flex-1 focus:outline-none border-b border-transparent focus:border-indigo-500"
-                placeholder="Scene title..."
-              />
-              <div className="flex items-center gap-2 ml-2">
-                <select
-                  value={selectedNode.sceneId || "unassigned"}
-                  onChange={(e) => {
-                    onUpdateProject({
-                      ...project,
-                      nodes: {
-                        ...project.nodes,
-                        [selectedNode.id]: { ...selectedNode, sceneId: e.target.value === "unassigned" ? undefined : e.target.value },
-                      },
-                      lastModified: Date.now(),
-                    });
-                  }}
-                  className="bg-slate-800 border border-slate-700 text-[10px] text-slate-300 rounded-lg p-1 cursor-pointer max-w-[130px]"
-                >
-                  <option value="unassigned">📂 Root</option>
-                  {scenes.map((s) => (
-                    <option key={s.id} value={s.id}>📂 {s.name}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => onSelectNode(null)}
-                  className="p-1 text-slate-500 hover:text-white cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Block editor — scrollable */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <BlockEditor
-                project={project}
-                blocks={expandedBlocks}
-                onChange={handleBlocksChange}
-                onCreateNode={handleCreateNodeFromBlock}
-              />
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Play simulation shortcut */}
       {project.startNodeId && (
