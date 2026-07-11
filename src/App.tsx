@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { VNProject, StoryNode } from "./types";
 import { generateDisplayId } from "./utils/displayIds";
 import FlowchartCanvas from "./components/FlowchartCanvas";
-import NodeEditor from "./components/NodeEditor";
+
 import PlaytestSimulator from "./components/PlaytestSimulator";
 import SyncIndicator from "./components/SyncIndicator";
 import TutorialDialog from "./components/TutorialDialog";
@@ -19,7 +19,7 @@ import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateF
 import { loadProjectFromDrive, scanDriveForProjects, getLinkedDriveMeta, setLinkedDriveMeta } from "./services/drive";
 import {
   Sliders, Flag, Package, Users, Clock,
-  Layers, Plus, BookOpen, History, Settings, Pencil, ChevronLeft, ChevronRight
+  Layers, BookOpen, History, Settings, Pencil
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -123,8 +123,7 @@ export default function App() {
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
   const [centerNodeTrigger, setCenterNodeTrigger] = useState<{ id: string; timestamp: number } | null>(null);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
-  const [editorWidth, setEditorWidth] = useState(420);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -637,7 +636,7 @@ export default function App() {
               project={project}
               onUpdateProject={handleUpdateProject}
               selectedNodeId={selectedNodeId}
-              onSelectNode={(id) => { setSelectedNodeId(id); if (id) setRightSidebarOpen(true); }}
+                onSelectNode={(id) => { setSelectedNodeId(id); }}
               hiddenFolderIds={hiddenFolderIds}
               onToggleFolderVisibility={(sceneId: string) => {
                 setHiddenFolderIds(prev => prev.includes(sceneId) ? prev.filter(id => id !== sceneId) : [...prev, sceneId]);
@@ -649,36 +648,16 @@ export default function App() {
                 project={project}
                 onUpdateProject={handleUpdateProject}
                 selectedNodeId={selectedNodeId}
-                onSelectNode={(id) => { setSelectedNodeId(id); if (id) setRightSidebarOpen(true); }}
+                onSelectNode={(id) => { setSelectedNodeId(id); }}
                 onEnterPlaytest={(id) => setPlaytestStartId(id)}
                 hiddenFolderIds={hiddenFolderIds}
                 centerNodeTrigger={centerNodeTrigger}
-                onCanvasBackgroundClick={() => setRightSidebarOpen(false)}
+                onCanvasBackgroundClick={() => {}}
                 onAddBlankNode={handleAddBlankNode}
                 onAddLocation={handleAddLocation}
                 onAddEncounter={handleAddEncounter}
               />
             </div>
-            {rightSidebarOpen ? (
-              <div className="h-full shrink-0 bg-slate-900" style={{ width: editorWidth }}>
-                <NodeEditor
-                  project={project}
-                  selectedNodeId={selectedNodeId || ""}
-                  onUpdateProject={handleUpdateProject}
-                  onSelectNode={setSelectedNodeId}
-                  editorWidth={editorWidth}
-                  onResizeEditor={setEditorWidth}
-                />
-              </div>
-            ) : (
-              <button
-                onClick={() => setRightSidebarOpen(true)}
-                className="w-8 h-full bg-slate-900 border-l border-slate-800 flex items-center justify-center hover:bg-slate-800 cursor-pointer shrink-0"
-                title="Open Node Editor"
-              >
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-              </button>
-            )}
           </div>
         )}
         {activeTab === "stats" && <TrackersManager project={project} onUpdateProject={handleUpdateProject} />}
@@ -755,7 +734,6 @@ export default function App() {
           onSelectNode={(id) => {
             setSelectedNodeId(id);
             setCenterNodeTrigger({ id, timestamp: Date.now() });
-            setRightSidebarOpen(true);
           }}
           onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "stats" | "flags" | "items" | "entities" | "calendar")}
           onClose={() => setSearchOpen(false)}

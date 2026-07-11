@@ -327,6 +327,13 @@ export default function PlaytestSimulator({
   const totalLines = node.dialogueLines?.length ?? 0;
   const activeLine = node.dialogueLines?.[lineIdx] ?? null;
 
+  // Sequential block processing — determine ending state
+  const isOnLastLine = !hasDialogue || lineIdx === totalLines - 1;
+  const endingBlock = (node.blocks || []).find((b): b is SceneBlock & { type: "ending" } => b.type === "ending");
+  const showEndingNow = !!endingBlock && isOnLastLine && (node.choices.length === 0 || (!hasDialogue || lineIdx === totalLines - 1)) && !node.choices.some(c => !c.targetNodeId);
+  const activeEndingType = endingBlock?.endingType || node.endingType;
+  const activeEndingName = endingBlock?.endingName || node.endingName;
+
   // Pre-compute visible choices — single evaluation pass
   const availableChoices = node.choices.filter((choice) => {
     const evalResult = checkChoiceCondition(choice);
@@ -466,22 +473,22 @@ export default function PlaytestSimulator({
 
         {/* Narrative / Script stage visualization area */}
         <div className="flex-1 flex flex-col justify-start py-4" id="vn-player-expressive-stage">
-          {/* If ending node is active, show giant beautiful ending splashes */}
-          {node.isEnding ? (
+          {/* If ending node is active (sequential), show giant beautiful ending splashes */}
+           {showEndingNow ? (
             <div className="text-center p-8 max-w-md bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden" id="ending-splash-card">
               <div className="absolute top-0 left-0 w-full h-1 bg-rose-500" />
               <Flag className="w-14 h-14 text-rose-400 mx-auto mb-4 animate-bounce" />
               <span className={`text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded-full ${
-                node.endingType === "GOOD"
+                activeEndingType === "GOOD"
                   ? "bg-emerald-500/20 text-emerald-400"
-                  : node.endingType === "BAD"
+                  : activeEndingType === "BAD"
                   ? "bg-rose-500/20 text-rose-400"
                   : "bg-cyan-500/20 text-cyan-400"
               }`}>
-                {node.endingType || "NORMAL"} ENDING
+                {activeEndingType || "NORMAL"} ENDING
               </span>
 
-              <h3 className="text-2xl font-black text-white mt-4 tracking-tight">{node.endingName || "Story Completed"}</h3>
+              <h3 className="text-2xl font-black text-white mt-4 tracking-tight">{activeEndingName || "Story Completed"}</h3>
               <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
                 {node.description || "You have charted a course through the branches and arrived at a distinct conclusion."}
               </p>
@@ -720,7 +727,7 @@ export default function PlaytestSimulator({
                 )}
 
                 {/* Continue-to auto-advance */}
-                {!node.isEnding && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && node.continueToNodeId && project.nodes[node.continueToNodeId] && (
+                {!showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && node.continueToNodeId && project.nodes[node.continueToNodeId] && (
                   <div className="border-t border-slate-800/60 pt-4 mt-4">
                     <div className="flex justify-center">
                       <button
@@ -738,7 +745,7 @@ export default function PlaytestSimulator({
                 )}
 
                 {/* Choices inside the dialogue card */}
-                {!node.isEnding && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length > 0 && (
+                {!showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length > 0 && (
                   <div className="border-t border-slate-800/60 pt-4 mt-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {availableChoices.map((choice) => {

@@ -4,10 +4,12 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { VNProject, StoryNode, StoryChoice } from "../types";
+import { VNProject, StoryNode, StoryChoice, SceneBlock } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
-import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star } from "lucide-react";
+import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star, X } from "lucide-react";
 import { useConfirmDelete } from "../hooks/useConfirmDelete";
+import BlockEditor from "./BlockEditor";
+import { blocksToNode, nodeToBlocks } from "../utils/blockSerializer";
 
 interface FlowchartCanvasProps {
   project: VNProject;
@@ -70,6 +72,60 @@ export default function FlowchartCanvas({
   const { confirmId: nodeConfirmId, ref: nodeConfirmRef, requestDelete: requestNodeDelete } = useConfirmDelete();
 
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Expanded node editor panel state
+  const selectedNode = selectedNodeId ? project.nodes[selectedNodeId] : null;
+  const [expandedBlocks, setExpandedBlocks] = useState<SceneBlock[]>(() =>
+    selectedNode ? (selectedNode.blocks || nodeToBlocks(selectedNode)) : []
+  );
+
+  useEffect(() => {
+    if (selectedNode) {
+      setExpandedBlocks(selectedNode.blocks || nodeToBlocks(selectedNode));
+    }
+  }, [selectedNodeId]);
+
+  const handleBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
+    setExpandedBlocks(newBlocks);
+    if (selectedNodeId && project.nodes[selectedNodeId]) {
+      const node = project.nodes[selectedNodeId];
+      const legacy = blocksToNode(newBlocks, node);
+      onUpdateProject({
+        ...project,
+        nodes: {
+          ...project.nodes,
+          [selectedNodeId]: { ...node, ...legacy, blocks: newBlocks },
+        },
+        lastModified: Date.now(),
+      });
+    }
+  }, [selectedNodeId, project]);
+
+  const handleCreateNodeFromBlock = useCallback((): string => {
+    const childId = crypto.randomUUID();
+    const parent = selectedNodeId ? project.nodes[selectedNodeId] : null;
+    const childNode: StoryNode = {
+      id: childId,
+      displayId: generateDisplayId("SCN"),
+      title: "New Scene",
+      description: "",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: parent
+        ? { x: parent.position.x + 320, y: parent.position.y + (parent.choices.length * 120) }
+        : { x: 400, y: 300 },
+      isEnding: false,
+      nodeType: "story",
+    };
+    onUpdateProject({
+      ...project,
+      nodes: { ...project.nodes, [childId]: childNode },
+      lastModified: Date.now(),
+    });
+    return childId;
+  }, [selectedNodeId, project]);
 
   const flowDirection = project.flowDirection || "horizontal";
   const hiddenSet = new Set(hiddenFolderIds);
@@ -989,6 +1045,82 @@ export default function FlowchartCanvas({
           Tidy Layout
         </button>
       </div>
+
+      {/* Expanded node editor panel */}
+      {selectedNode && (() => {
+        const nodePos = selectedNode.position;
+        const panelX = nodePos.x * zoom + pan.x + 250 * zoom + 16;
+        const panelY = nodePos.y * zoom + pan.y;
+        const clampedX = Math.min(panelX, (canvasRef.current?.clientWidth ?? 1200) - 440);
+        const clampedY = Math.max(8, Math.min(panelY, (canvasRef.current?.clientHeight ?? 800) - 500));
+        const scenes = project.scenes || [];
+
+        return (
+          <div
+            className="absolute z-30 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+            style={{
+              left: clampedX,
+              top: clampedY,
+              width: 420,
+              maxHeight: Math.min(600, (canvasRef.current?.clientHeight ?? 800) - 16),
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+              <input
+                type="text"
+                value={selectedNode.title}
+                onChange={(e) => {
+                  onUpdateProject({
+                    ...project,
+                    nodes: { ...project.nodes, [selectedNode.id]: { ...selectedNode, title: e.target.value } },
+                    lastModified: Date.now(),
+                  });
+                }}
+                className="bg-transparent text-sm font-bold text-white flex-1 focus:outline-none border-b border-transparent focus:border-indigo-500"
+                placeholder="Scene title..."
+              />
+              <div className="flex items-center gap-2 ml-2">
+                <select
+                  value={selectedNode.sceneId || "unassigned"}
+                  onChange={(e) => {
+                    onUpdateProject({
+                      ...project,
+                      nodes: {
+                        ...project.nodes,
+                        [selectedNode.id]: { ...selectedNode, sceneId: e.target.value === "unassigned" ? undefined : e.target.value },
+                      },
+                      lastModified: Date.now(),
+                    });
+                  }}
+                  className="bg-slate-800 border border-slate-700 text-[10px] text-slate-300 rounded-lg p-1 cursor-pointer max-w-[130px]"
+                >
+                  <option value="unassigned">📂 Root</option>
+                  {scenes.map((s) => (
+                    <option key={s.id} value={s.id}>📂 {s.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => onSelectNode(null)}
+                  className="p-1 text-slate-500 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Block editor */}
+            <div className="p-4 overflow-y-auto" style={{ maxHeight: 520 }}>
+              <BlockEditor
+                project={project}
+                blocks={expandedBlocks}
+                onChange={handleBlocksChange}
+                onCreateNode={handleCreateNodeFromBlock}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Play simulation shortcut */}
       {project.startNodeId && (

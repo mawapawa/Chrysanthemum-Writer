@@ -1,9 +1,8 @@
 import React, { useState, useCallback } from "react";
-import { VNProject, SceneBlock, StoryChoice, InlineEffect, ChoiceRequirement, VNEntity } from "../types";
+import { VNProject, SceneBlock, InlineEffect, ChoiceRequirement, VNEntity } from "../types";
 import {
   Plus, MessageSquare, FileText, Activity, BarChart3,
-  GitBranch, UserCheck, Filter, Flag, X, Check,
-  ChevronRight, GripVertical
+  GitBranch, UserCheck, Filter, Flag, X, ArrowRight, GripVertical
 } from "lucide-react";
 
 interface BlockEditorProps {
@@ -13,7 +12,7 @@ interface BlockEditorProps {
   onCreateNode?: () => string;
 }
 
-type BlockAction = "dialogue" | "narrative" | "effect" | "statDisplay" | "choice" | "entity" | "condition" | "ending";
+type BlockAction = "dialogue" | "narrative" | "effect" | "statDisplay" | "choice" | "entity" | "condition" | "continue" | "ending";
 
 const BLOCK_ACTIONS: { key: BlockAction; icon: React.ReactNode; label: string }[] = [
   { key: "dialogue", icon: <MessageSquare className="w-3.5 h-3.5" />, label: "Dialogue" },
@@ -23,6 +22,7 @@ const BLOCK_ACTIONS: { key: BlockAction; icon: React.ReactNode; label: string }[
   { key: "choice", icon: <GitBranch className="w-3.5 h-3.5" />, label: "Choice" },
   { key: "entity", icon: <UserCheck className="w-3.5 h-3.5" />, label: "Entity" },
   { key: "condition", icon: <Filter className="w-3.5 h-3.5" />, label: "Condition" },
+  { key: "continue", icon: <ArrowRight className="w-3.5 h-3.5" />, label: "Continue" },
   { key: "ending", icon: <Flag className="w-3.5 h-3.5" />, label: "Ending" },
 ];
 
@@ -339,6 +339,46 @@ function InlineConditionForm({ project, onSave, onCancel }: {
   );
 }
 
+function InlineContinueForm({ project, onSave, onCancel, onCreateNode }: {
+  project: VNProject; onSave: (block: SceneBlock) => void; onCancel: () => void; onCreateNode?: () => string;
+}) {
+  const [targetId, setTargetId] = useState("");
+
+  const handleSave = () => {
+    if (!targetId) return;
+    onSave({ type: "continue", targetNodeId: targetId });
+  };
+
+  const allNodes = Object.values(project.nodes);
+  const targets = allNodes.filter(n => n.nodeType === "story" || !n.nodeType);
+
+  return (
+    <div className="bg-slate-950 border border-teal-500/40 rounded-xl p-3 space-y-2">
+      <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider">Continue To</span>
+      <select value={targetId} onChange={e => {
+        if (e.target.value === "__new__" && onCreateNode) {
+          const newId = onCreateNode();
+          onSave({ type: "continue", targetNodeId: newId });
+        } else {
+          setTargetId(e.target.value);
+        }
+      }}
+        className="w-full bg-slate-900 border border-slate-800 text-xs rounded-lg p-2 text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+        autoFocus onKeyDown={e => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") onCancel(); }}>
+        <option value="">Select target scene...</option>
+        {targets.map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
+        {onCreateNode && <option value="__new__">✨ Create new scene</option>}
+      </select>
+      <div className="flex gap-2">
+        <button onClick={handleSave}
+          className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-bold rounded-lg cursor-pointer">Add Continue</button>
+        <button onClick={onCancel}
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded-lg cursor-pointer">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function InlineEndingForm({ onSave, onCancel }: {
   onSave: (block: SceneBlock) => void; onCancel: () => void;
 }) {
@@ -373,8 +413,8 @@ function InlineEndingForm({ onSave, onCancel }: {
   );
 }
 
-function BlockRenderer({ block, entity, trackerValue }: {
-  block: SceneBlock; entity?: VNEntity; trackerValue?: number;
+function BlockRenderer({ block, entity, trackerValue, project }: {
+  block: SceneBlock; entity?: VNEntity; trackerValue?: number; project?: VNProject;
 }) {
   switch (block.type) {
     case "dialogue":
@@ -432,6 +472,16 @@ function BlockRenderer({ block, entity, trackerValue }: {
           {block.operator && <span className="text-slate-400"> {block.operator} {block.compareValue}</span>}
         </span>
       );
+    case "continue": {
+      const target = (block as any).targetNodeId as string;
+      const targetNode = project?.nodes?.[target];
+      return (
+        <span>
+          <span className="text-teal-400">→ Continue to: </span>
+          <span className="text-teal-300 font-semibold">{targetNode?.title || "Unknown scene"}</span>
+        </span>
+      );
+    }
     case "ending":
       return (
         <span>
@@ -454,6 +504,7 @@ const BLOCK_BG: Record<string, string> = {
   entity: "bg-purple-950/30 border-purple-800/40",
   condition: "bg-rose-950/30 border-rose-800/40",
   ending: "bg-rose-950/30 border-rose-800/40",
+  continue: "bg-teal-950/30 border-teal-800/40",
 };
 
 export default function BlockEditor({ project, blocks, onChange, onCreateNode }: BlockEditorProps) {
@@ -488,7 +539,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
               <GripVertical className="w-3 h-3" />
             </button>
             <div className="flex-1 text-xs leading-relaxed">
-              <BlockRenderer block={block} entity={getEntity((block as any).entityId)} trackerValue={getTrackerValue((block as any).variableName)} />
+              <BlockRenderer block={block} entity={getEntity((block as any).entityId)} trackerValue={getTrackerValue((block as any).variableName)} project={project} />
             </div>
             <button onClick={() => removeBlock(i)} className="text-slate-600 hover:text-rose-400 cursor-pointer shrink-0"><X className="w-3 h-3" /></button>
           </div>
@@ -502,6 +553,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
             case "choice": return <InlineChoiceForm {...formProps} onCreateNode={onCreateNode} />;
             case "entity": return <InlineEntityForm {...formProps} />;
             case "condition": return <InlineConditionForm {...formProps} />;
+            case "continue": return <InlineContinueForm project={project} onSave={addBlock} onCancel={() => setActiveForm(null)} onCreateNode={onCreateNode} />;
             case "ending": return <InlineEndingForm onSave={addBlock} onCancel={() => setActiveForm(null)} />;
             default: return null;
           }
@@ -523,7 +575,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
               <GripVertical className="w-3 h-3" />
             </button>
             <div className="flex-1 text-xs leading-relaxed">
-              <BlockRenderer block={block} entity={getEntity((block as any).entityId)} trackerValue={getTrackerValue((block as any).variableName)} />
+              <BlockRenderer block={block} entity={getEntity((block as any).entityId)} trackerValue={getTrackerValue((block as any).variableName)} project={project} />
             </div>
             <button onClick={() => removeBlock(i)} className="text-slate-600 hover:text-rose-400 cursor-pointer shrink-0"><X className="w-3 h-3" /></button>
           </div>

@@ -7,6 +7,7 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
   let isEnding = false;
   let endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL" | undefined;
   let endingName: string | undefined;
+  let continueToNodeId: string | undefined;
 
   for (const block of blocks) {
     switch (block.type) {
@@ -43,6 +44,9 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
           requirement: block.requirement,
         });
         break;
+      case "continue":
+        continueToNodeId = block.targetNodeId;
+        break;
       case "ending":
         isEnding = true;
         endingType = block.endingType;
@@ -59,6 +63,7 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
     isEnding,
     endingType,
     endingName,
+    continueToNodeId,
   };
 
   // If we have explicit choices from blocks, merge with existing ones not in blocks
@@ -101,6 +106,11 @@ export function nodeToBlocks(node: StoryNode): SceneBlock[] {
       effects: choice.effects,
       requirement: choice.requirement,
     });
+  }
+
+  // Add continue-to if applicable
+  if (node.continueToNodeId) {
+    blocks.push({ type: "continue", targetNodeId: node.continueToNodeId });
   }
 
   // Add ending if applicable
