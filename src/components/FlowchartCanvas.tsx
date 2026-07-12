@@ -73,37 +73,49 @@ export default function FlowchartCanvas({
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Expanded node editor panel state
-  const selectedNode = selectedNodeId ? project.nodes[selectedNodeId] : null;
-  const [expandedBlocks, setExpandedBlocks] = useState<SceneBlock[]>(() =>
-    selectedNode ? (selectedNode.blocks || nodeToBlocks(selectedNode)) : []
-  );
+  // Single block editor state — tracks which node the blocks belong to
+  const [editorBlocks, setEditorBlocks] = useState<SceneBlock[]>([]);
+  const [editorNodeId, setEditorNodeId] = useState<string | null>(null);
 
+  const activeEditNodeId = editingNodeId || selectedNodeId;
+  const activeEditNode = activeEditNodeId ? project.nodes[activeEditNodeId] : null;
+
+  // Load blocks when the active node changes
   useEffect(() => {
-    if (selectedNode) {
-      setExpandedBlocks(selectedNode.blocks || nodeToBlocks(selectedNode));
+    if (activeEditNode) {
+      const blocks = activeEditNode.blocks || nodeToBlocks(activeEditNode);
+      if (editorNodeId !== activeEditNodeId) {
+        setEditorBlocks(blocks);
+        setEditorNodeId(activeEditNodeId);
+      }
+    } else {
+      setEditorBlocks([]);
+      setEditorNodeId(null);
     }
-  }, [selectedNodeId, project.nodes[selectedNodeId || ""]?.blocks]);
+  }, [activeEditNodeId, project.nodes[activeEditNodeId || ""]?.blocks]);
 
-  const handleBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
-    setExpandedBlocks(newBlocks);
-    if (selectedNodeId && project.nodes[selectedNodeId]) {
-      const node = project.nodes[selectedNodeId];
+  // Single handler for saving blocks — uses activeEditNodeId (NOT selectedNodeId)
+  const handleEditorBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
+    setEditorBlocks(newBlocks);
+    const targetId = editingNodeId || selectedNodeId;
+    if (targetId && project.nodes[targetId]) {
+      const node = project.nodes[targetId];
       const legacy = blocksToNode(newBlocks, node);
       onUpdateProject({
         ...project,
         nodes: {
           ...project.nodes,
-          [selectedNodeId]: { ...node, ...legacy, blocks: newBlocks },
+          [targetId]: { ...node, ...legacy, blocks: newBlocks },
         },
         lastModified: Date.now(),
       });
     }
-  }, [selectedNodeId, project]);
+  }, [editingNodeId, selectedNodeId, project]);
 
   const handleCreateNodeFromBlock = useCallback((): string => {
     const childId = crypto.randomUUID();
-    const parent = selectedNodeId ? project.nodes[selectedNodeId] : null;
+    const parentId = activeEditNodeId;
+    const parent = parentId ? project.nodes[parentId] : null;
     const childNode: StoryNode = {
       id: childId,
       displayId: generateDisplayId("SCN"),
@@ -125,7 +137,7 @@ export default function FlowchartCanvas({
       lastModified: Date.now(),
     });
     return childId;
-  }, [selectedNodeId, project]);
+  }, [activeEditNodeId, project]);
 
   const flowDirection = project.flowDirection || "horizontal";
   const hiddenSet = new Set(hiddenFolderIds);
@@ -161,42 +173,6 @@ export default function FlowchartCanvas({
   const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
 
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const editingNode = editingNodeId ? project.nodes[editingNodeId] : null;
-  const [focusBlocks, setFocusBlocks] = useState<SceneBlock[]>(() =>
-    editingNode ? (editingNode.blocks || nodeToBlocks(editingNode)) : []
-  );
-
-  useEffect(() => {
-    if (editingNode) {
-      setFocusBlocks(editingNode.blocks || nodeToBlocks(editingNode));
-    }
-  }, [editingNodeId]);
-
-  const handleFocusBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
-    setFocusBlocks(newBlocks);
-    if (editingNodeId && project.nodes[editingNodeId]) {
-      const node = project.nodes[editingNodeId];
-      const legacy = blocksToNode(newBlocks, node);
-      onUpdateProject({
-        ...project,
-        nodes: { ...project.nodes, [editingNodeId]: { ...node, ...legacy, blocks: newBlocks } },
-        lastModified: Date.now(),
-      });
-    }
-  }, [editingNodeId, project]);
-
-  const handleFocusCreateNode = useCallback((): string => {
-    const childId = crypto.randomUUID();
-    const parent = editingNodeId ? project.nodes[editingNodeId] : null;
-    const childNode: StoryNode = {
-      id: childId, displayId: generateDisplayId("SCN"), title: "New Scene", description: "",
-      speaker: "Narrator", dialogueLines: [], choices: [], statChanges: [],
-      position: parent ? { x: parent.position.x + 320, y: parent.position.y + (parent.choices.length * 120) } : { x: 400, y: 300 },
-      isEnding: false, nodeType: "story",
-    };
-    onUpdateProject({ ...project, nodes: { ...project.nodes, [childId]: childNode }, lastModified: Date.now() });
-    return childId;
-  }, [editingNodeId, project]);
 
   // Close focus mode on Escape
   useEffect(() => {
@@ -400,129 +376,163 @@ export default function FlowchartCanvas({
 
   const autoArrangeNodes = () => {
     const updatedNodes = { ...project.nodes };
+    const isVert = flowDirection === "vertical";
+    const CARD_W = 240;
+    const CARD_H = 140;
+    const GAP_X = 80;
+    const GAP_Y = 60;
+    const PADDING = 30;
 
-    // Collect connected nodes via BFS following both choices and continue-to
+    // 1. Assign integer layer depths via BFS from the start node
+    const layers: Record<string, number> = {};
+    const queue: string[] = [];
     const visited = new Set<string>();
-    const levels: Record<string, number> = {};
-    const countsAtLevel: Record<number, Record<string, number>> = {};
+    const childrenOf: Record<string, string[]> = {};
+    const parentOf: Record<string, string> = {};
 
-    const traverse = (nodeId: string, level: number, branchKey: string) => {
-      if (visited.has(nodeId)) return;
-      visited.add(nodeId);
-      const node = project.nodes[nodeId];
-      if (!node) return;
-      const isHidden = node.sceneId && hiddenSet.has(node.sceneId);
-
-      if (!isHidden && (!node.nodeType || node.nodeType === "story")) {
-        levels[nodeId] = level;
-        if (!countsAtLevel[level]) countsAtLevel[level] = {};
-        countsAtLevel[level][branchKey] = (countsAtLevel[level][branchKey] || 0) + 1;
+    const enqueue = (id: string, depth: number, parentId?: string) => {
+      if (visited.has(id) || !project.nodes[id]) return;
+      visited.add(id);
+      layers[id] = depth;
+      queue.push(id);
+      if (parentId) {
+        parentOf[id] = parentId;
+        if (!childrenOf[parentId]) childrenOf[parentId] = [];
+        childrenOf[parentId].push(id);
       }
-
-      if (node.nodeType && node.nodeType !== "story") return;
-
-      // Follow continue-to link — same branch, half-level deeper (stays close)
-      if (node.continueToNodeId) {
-        traverse(node.continueToNodeId, level + 0.5, branchKey);
-      }
-
-      // Follow choices — each spawns a new branch
-      node.choices.forEach((choice, ci) => {
-        if (choice.targetNodeId && project.nodes[choice.targetNodeId]) {
-          traverse(choice.targetNodeId, level + 1, `${branchKey}-ch${ci}`);
-        }
-      });
     };
 
-    if (project.startNodeId && project.nodes[project.startNodeId]) {
-      traverse(project.startNodeId, 0, "spine");
-    }
-    // Orphan nodes
-    Object.keys(project.nodes).forEach((nodeId) => {
-      const n = project.nodes[nodeId];
-      if (!visited.has(nodeId) && n && (!n.nodeType || n.nodeType === "story")) {
-        traverse(nodeId, 0, `orphan-${nodeId}`);
+    if (project.startNodeId) enqueue(project.startNodeId, 0);
+
+    // BFS traversal
+    for (let i = 0; i < queue.length; i++) {
+      const curId = queue[i];
+      const curNode = project.nodes[curId];
+      if (!curNode) continue;
+      const curDepth = layers[curId] || 0;
+
+      if (curNode.nodeType && curNode.nodeType !== "story") continue;
+
+      // Continue-to link — same depth level (stays on main axis)
+      if (curNode.continueToNodeId && !visited.has(curNode.continueToNodeId)) {
+        enqueue(curNode.continueToNodeId, curDepth, curId);
       }
-    });
 
-    // --- Position nodes ---
-    const isVert = flowDirection === "vertical";
-    const storyPositions: Record<string, { x: number; y: number }> = {};
-
-    // Group story nodes by (level, branchKey) for clean placement
-    const grouped: Record<number, Array<{ id: string; branch: string }>> = {};
-    for (const [id, lvl] of Object.entries(levels)) {
-      if (!grouped[lvl]) grouped[lvl] = [];
-      const node = project.nodes[id];
-      const branch = node?.choices.length ? "choice" : "spine";
-      grouped[lvl].push({ id, branch });
-    }
-
-    // Place spine nodes (continue-to chain) as the primary axis
-    const spineIds = new Set<string>();
-    let spineIdx = 0;
-    let spineNodeId = project.startNodeId;
-    while (spineNodeId && project.nodes[spineNodeId] && !spineIds.has(spineNodeId)) {
-      spineIds.add(spineNodeId);
-      if (!project.nodes[spineNodeId].sceneId || !hiddenSet.has(project.nodes[spineNodeId].sceneId!)) {
-        if (isVert) {
-          storyPositions[spineNodeId] = { x: 400, y: spineIdx * 260 + 120 };
-        } else {
-          storyPositions[spineNodeId] = { x: spineIdx * 320 + 80, y: 240 };
+      // Choices — next depth level
+      for (const choice of curNode.choices) {
+        if (choice.targetNodeId && !visited.has(choice.targetNodeId)) {
+          enqueue(choice.targetNodeId, curDepth + 1, curId);
         }
       }
-      spineIdx++;
-      spineNodeId = project.nodes[spineNodeId]?.continueToNodeId || "";
     }
 
-    // Place remaining nodes: spread around their level
-    const placedBranchOffsets: Record<string, number> = {};
-    for (const [lvlStr, entries] of Object.entries(grouped)) {
-      const lvl = Number(lvlStr);
-      let branchCount = 0;
-      for (const { id, branch } of entries) {
-        if (storyPositions[id]) continue; // already placed by spine
-        const node = project.nodes[id];
-        if (!node || (node.sceneId && hiddenSet.has(node.sceneId))) continue;
-
-        const branchKey = `${lvl}-${branch}-${entries.indexOf({ id, branch })}`;
-        placedBranchOffsets[branchKey] = (placedBranchOffsets[branchKey] || 0) + 1;
-
-        if (isVert) {
-          const baseX = 400 + (branchCount - entries.length / 2) * 280;
-          storyPositions[id] = { x: baseX, y: lvl * 260 + 120 };
-        } else {
-          const yOffset = (branchCount - entries.length / 2) * 220;
-          storyPositions[id] = { x: lvl * 320 + 80, y: 240 + yOffset };
-        }
-        branchCount++;
+    // 2. Calculate subtree heights per layer for vertical spacing
+    const subtreeHeight: Record<string, number> = {};
+    const calcSubtreeHeight = (nodeId: string): number => {
+      if (subtreeHeight[nodeId] !== undefined) return subtreeHeight[nodeId];
+      const children = childrenOf[nodeId] || [];
+      if (children.length === 0) {
+        subtreeHeight[nodeId] = CARD_H + PADDING;
+        return subtreeHeight[nodeId];
       }
-    }
-
-    // Apply story positions
-    for (const [id, pos] of Object.entries(storyPositions)) {
-      if (updatedNodes[id]) {
-        updatedNodes[id] = { ...updatedNodes[id], position: pos };
+      let totalHeight = 0;
+      for (const childId of children) {
+        totalHeight += calcSubtreeHeight(childId);
       }
-    }
+      subtreeHeight[nodeId] = Math.max(CARD_H + PADDING, totalHeight);
+      return subtreeHeight[nodeId];
+    };
 
-    // Place location/encounter nodes in their own lane below all story nodes
-    const maxStoryY = Math.max(...Object.values(storyPositions).map(p => p.y), 0) + 100;
-    const maxStoryX = Math.max(...Object.values(storyPositions).map(p => p.x), 0) + 100;
-    const nonStoryLaneY = isVert ? 120 : maxStoryY;
-    const nonStoryLaneX = isVert ? maxStoryX : 80;
-    const placedNonStory = new Set<string>();
-    for (const node of Object.values(project.nodes) as StoryNode[]) {
-      if (!node.nodeType || node.nodeType === "story") continue;
-      if (node.sceneId && hiddenSet.has(node.sceneId)) continue;
-      if (placedNonStory.has(node.id)) continue;
-      placedNonStory.add(node.id);
+    for (const id of queue) calcSubtreeHeight(id);
 
-      const typeOffset = node.nodeType === "location" ? 0 : 1;
+    // 3. Position nodes layer by layer with subtree-aware spacing
+    const positions: Record<string, { x: number; y: number }> = {};
+    const layerYOffsets: Record<number, number> = {};
+    const layerCounts: Record<number, number> = {};
+
+    // Process in BFS order to assign Y positions
+    const placed = new Set<string>();
+    const getLayerCenter = (layer: number): number => {
+      // Find all nodes in this layer, spread them based on subtree heights
+      const nodesAtLayer = queue.filter(id => (layers[id] || 0) === layer && !placed.has(id));
+      const layerHeight = layerYOffsets[layer] || 0;
+      return layerHeight;
+    };
+
+    for (const id of queue) {
+      if (placed.has(id)) continue;
+      const layer = layers[id] || 0;
       if (isVert) {
-        updatedNodes[node.id] = { ...node, position: { x: nonStoryLaneX + typeOffset * 320, y: nonStoryLaneY + (placedNonStory.size - 1) * 220 } };
+        // Vertical layout: X = subtree position, Y = layer
+        const parentId = parentOf[id];
+        if (parentId && positions[parentId]) {
+          // Place below parent at center of subtree
+          const siblings = childrenOf[parentId] || [];
+          const siblingIdx = siblings.indexOf(id);
+          let xOffset = positions[parentId].x;
+          if (siblings.length > 1) {
+            const totalW = siblings.length * CARD_W + (siblings.length - 1) * GAP_X;
+            xOffset = positions[parentId].x - totalW / 2 + siblingIdx * (CARD_W + GAP_X) + CARD_W / 2;
+          }
+          const yPos = positions[parentId].y + CARD_H + GAP_Y;
+          positions[id] = { x: xOffset, y: yPos };
+        } else {
+          const count = layerCounts[layer] || 0;
+          layerCounts[layer] = count + 1;
+          positions[id] = { x: 400 + count * (CARD_W + GAP_X), y: layer * (CARD_H + GAP_Y) + 120 };
+        }
       } else {
-        updatedNodes[node.id] = { ...node, position: { x: nonStoryLaneX + (placedNonStory.size - 1) * 320, y: nonStoryLaneY + typeOffset * 240 } };
+        // Horizontal layout: X = layer, Y = spread based on subtree height
+        const parentId = parentOf[id];
+        if (parentId && positions[parentId]) {
+          // Place to the right of parent
+          const xPos = positions[parentId].x + CARD_W + GAP_X;
+          // Stack vertically based on sibling index
+          const siblings = childrenOf[parentId] || [];
+          const siblingIdx = siblings.indexOf(id);
+          let totalSubH = 0;
+          for (let si = 0; si < siblingIdx; si++) {
+            totalSubH += calcSubtreeHeight(siblings[si]);
+          }
+          const yPos = positions[parentId].y + (CARD_H / 2) + totalSubH - calcSubtreeHeight(id) / 2;
+          positions[id] = { x: xPos, y: yPos };
+        } else {
+          // Root-level placement
+          const yOffset = layerYOffsets[layer] || 0;
+          const xPos = layer * (CARD_W + GAP_X) + 80;
+          const yPos = 240 + yOffset;
+          positions[id] = { x: xPos, y: yPos };
+          layerYOffsets[layer] = yOffset + calcSubtreeHeight(id);
+        }
+      }
+      placed.add(id);
+    }
+
+    // 4. Apply positions to all story nodes
+    for (const [id, pos] of Object.entries(positions)) {
+      if (updatedNodes[id]) {
+        const node = updatedNodes[id];
+        if (!node.nodeType || node.nodeType === "story") {
+          updatedNodes[id] = { ...node, position: { x: Math.round(pos.x), y: Math.round(pos.y) } };
+        }
+      }
+    }
+
+    // 5. Place location/encounter nodes in their own lane below story nodes
+    const maxStoryY = Math.max(...Object.values(positions).map(p => p.y), 0) + CARD_H + GAP_Y * 2;
+    const maxStoryX = Math.max(...Object.values(positions).map(p => p.x), 0) + CARD_W + GAP_X;
+    const nonStoryIds = Object.keys(project.nodes).filter(id => {
+      const n = project.nodes[id];
+      return n && n.nodeType && n.nodeType !== "story" && !(n.sceneId && hiddenSet.has(n.sceneId));
+    });
+    for (let i = 0; i < nonStoryIds.length; i++) {
+      const id = nonStoryIds[i];
+      const n = project.nodes[id];
+      const typeOffset = n.nodeType === "location" ? 0 : 1;
+      if (isVert) {
+        updatedNodes[id] = { ...n, position: { x: maxStoryX + typeOffset * 320, y: i * (CARD_H + GAP_Y) + 120 } };
+      } else {
+        updatedNodes[id] = { ...n, position: { x: i * (CARD_W + GAP_X) + 80, y: maxStoryY + typeOffset * (CARD_H + GAP_Y) } };
       }
     }
 
@@ -952,14 +962,14 @@ export default function FlowchartCanvas({
                     </div>
                   )}
 
-                  {/* Focus editor — only shows when double-clicked into editing mode */}
+                  {/* Editor — shows in focus mode (inline expansion removed) */}
                   {isEditing && (
                     <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-hidden">
                       <BlockEditor
                         project={project}
-                        blocks={focusBlocks}
-                        onChange={handleFocusBlocksChange}
-                        onCreateNode={handleFocusCreateNode}
+                        blocks={editorBlocks}
+                        onChange={handleEditorBlocksChange}
+                        onCreateNode={handleCreateNodeFromBlock}
                       />
                     </div>
                   )}
