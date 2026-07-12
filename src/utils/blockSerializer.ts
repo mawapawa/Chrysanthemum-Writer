@@ -56,8 +56,8 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
   }
 
   return {
-    dialogueLines: dialogueLines.length > 0 ? dialogueLines : (choices.length > 0 ? [] : existing.dialogueLines),
-    choices: choices.length > 0 ? choices : (dialogueLines.length > 0 ? [] : existing.choices),
+    dialogueLines: dialogueLines.length > 0 ? dialogueLines : [],
+    choices,
     statChanges: statChanges.length > 0 ? statChanges : [],
     isEnding,
     endingType,
