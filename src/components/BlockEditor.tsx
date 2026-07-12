@@ -1,10 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { VNProject, SceneBlock, VNEntity } from "../types";
-import {
-  Plus, MessageSquare, FileText, Activity, BarChart3,
-  GitBranch, UserCheck, Filter, Flag, ArrowRight, X, Pencil
-} from "lucide-react";
-import ScriptEditor from "./ScriptEditor";
+import { VNProject, SceneBlock } from "../types";
+import { Plus } from "lucide-react";
 
 interface BlockEditorProps {
   project: VNProject;
@@ -13,357 +9,655 @@ interface BlockEditorProps {
   onCreateNode?: () => string;
 }
 
-type BlockAction = "dialogue" | "narrative" | "effect" | "statDisplay" | "choice" | "entity" | "condition" | "continue" | "ending";
+type BlockAction = keyof typeof BLOCK_LABELS;
 
-const BLOCK_ACTIONS: { key: BlockAction; icon: React.ReactNode; label: string }[] = [
-  { key: "dialogue", icon: <MessageSquare className="w-3 h-3" />, label: "Dialogue" },
-  { key: "narrative", icon: <FileText className="w-3 h-3" />, label: "Narrative" },
-  { key: "effect", icon: <Activity className="w-3 h-3" />, label: "Effect" },
-  { key: "statDisplay", icon: <BarChart3 className="w-3 h-3" />, label: "Stat" },
-  { key: "choice", icon: <GitBranch className="w-3 h-3" />, label: "Choice" },
-  { key: "entity", icon: <UserCheck className="w-3 h-3" />, label: "Entity" },
-  { key: "condition", icon: <Filter className="w-3 h-3" />, label: "Condition" },
-  { key: "continue", icon: <ArrowRight className="w-3 h-3" />, label: "Continue" },
-  { key: "ending", icon: <Flag className="w-3 h-3" />, label: "Ending" },
-];
+const BLOCK_LABELS = {
+  dialogue: { icon: "💬", label: "Dialogue" },
+  narrative: { icon: "📝", label: "Narrative" },
+  effect: { icon: "📊", label: "Effect" },
+  statDisplay: { icon: "📈", label: "Stat" },
+  choice: { icon: "🔗", label: "Link" },
+  entity: { icon: "👤", label: "Entity" },
+  condition: { icon: "👁️", label: "Condition" },
+  continue: { icon: "🔀", label: "Redirect" },
+  ending: { icon: "🏁", label: "Ending" },
+  flag: { icon: "🚩", label: "Flag" },
+  bgm: { icon: "🎵", label: "BGM" },
+  sfx: { icon: "💥", label: "SFX" },
+  background: { icon: "🖼️", label: "Background" },
+  delay: { icon: "⏳", label: "Delay" },
+  itemEffect: { icon: "🎒", label: "Item" },
+} as const;
 
-const DEFAULT_EXPRESSIONS = ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
+const BLOCK_ACTIONS = Object.entries(BLOCK_LABELS).map(([key, v]) => ({ key: key as BlockAction, ...v }));
 
-// Separate narrative blocks from complex blocks
-function splitBlocks(blocks: SceneBlock[]): { narrativeText: string; complexBlocks: SceneBlock[] } {
-  const narrativeLines: string[] = [];
-  const complexBlocks: SceneBlock[] = [];
-  for (const b of blocks) {
-    if (b.type === "narrative") {
-      narrativeLines.push(b.text);
-    } else {
-      complexBlocks.push(b);
-    }
+function blockToBadgeHTML(block: SceneBlock, project: VNProject): string {
+  const cls = `cm-badge cm-badge-${block.type}`;
+  const data = encodeURIComponent(JSON.stringify(block));
+  let label = "";
+  switch (block.type) {
+    case "dialogue": label = `${BLOCK_LABELS.dialogue.icon} ${block.speaker}: "${block.text}"`; break;
+    case "effect": label = `${BLOCK_LABELS.effect.icon} ${block.operation}${block.value} ${block.variableName}`; break;
+    case "statDisplay": label = `${BLOCK_LABELS.statDisplay.icon} ${block.variableName}: ?`; break;
+    case "choice": label = `${BLOCK_LABELS.choice.icon} ${block.text}`; break;
+    case "entity": { const e = project.entities.find(en => en.id === block.entityId); label = `${BLOCK_LABELS.entity.icon} ${e?.name || "?"}`; break; }
+    case "condition": label = `${BLOCK_LABELS.condition.icon} if: ${block.condition?.source || "?"}`; break;
+    case "continue": { const t = project.nodes[block.targetNodeId]; label = `${BLOCK_LABELS.continue.icon} ${t?.title || "?"}`; break; }
+    case "ending": label = `${BLOCK_LABELS.ending.icon} ${block.endingType}${block.endingName ? `: ${block.endingName}` : ""}`; break;
+    case "flag": label = `${BLOCK_LABELS.flag.icon} ${block.flagName} = ${block.flagValue}`; break;
+    case "bgm": label = `${BLOCK_LABELS.bgm.icon} ${block.trackName}${block.fadeIn ? ` (fade ${block.fadeIn}s)` : ""}`; break;
+    case "sfx": label = `${BLOCK_LABELS.sfx.icon} ${block.soundName}`; break;
+    case "background": label = `${BLOCK_LABELS.background.icon} ${block.asset}`; break;
+    case "delay": label = `${BLOCK_LABELS.delay.icon} ${block.seconds}s`; break;
+    case "itemEffect": label = `${BLOCK_LABELS.itemEffect.icon} ${block.action === "give" ? "+" : "-"} ${block.itemName}`; break;
+    case "narrative": return escHTML(block.text);
   }
-  return { narrativeText: narrativeLines.join("\n\n"), complexBlocks };
+  return `<span class="${cls}" tabindex="0" data-block="${data}" contenteditable="false">${escHTML(label)}</span>`;
 }
 
-// Render a badge for display
-function Badge({ block, project }: { block: SceneBlock; project?: VNProject }) {
-  switch (block.type) {
-    case "dialogue":
-      return <><span className="font-semibold text-sky-300">[{block.speaker}]</span> <span className="text-slate-100">"{block.text}"</span></>;
-    case "effect":
-      return <><span className={`font-bold ${block.operation === "+" ? "text-emerald-400" : block.operation === "-" ? "text-rose-400" : "text-amber-400"}`}>[{block.operation}{block.value}]</span> <span className="text-slate-200">[{block.variableName}]</span></>;
-    case "statDisplay": {
-      const val = project?.trackers.find(t => t.name === block.variableName)?.defaultValue ?? "?";
-      return <span className="text-amber-300 font-mono">[{block.variableName}: {val}]</span>;
+function escHTML(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function blocksToHTML(blocks: SceneBlock[], project: VNProject): string {
+  // Group contiguous narrative blocks into paragraphs
+  const parts: string[] = [];
+  let para: string[] = [];
+  for (const b of blocks) {
+    if (b.type === "narrative") {
+      para.push(escHTML(b.text));
+    } else {
+      if (para.length) { parts.push(`<p>${para.join("<br>")}</p>`); para = []; }
+      parts.push(`<p>${blockToBadgeHTML(b, project)}</p>`);
     }
-    case "choice":
-      return <><span className="text-indigo-300">→ {block.text}</span>{block.random ? <span className="text-[10px] text-indigo-400 ml-1">({block.random}%)</span> : null}</>;
-    case "entity": {
-      const entity = project?.entities.find(e => e.id === block.entityId);
-      return entity ? <span className="text-purple-300 font-semibold">[{entity.name}]</span> : <span className="text-rose-400">[Unknown entity]</span>;
+  }
+  if (para.length) parts.push(`<p>${para.join("<br>")}</p>`);
+  return parts.join("\n");
+}
+
+function HTMLToBlocks(html: string, project: VNProject): SceneBlock[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+  const container = doc.body.firstChild as HTMLElement;
+  const blocks: SceneBlock[] = [];
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent || "").trim();
+      if (text) { blocks.push({ type: "narrative", text }); }
+      return;
     }
-    case "condition":
-      return <span className="text-rose-300">[if: {block.targetId} {block.operator} {block.compareValue}]</span>;
-    case "continue": {
-      const tn = project?.nodes?.[block.targetNodeId];
-      return <><span className="text-teal-400">→ Continue to: </span><span className="text-teal-300 font-semibold">{tn?.title || "Unknown"}</span></>;
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.hasAttribute("data-block")) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(el.getAttribute("data-block")!)) as SceneBlock;
+          blocks.push(parsed);
+          return;
+        } catch { /* fall through to text */ }
+      }
+      // For <p> or <div>, recurse into children
+      for (const child of el.childNodes) walk(child);
     }
-    case "ending":
-      return <span className={`font-bold ${block.endingType === "GOOD" ? "text-emerald-400" : block.endingType === "BAD" ? "text-rose-400" : "text-cyan-400"}`}>[{block.endingType} END{block.endingName ? `: ${block.endingName}` : ""}]</span>;
-    default:
-      return null;
+  };
+
+  for (const child of container.childNodes) walk(child);
+  return blocks;
+}
+
+function createDefaultBlock(action: BlockAction, project: VNProject, onCreateNode?: () => string): SceneBlock | null {
+  switch (action) {
+    case "dialogue": return { type: "dialogue", speaker: "Narrator", text: "" };
+    case "narrative": return null; // handled by just focusing the editor
+    case "effect": return { type: "effect", variableName: "", operation: "+", value: 0 };
+    case "statDisplay": return { type: "statDisplay", variableName: "" };
+    case "choice": return { type: "choice", text: "", targetNodeId: "" };
+    case "entity": return { type: "entity", entityId: "" };
+    case "condition": return { type: "condition", condition: { source: "tracker", targetId: "" } };
+    case "continue": return { type: "continue", targetNodeId: "" };
+    case "ending": return { type: "ending", endingType: "NORMAL" };
+    case "flag": return { type: "flag", flagName: "", flagValue: true };
+    case "bgm": return { type: "bgm", trackName: "" };
+    case "sfx": return { type: "sfx", soundName: "" };
+    case "background": return { type: "background", asset: "" };
+    case "delay": return { type: "delay", seconds: 1 };
+    case "itemEffect": return { type: "itemEffect", action: "give", itemName: "" };
   }
 }
 
 export default function BlockEditor({ project, blocks, onChange, onCreateNode }: BlockEditorProps) {
-  const { narrativeText, complexBlocks } = splitBlocks(blocks);
-  const [text, setText] = useState(narrativeText);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [commandMode, setCommandMode] = useState(false);
+  const [commandText, setCommandText] = useState("");
+  const [editingBadge, setEditingBadge] = useState<{ block: SceneBlock; index: number } | null>(null);
+  const palettePosRef = useRef({ x: 0, y: 0 });
+  const savedRangeRef = useRef<Range | null>(null);
+  const isInternalUpdate = useRef(false);
 
-  const rebuildBlocks = useCallback((newNarrative: string, newComplex: SceneBlock[]) => {
-    const narrativeBlocks: SceneBlock[] = newNarrative
-      .split("\n")
-      .map(line => line.trim())
-      .filter(Boolean)
-      .map(text => ({ type: "narrative" as const, text }));
-    onChange([...narrativeBlocks, ...newComplex]);
-  }, [onChange]);
-
-  const handleTextChange = useCallback((newText: string) => {
-    setText(newText);
-    rebuildBlocks(newText, complexBlocks);
-  }, [complexBlocks, rebuildBlocks]);
-
-  const addBlock = useCallback((block: SceneBlock) => {
-    const newComplex = [...complexBlocks, block];
-    rebuildBlocks(text, newComplex);
-    setPaletteOpen(false);
-  }, [text, complexBlocks, rebuildBlocks]);
-
-  const updateBlock = useCallback((index: number, block: SceneBlock) => {
-    const newComplex = [...complexBlocks];
-    newComplex[index] = block;
-    rebuildBlocks(text, newComplex);
-    setEditingIndex(null);
-  }, [text, complexBlocks, rebuildBlocks]);
-
-  const removeBlock = useCallback((index: number) => {
-    const newComplex = complexBlocks.filter((_, i) => i !== index);
-    rebuildBlocks(text, newComplex);
-    setEditingIndex(null);
-  }, [text, complexBlocks, rebuildBlocks]);
-
-  const handlePaletteSelect = useCallback((action: BlockAction) => {
-    setPaletteOpen(false);
-    let newBlock: SceneBlock | null = null;
-    switch (action) {
-      case "dialogue": newBlock = { type: "dialogue", speaker: "Narrator", text: "" }; break;
-      case "narrative": { const ta = text; setText(ta ? ta + "\n\n" : ""); return; }
-      case "effect": newBlock = { type: "effect", variableName: "", operation: "+", value: 0 }; break;
-      case "statDisplay": newBlock = { type: "statDisplay", variableName: "" }; break;
-      case "choice": newBlock = { type: "choice", text: "", targetNodeId: "" }; break;
-      case "entity": newBlock = { type: "entity", entityId: "" }; break;
-      case "condition": newBlock = { type: "condition", source: "tracker", targetId: "" }; break;
-      case "continue": newBlock = { type: "continue", targetNodeId: "" }; break;
-      case "ending": newBlock = { type: "ending", endingType: "NORMAL" }; break;
+  // Render blocks into the contenteditable div
+  const renderBlocks = useCallback(() => {
+    if (!editorRef.current || isInternalUpdate.current) return;
+    const html = blocksToHTML(blocks, project);
+    if (editorRef.current.innerHTML !== html) {
+      editorRef.current.innerHTML = html;
     }
-    if (newBlock) {
-      const newComplex = [...complexBlocks, newBlock];
-      rebuildBlocks(text, newComplex);
-      setEditingIndex(newComplex.length - 1);
-    }
-  }, [text, complexBlocks, rebuildBlocks]);
+  }, [blocks, project]);
 
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setEditingIndex(null);
-        setPaletteOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+  useEffect(() => { renderBlocks(); }, [renderBlocks]);
+
+  // Save cursor position
+  const saveRange = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+  };
+
+  // Insert a badge at the saved cursor position
+  const insertBadgeAtCursor = useCallback((block: SceneBlock) => {
+    const range = savedRangeRef.current;
+    const el = editorRef.current;
+    if (!el || !range) return;
+    if (!el.contains(range.commonAncestorContainer) && el.contains(range.startContainer)) {
+      // range is in a child
+    } else if (!el.contains(range.commonAncestorContainer)) {
+      // Fallback: append to end
+      const p = document.createElement("p");
+      el.appendChild(p);
+      range.selectNodeContents(p);
+      range.collapse(true);
+    }
+
+    const html = blockToBadgeHTML(block, project);
+    const fragment = range.createContextualFragment(html);
+    range.deleteContents();
+    range.insertNode(fragment);
+
+    // Move cursor after the inserted badge
+    const newNode = fragment.lastChild || fragment;
+    range.setStartAfter(newNode);
+    range.collapse(true);
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    isInternalUpdate.current = true;
+    syncBlocks();
+    isInternalUpdate.current = false;
+  }, [project]);
+
+  // Sync blocks from DOM
+  const syncBlocks = useCallback(() => {
+    if (!editorRef.current) return;
+    const newBlocks = HTMLToBlocks(editorRef.current.innerHTML, project);
+    if (JSON.stringify(newBlocks) !== JSON.stringify(blocks)) {
+      onChange(newBlocks);
+    }
+  }, [blocks, project, onChange]);
+
+  // Handle keyboard input for / commands
+  const handleInput = useCallback(() => {
+    if (!editorRef.current) return;
+    // Check if we just typed /
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const textBefore = range.startContainer.textContent || "";
+    const caretPos = range.startOffset;
+    const beforeCaret = textBefore.slice(0, caretPos).trim();
+
+    if (beforeCaret.endsWith("/")) {
+      saveRange();
+      setCommandMode(true);
+      setCommandText("");
+      const rect = range.getBoundingClientRect();
+      palettePosRef.current = { x: rect.left, y: rect.bottom + 4 };
+      // Remove the / from the DOM
+      range.startContainer.textContent = textBefore.slice(0, -1) + textBefore.slice(caretPos);
+    }
   }, []);
 
+  // Handle blur — sync blocks
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    // Don't sync if clicking on palette or badge editor
+    if ((e.relatedTarget as HTMLElement)?.closest?.(".cm-palette, .cm-edit-popup")) return;
+    syncBlocks();
+  }, [syncBlocks]);
+
+  // Command palette selection
+  const handleCommandSelect = useCallback((action: BlockAction) => {
+    const block = createDefaultBlock(action, project, onCreateNode);
+    if (block) {
+      insertBadgeAtCursor(block);
+    }
+    setCommandMode(false);
+    setCommandText("");
+    if (editorRef.current) editorRef.current.focus();
+  }, [project, onCreateNode, insertBadgeAtCursor]);
+
+  // Palette open
+  const openPalette = useCallback(() => {
+    saveRange();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      palettePosRef.current = { x: rect.left, y: rect.bottom + 4 };
+    } else {
+      const editorRect = editorRef.current?.getBoundingClientRect();
+      palettePosRef.current = { x: editorRect?.left || 0, y: (editorRect?.bottom || 0) - 40 };
+    }
+    setPaletteOpen(true);
+  }, []);
+
+  // Badge click handling
+  const handleBadgeClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const badge = target.closest("[data-block]") as HTMLElement | null;
+    if (!badge) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const block = JSON.parse(decodeURIComponent(badge.getAttribute("data-block")!)) as SceneBlock;
+      // Find index in blocks
+      const idx = blocks.findIndex(b => JSON.stringify(b) === JSON.stringify(block));
+      setEditingBadge({ block, index: idx >= 0 ? idx : blocks.length });
+    } catch { /* ignore */ }
+  }, [blocks]);
+
+  // Update a badge after editing
+  const handleBadgeUpdate = useCallback((newBlock: SceneBlock) => {
+    if (!editorRef.current || !editingBadge) return;
+    // Find and update the badge span in the DOM
+    const badges = editorRef.current.querySelectorAll<HTMLSpanElement>("[data-block]");
+    let idx = 0;
+    for (const badge of badges) {
+      try {
+        const existing = JSON.parse(decodeURIComponent(badge.getAttribute("data-block")!)) as SceneBlock;
+        if (JSON.stringify(existing) === JSON.stringify(editingBadge.block)) {
+          const html = blockToBadgeHTML(newBlock, project);
+          const temp = document.createElement("div");
+          temp.innerHTML = html;
+          const newEl = temp.firstElementChild as HTMLElement;
+          if (newEl) {
+            badge.parentNode?.replaceChild(newEl, badge);
+          }
+          break;
+        }
+      } catch { /* */ }
+      idx++;
+    }
+    setEditingBadge(null);
+    syncBlocks();
+  }, [editingBadge, project, syncBlocks]);
+
+  const handleBadgeDelete = useCallback(() => {
+    if (!editorRef.current || !editingBadge) return;
+    const badges = editorRef.current.querySelectorAll<HTMLSpanElement>("[data-block]");
+    for (const badge of badges) {
+      try {
+        const existing = JSON.parse(decodeURIComponent(badge.getAttribute("data-block")!)) as SceneBlock;
+        if (JSON.stringify(existing) === JSON.stringify(editingBadge.block)) {
+          badge.remove();
+          break;
+        }
+      } catch { /* */ }
+    }
+    setEditingBadge(null);
+    syncBlocks();
+    if (editorRef.current) editorRef.current.focus();
+  }, [editingBadge, syncBlocks]);
+
+  const filteredActions = commandText
+    ? BLOCK_ACTIONS.filter(a => a.label.toLowerCase().includes(commandText.toLowerCase()))
+    : BLOCK_ACTIONS;
+
   return (
-    <div ref={containerRef} className="space-y-3">
-      {/* Narration textarea */}
-      <textarea
-        value={text}
-        onChange={e => handleTextChange(e.target.value)}
-        rows={4}
-        className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-lg p-3 focus:outline-none focus:border-indigo-500 resize-none font-mono leading-relaxed"
-        placeholder="Type narration here. Use the buttons below to add dialogue, effects, choices, etc."
-        onMouseDown={e => e.stopPropagation()}
+    <div className="relative">
+      {/* Contenteditable editor */}
+      <div
+        ref={editorRef}
+        className="cm-editor w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-lg p-3 focus:outline-none focus:border-indigo-500 overflow-y-auto"
+        contentEditable
+        data-placeholder="Type your story here... Use / to add badges, or click the + button..."
+        onInput={handleInput}
+        onBlur={handleBlur}
+        onClick={handleBadgeClick}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { setCommandMode(false); setPaletteOpen(false); setEditingBadge(null); }
+          if (e.key === "Enter" && commandMode && filteredActions.length > 0) {
+            e.preventDefault();
+            handleCommandSelect(filteredActions[0].key);
+          }
+          if (e.key === "Backspace" && commandMode && !commandText) {
+            setCommandMode(false);
+          }
+        }}
+        style={{ minHeight: "150px", maxHeight: "400px" }}
       />
 
-      {/* Badge strip */}
-      {complexBlocks.length > 0 && (
-        <div className="space-y-1 border border-slate-800 rounded-lg p-2 bg-slate-900/50">
-          {complexBlocks.map((block, i) => (
-            <div key={i} className="group flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-800/60 transition-colors">
-              {editingIndex === i ? (
-                <div className="flex-1">
-                  <EditForm block={block} project={project} onSave={(b) => updateBlock(i, b)} onCancel={() => setEditingIndex(null)} onCreateNode={onCreateNode} />
-                </div>
-              ) : (
-                <>
-                  <div className="flex-1 text-xs leading-relaxed cursor-pointer" onClick={() => setEditingIndex(i)}>
-                    <Badge block={block} project={project} />
-                  </div>
-                  <button onClick={() => setEditingIndex(i)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-indigo-400 cursor-pointer transition-opacity">
-                    <Pencil className="w-3 h-3" />
-                  </button>
-                  <button onClick={() => removeBlock(i)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-400 cursor-pointer transition-opacity">
-                    <X className="w-3 h-3" />
-                  </button>
-                </>
-              )}
+      {/* + button */}
+      <div className="flex justify-end mt-1.5">
+        <button onClick={openPalette}
+          className="p-1.5 bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
+          title="Insert badge">
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Command palette */}
+      {(paletteOpen || commandMode) && (
+        <div
+          className="cm-palette fixed z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1.5 min-w-[180px] max-h-60 overflow-y-auto"
+          style={{ left: palettePosRef.current.x, top: palettePosRef.current.y }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {commandMode && (
+            <div className="px-3 py-1 border-b border-slate-800 mb-1">
+              <input
+                value={commandText}
+                onChange={e => setCommandText(e.target.value)}
+                placeholder="Search commands..."
+                className="w-full bg-transparent text-xs text-white focus:outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && filteredActions.length > 0) { e.preventDefault(); handleCommandSelect(filteredActions[0].key); }
+                  if (e.key === "Escape") { setCommandMode(false); }
+                }}
+              />
             </div>
+          )}
+          {filteredActions.map(a => (
+            <button key={a.key} onClick={() => { handleCommandSelect(a.key); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded flex items-center gap-2 cursor-pointer">
+              <span>{a.icon}</span>
+              <span>{a.label}</span>
+            </button>
           ))}
         </div>
       )}
 
-      {/* + button */}
-      <div className="relative">
-        {paletteOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setPaletteOpen(false)} />
-            <div className="absolute bottom-full right-0 mb-1 z-50 flex flex-row-reverse gap-1 flex-wrap justify-end">
-              {BLOCK_ACTIONS.map(action => (
-                <button key={action.key} onClick={() => handlePaletteSelect(action.key)}
-                  className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-bold rounded-lg border border-slate-700 transition-all cursor-pointer">
-                  {action.icon}{action.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        <div className="flex justify-end">
-          <button onClick={() => setPaletteOpen(!paletteOpen)}
-            className="p-1.5 bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
-            title="Insert block">
-            <Plus className="w-4 h-4" />
-          </button>
+      {/* Badge editor popover */}
+      {editingBadge && (
+        <div
+          className="cm-edit-popup fixed z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 min-w-[260px]"
+          style={{
+            left: Math.min(palettePosRef.current.x, window.innerWidth - 300),
+            top: Math.min(palettePosRef.current.y, window.innerHeight - 200),
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <BadgeEditor
+            block={editingBadge.block}
+            project={project}
+            onSave={handleBadgeUpdate}
+            onDelete={handleBadgeDelete}
+            onCancel={() => setEditingBadge(null)}
+            onCreateNode={onCreateNode}
+          />
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// Inline edit forms for each block type
-function EditForm({ block, project, onSave, onCancel, onCreateNode }: {
-  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onCancel: () => void; onCreateNode?: () => string;
+// Badge editor component
+function BadgeEditor({ block, project, onSave, onDelete, onCancel, onCreateNode }: {
+  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onDelete: () => void; onCancel: () => void;
+  onCreateNode?: () => string;
 }) {
+  const label = BLOCK_LABELS[block.type as BlockAction]?.label || block.type;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold text-slate-400 uppercase">{label}</span>
+        <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer text-xs">✕</button>
+      </div>
+      <SimpleFields block={block} project={project} onSave={onSave} onDelete={onDelete} onCreateNode={onCreateNode} />
+    </div>
+  );
+}
+
+function SimpleFields({ block, project, onSave, onDelete, onCreateNode }: {
+  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onDelete: () => void; onCreateNode?: () => string;
+}) {
+  const onChange = (patch: Partial<SceneBlock>) => {
+    const merged = { ...block, ...patch } as SceneBlock;
+    onSave(merged);
+  };
+
   switch (block.type) {
     case "dialogue": {
-      const [speaker, setSpeaker] = useState(block.speaker);
-      const [expr, setExpr] = useState(block.expression || "Neutral");
-      const [html, setHtml] = useState(block.text ? `<p>${block.text}</p>` : "");
-      const entity = project.entities.find(e => e.name === speaker);
-      const tones = entity?.expressions?.length ? entity.expressions : DEFAULT_EXPRESSIONS;
-      const save = () => {
-        const parser = new DOMParser();
-        const text = parser.parseFromString(html, "text/html").body.textContent || "";
-        if (text.trim()) onSave({ type: "dialogue", speaker, expression: expr, text: text.trim() });
-      };
+      const b = block as SceneBlock & { type: "dialogue" };
+      const entity = project.entities.find(e => e.name === b.speaker);
+      const tones = entity?.expressions?.length ? entity.expressions : ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
       return (
         <div className="flex flex-col gap-1.5">
           <div className="flex gap-1.5">
-            <select value={speaker} onChange={e => { setSpeaker(e.target.value); setExpr("Neutral"); }} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+            <select value={b.speaker} onChange={e => onChange({ speaker: e.target.value })}
+              className="flex-1 bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
               <option value="Narrator">Narrator</option>
               {project.entities.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
             </select>
-            <select value={expr} onChange={e => setExpr(e.target.value)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+            <select value={b.expression || "Neutral"} onChange={e => onChange({ expression: e.target.value })}
+              className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
               {tones.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div className="bg-slate-950 border border-slate-700 rounded overflow-hidden">
-            <ScriptEditor initialContent={html} onChange={setHtml} placeholder="Write dialogue..." />
-          </div>
-          <div className="flex gap-1 justify-end">
-            <button onClick={save} className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white rounded cursor-pointer">Done</button>
-            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Cancel</button>
+          <input value={b.text} onChange={e => onChange({ text: e.target.value })}
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1.5 text-white focus:outline-none focus:border-indigo-500"
+            placeholder="Dialogue text..." autoFocus />
+          <div className="flex gap-1 justify-end pt-1">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Close</button>
           </div>
         </div>
       );
     }
     case "effect": {
-      const [op, setOp] = useState(block.operation);
-      const [val, setVal] = useState(block.value);
-      const [name, setName] = useState(block.variableName);
+      const b = block as SceneBlock & { type: "effect" };
       return (
         <div className="flex items-center gap-1.5">
-          <select value={op} onChange={e => setOp(e.target.value as any)} className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white w-10 text-center cursor-pointer"><option value="+">+</option><option value="-">−</option><option value="=">=</option></select>
-          <input type="number" value={val} onChange={e => setVal(Number(e.target.value))} className="w-14 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white text-center focus:outline-none focus:border-indigo-500" />
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="stat" list="ef-tl" className="flex-1 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
-          <datalist id="ef-tl">{project.trackers.map(t => <option key={t.id} value={t.name} />)}</datalist>
-          <button onClick={() => { if (name.trim()) onSave({ type: "effect", operation: op, value: val, variableName: name.trim() }); }} className="text-[10px] px-2 py-0.5 bg-emerald-600 text-white rounded cursor-pointer">Done</button>
-          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+          <select value={b.operation} onChange={e => onChange({ operation: e.target.value as any })}
+            className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white w-10 text-center cursor-pointer">
+            <option value="+">+</option><option value="-">−</option><option value="=">=</option>
+          </select>
+          <input type="number" value={b.value} onChange={e => onChange({ value: parseInt(e.target.value) || 0 })}
+            className="w-14 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white text-center focus:outline-none focus:border-indigo-500" />
+          <input value={b.variableName} onChange={e => onChange({ variableName: e.target.value })} placeholder="stat"
+            className="flex-1 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
+          <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">✕</button>
+          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
         </div>
       );
     }
     case "choice": {
-      const [ct, setCt] = useState(block.text);
-      const [targetId, setTargetId] = useState(block.targetNodeId);
-      const [rand, setRand] = useState(block.random || 0);
+      const b = block as SceneBlock & { type: "choice" };
       const allNodes = Object.values(project.nodes).filter(n => n.nodeType === "story" || !n.nodeType);
+      const [rand, setRand] = useState(b.random || 0);
       return (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-1.5">
-            <input value={ct} onChange={e => setCt(e.target.value)} placeholder="choice text" className="flex-1 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
-            <select value={targetId} onChange={e => setTargetId(e.target.value)}
+            <input value={b.text} onChange={e => onChange({ text: e.target.value })} placeholder="choice text"
+              className="flex-1 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" autoFocus />
+            <select value={b.targetNodeId} onChange={e => onChange({ targetNodeId: e.target.value })}
               className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[130px]">
               <option value="">→ target</option>
               {allNodes.map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
               {onCreateNode && <option value="__new__">+ New scene</option>}
             </select>
           </div>
-          {targetId === "__new__" && onCreateNode && (() => { const newId = onCreateNode(); setTargetId(newId); return null; })()}
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
               <input type="checkbox" checked={rand > 0} onChange={e => setRand(e.target.checked ? 50 : 0)} className="w-3 h-3" />
               Random {rand > 0 ? `${rand}%` : ""}
             </label>
-            {rand > 0 && <input type="range" min={1} max={100} value={rand} onChange={e => setRand(Number(e.target.value))} className="w-20 h-1" />}
+            {rand > 0 && <input type="range" min={1} max={100} value={rand} onChange={e => { setRand(Number(e.target.value)); onChange({ random: Number(e.target.value) }); }} className="w-20 h-1" />}
           </div>
           <div className="flex gap-1 justify-end">
-            <button onClick={() => { if (ct.trim() && targetId) onSave({ type: "choice", text: ct.trim(), targetNodeId: targetId, ...(rand > 0 ? { random: rand } : {}) }); }} className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white rounded cursor-pointer">Done</button>
-            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
           </div>
         </div>
       );
     }
     case "continue": {
-      const [targetId, setTargetId] = useState(block.targetNodeId);
+      const b = block as SceneBlock & { type: "continue" };
       const allNodes = Object.values(project.nodes).filter(n => n.nodeType === "story" || !n.nodeType);
       return (
-        <div className="flex items-center gap-1.5">
-          <select value={targetId} onChange={e => setTargetId(e.target.value)} autoFocus className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[160px]">
+        <div className="flex flex-col gap-1.5">
+          <select value={b.targetNodeId} onChange={e => onChange({ targetNodeId: e.target.value })}
+            className="w-full bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
             <option value="">→ target</option>
             {allNodes.map(n => <option key={n.id} value={n.id}>{n.title}</option>)}
             {onCreateNode && <option value="__new__">+ New scene</option>}
           </select>
-          {targetId === "__new__" && onCreateNode && (() => { const newId = onCreateNode(); setTargetId(newId); return null; })()}
-          <button onClick={() => { if (targetId) onSave({ type: "continue", targetNodeId: targetId }); }} className="text-[10px] px-2 py-0.5 bg-teal-600 text-white rounded cursor-pointer">Done</button>
-          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
         </div>
       );
     }
     case "ending": {
-      const [et, setEt] = useState(block.endingType);
-      const [en, setEn] = useState(block.endingName || "");
+      const b = block as SceneBlock & { type: "ending" };
       return (
-        <div className="flex items-center gap-1.5">
-          <select value={et} onChange={e => setEt(e.target.value as any)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer"><option value="GOOD">Good</option><option value="BAD">Bad</option><option value="NORMAL">Normal</option><option value="NEUTRAL">Neutral</option></select>
-          <input value={en} onChange={e => setEn(e.target.value)} placeholder="ending name" className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
-          <button onClick={() => onSave({ type: "ending", endingType: et, endingName: en.trim() || undefined })} className="text-[10px] px-2 py-0.5 bg-rose-600 text-white rounded cursor-pointer">Done</button>
-          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+        <div className="flex flex-col gap-1.5">
+          <select value={b.endingType} onChange={e => onChange({ endingType: e.target.value as any })}
+            className="w-full bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+            <option value="GOOD">Good</option><option value="BAD">Bad</option><option value="NORMAL">Normal</option><option value="NEUTRAL">Neutral</option>
+          </select>
+          <input value={b.endingName || ""} onChange={e => onChange({ endingName: e.target.value })} placeholder="ending name"
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
         </div>
       );
     }
-    case "statDisplay": {
-      const [n, setN] = useState(block.variableName);
+    case "flag": {
+      const b = block as SceneBlock & { type: "flag" };
       return (
-        <div className="flex items-center gap-1.5">
-          <input value={n} onChange={e => setN(e.target.value)} placeholder="stat name" list="sd-tl" className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
-          <datalist id="sd-tl">{project.trackers.map(t => <option key={t.id} value={t.name} />)}</datalist>
-          <button onClick={() => { if (n.trim()) onSave({ type: "statDisplay", variableName: n.trim() }); }} className="text-[10px] px-2 py-0.5 bg-amber-600 text-white rounded cursor-pointer">Done</button>
-          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+        <div className="flex flex-col gap-1.5">
+          <input value={b.flagName} onChange={e => onChange({ flagName: e.target.value })} placeholder="flag name"
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" autoFocus />
+          <label className="flex items-center gap-2 text-[10px] text-slate-400 cursor-pointer">
+            <input type="checkbox" checked={b.flagValue} onChange={e => onChange({ flagValue: e.target.checked })} className="w-3 h-3" />
+            {b.flagValue ? "True" : "False"}
+          </label>
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
+        </div>
+      );
+    }
+    case "bgm": {
+      const b = block as SceneBlock & { type: "bgm" };
+      return (
+        <div className="flex flex-col gap-1.5">
+          <input value={b.trackName} onChange={e => onChange({ trackName: e.target.value })} placeholder="track name"
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" autoFocus />
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
+        </div>
+      );
+    }
+    case "sfx": {
+      const b = block as SceneBlock & { type: "sfx" };
+      return (
+        <div className="flex flex-col gap-1.5">
+          <input value={b.soundName} onChange={e => onChange({ soundName: e.target.value })} placeholder="sound name"
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" autoFocus />
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
+        </div>
+      );
+    }
+    case "background": {
+      const b = block as SceneBlock & { type: "background" };
+      return (
+        <div className="flex flex-col gap-1.5">
+          <input value={b.asset} onChange={e => onChange({ asset: e.target.value })} placeholder="image path or color"
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" autoFocus />
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
+        </div>
+      );
+    }
+    case "delay": {
+      const b = block as SceneBlock & { type: "delay" };
+      return (
+        <div className="flex flex-col gap-1.5">
+          <input type="number" min={0.1} step={0.1} value={b.seconds} onChange={e => onChange({ seconds: parseFloat(e.target.value) || 0 })}
+            className="w-20 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" autoFocus />
+          <span className="text-[10px] text-slate-500">seconds</span>
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
+        </div>
+      );
+    }
+    case "itemEffect": {
+      const b = block as SceneBlock & { type: "itemEffect" };
+      return (
+        <div className="flex flex-col gap-1.5">
+          <select value={b.action} onChange={e => onChange({ action: e.target.value as "give" | "take" })}
+            className="w-full bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+            <option value="give">Give</option><option value="take">Take</option>
+          </select>
+          <input value={b.itemName} onChange={e => onChange({ itemName: e.target.value })} placeholder="item name"
+            className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
         </div>
       );
     }
     case "condition": {
-      const [src, setSrc] = useState(block.source);
-      const [tid, setTid] = useState(block.targetId);
-      const [op, setOp] = useState(block.operator || ">=");
-      const [val, setVal] = useState(block.compareValue || 1);
+      const b = block as SceneBlock & { type: "condition" };
       return (
-        <div className="flex items-center gap-1.5">
-          <select value={src} onChange={e => setSrc(e.target.value as any)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer"><option value="tracker">Tracker</option><option value="flag">Flag</option></select>
-          {src === "tracker" ? (
-            <><select value={tid} onChange={e => setTid(e.target.value)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[100px]"><option value="">stat</option>{project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-              <select value={op} onChange={e => setOp(e.target.value)} className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white w-12 text-center cursor-pointer"><option value=">=">≥</option><option value="<=">≤</option><option value=">">&gt;</option><option value="<">&lt;</option><option value="==">=</option><option value="!=">≠</option></select>
-              <input type="number" value={val} onChange={e => setVal(Number(e.target.value))} className="w-12 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white text-center" /></>
+        <div className="flex flex-col gap-1.5">
+          <select value={b.condition.source} onChange={e => onSave({ ...block, condition: { ...b.condition, source: e.target.value as "tracker" | "flag" } } as SceneBlock)}
+            className="w-full bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+            <option value="tracker">Tracker</option><option value="flag">Flag</option>
+          </select>
+          {b.condition.source === "tracker" ? (
+            <div className="flex items-center gap-1.5">
+              <input value={b.condition.targetId} onChange={e => onSave({ ...block, condition: { ...b.condition, targetId: e.target.value } } as SceneBlock)} placeholder="stat name"
+                className="flex-1 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
+              <select value={b.condition.operator || ">="} onChange={e => onSave({ ...block, condition: { ...b.condition, operator: e.target.value } } as SceneBlock)}
+                className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white w-12 text-center cursor-pointer">
+                <option value=">=">≥</option><option value="<=">≤</option><option value=">">&gt;</option><option value="<">&lt;</option><option value="==">=</option><option value="!=">≠</option>
+              </select>
+              <input type="number" value={b.condition.compareValue || 1} onChange={e => onSave({ ...block, condition: { ...b.condition, compareValue: parseInt(e.target.value) || 0 } } as SceneBlock)}
+                className="w-12 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white text-center" />
+            </div>
           ) : (
-            <select value={tid} onChange={e => setTid(e.target.value)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[100px]"><option value="">flag</option>{project.flags.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+            <input value={b.condition.targetId} onChange={e => onSave({ ...block, condition: { ...b.condition, targetId: e.target.value } } as SceneBlock)} placeholder="flag name"
+              className="w-full bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
           )}
-          <button onClick={() => { if (tid) onSave({ type: "condition", source: src, targetId: tid, ...(src === "tracker" ? { operator: op, compareValue: val } : {}) }); }} className="text-[10px] px-2 py-0.5 bg-rose-600 text-white rounded cursor-pointer">Done</button>
-          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+          <div className="flex gap-1 justify-end">
+            <button onClick={onDelete} className="text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
+            <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Done</button>
+          </div>
         </div>
       );
     }
-    case "entity": {
-      const [eid, setEid] = useState(block.entityId);
+    default: {
+      // Generic fallback — show data-block JSON for unknown types
       return (
-        <div className="flex items-center gap-1.5">
-          <select value={eid} onChange={e => setEid(e.target.value)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[140px]"><option value="">select entity</option>{project.entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
-          <button onClick={() => { if (eid) onSave({ type: "entity", entityId: eid }); }} className="text-[10px] px-2 py-0.5 bg-purple-600 text-white rounded cursor-pointer">Done</button>
-          <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">✕</button>
+        <div className="text-[10px] text-slate-500">
+          <p className="mb-1">Block type: {(block as any).type}</p>
+          <pre className="bg-slate-950 p-2 rounded text-[9px]">{JSON.stringify(block, null, 2)}</pre>
+          <button onClick={onDelete} className="mt-2 text-[10px] px-2 py-0.5 bg-rose-700 text-white rounded cursor-pointer">Delete</button>
         </div>
       );
     }
-    default:
-      return null;
   }
 }

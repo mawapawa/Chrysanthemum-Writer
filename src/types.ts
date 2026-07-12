@@ -168,7 +168,14 @@ export type SceneBlock =
   | { type: "entity"; entityId: string }
   | { type: "condition"; source: "tracker" | "flag"; targetId: string; operator?: string; compareValue?: number }
   | { type: "continue"; targetNodeId: string }
-  | { type: "ending"; endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL"; endingName?: string };
+  | { type: "ending"; endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL"; endingName?: string }
+  | { type: "flag"; flagName: string; flagValue: boolean }
+  | { type: "conditional"; condition: ChoiceRequirement }
+  | { type: "bgm"; trackName: string; fadeIn?: number }
+  | { type: "sfx"; soundName: string }
+  | { type: "background"; asset: string }
+  | { type: "delay"; seconds: number }
+  | { type: "itemEffect"; action: "give" | "take"; itemName: string };
 
 export interface StoryNode {
   id: string;

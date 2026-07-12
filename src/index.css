@@ -62,4 +62,54 @@
     border-radius: 2px;
     user-select: none;
   }
+
+  /* Inline badge styles */
+  .cm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: default;
+    user-select: none;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    line-height: 1.6;
+    vertical-align: middle;
+  }
+  .cm-badge:focus {
+    outline: 2px solid #6366f1;
+    outline-offset: 1px;
+  }
+  .cm-badge-dialogue { background: #07598540; color: #7dd3fc; border-color: #075985; }
+  .cm-badge-effect { background: #065f4630; color: #6ee7b7; border-color: #065f46; }
+  .cm-badge-statDisplay { background: #92400e30; color: #fde68a; border-color: #92400e; }
+  .cm-badge-choice { background: #3730a330; color: #a5b4fc; border-color: #3730a3; }
+  .cm-badge-entity { background: #4c1d9530; color: #c4b5fd; border-color: #4c1d95; }
+  .cm-badge-condition { background: #9f123930; color: #fca5a5; border-color: #9f1239; }
+  .cm-badge-continue { background: #115e5930; color: #5eead4; border-color: #115e59; }
+  .cm-badge-ending { background: #9f123930; color: #fca5a5; border-color: #9f1239; }
+  .cm-badge-flag { background: #b4530930; color: #fcd34d; border-color: #b45309; }
+  .cm-badge-bgm { background: #1e40af30; color: #93c5fd; border-color: #1e40af; }
+  .cm-badge-sfx { background: #6b21a830; color: #d8b4fe; border-color: #6b21a8; }
+  .cm-badge-background { background: #16653430; color: #86efac; border-color: #166534; }
+  .cm-badge-delay { background: #78350f30; color: #fdba74; border-color: #78350f; }
+  .cm-badge-itemEffect { background: #83184330; color: #f9a8d4; border-color: #831843; }
+
+  /* Contenteditable editor styles */
+  .cm-editor {
+    min-height: 120px;
+    line-height: 1.8;
+    font-size: 13px;
+  }
+  .cm-editor:empty:before {
+    content: attr(data-placeholder);
+    color: #64748b;
+    font-style: italic;
+    pointer-events: none;
+  }
+  .cm-editor p { margin: 0.4em 0; }
+  .cm-editor p:first-child { margin-top: 0; }
 }
