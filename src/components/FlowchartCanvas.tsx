@@ -277,8 +277,13 @@ export default function FlowchartCanvas({
 
   // Dragging Canvas (Panning)
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left click
+    if (e.button !== 0) return;
     const target = e.target as HTMLElement;
+    // If we're in editing mode and click outside the card, close it
+    if (editingNodeId && !target.closest(".node-card") && !target.closest(".canvas-btn")) {
+      setEditingNodeId(null);
+      return;
+    }
     if (target.closest(".node-card") || target.closest(".canvas-btn") ||
         target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.closest("[contenteditable]")) return;
 
@@ -761,6 +766,7 @@ export default function FlowchartCanvas({
           id="nodes-container"
         >
           {visibleNodes.map((node) => {
+            const isEditing = editingNodeId === node.id;
             const isSelected = selectedNodeId === node.id;
             const isStart = project.startNodeId === node.id;
 
@@ -770,14 +776,28 @@ export default function FlowchartCanvas({
                 ref={(el) => {
                   nodeRefs.current[node.id] = el;
                 }}
-                onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
+                onMouseDown={(e) => { if (!isEditing) handleNodeMouseDown(node.id, e); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
-                className={`node-card absolute pointer-events-auto ${isSelected ? "w-[400px]" : "w-[240px]"} bg-slate-800 border-2 rounded-xl shadow-xl ${draggedNodeId !== node.id ? "transition-all duration-150" : ""} cursor-grab active:cursor-grabbing hover:shadow-2xl ${isSelected ? "" : "overflow-hidden"} ${
-                  isSelected
-                    ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-105 z-40"
-                    : "border-slate-700/80 hover:border-slate-600 z-10"
+                className={`node-card pointer-events-auto bg-slate-800 border-2 rounded-xl shadow-xl ${isEditing ? "" : "absolute"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
+                  isEditing
+                    ? "fixed overflow-hidden"
+                    : (draggedNodeId !== node.id ? "transition-all duration-150" : "") + (isSelected ? "" : " overflow-hidden") + " cursor-grab active:cursor-grabbing hover:shadow-2xl"
+                } ${
+                  isEditing
+                    ? "border-indigo-500 ring-4 ring-indigo-500/20"
+                    : isSelected
+                      ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-105"
+                      : "border-slate-700/80 hover:border-slate-600"
                 }`}
-                style={{
+                style={isEditing ? {
+                  left: "50%",
+                  top: 48,
+                  bottom: 72,
+                  transform: "translateX(-50%)",
+                  width: "100%",
+                  maxWidth: "650px",
+                  height: "auto",
+                } : {
                   transform: `translate(${node.position.x * zoom + pan.x + (dragGroupRef.current.some(g => g.id === node.id) ? dragDelta.current.x * zoom : 0)}px, ${
                     node.position.y * zoom + pan.y + (dragGroupRef.current.some(g => g.id === node.id) ? dragDelta.current.y * zoom : 0)
                   }px) scale(${zoom})`,
@@ -825,15 +845,15 @@ export default function FlowchartCanvas({
 
                 <div className="p-3">
                   <div className="flex items-start justify-between gap-1 mb-1.5">
-                    {editingTitleNodeId === node.id ? (
+                    {editingTitleNodeId === node.id || isEditing ? (
                       <input
                         type="text"
                         value={node.title}
                         onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [node.id]: { ...node, title: e.target.value } }, lastModified: Date.now() })}
                         onBlur={() => setEditingTitleNodeId(null)}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingTitleNodeId(null); }}
-                        className="bg-slate-700 text-xs font-semibold text-white rounded px-1 py-0.5 w-full max-w-[150px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        autoFocus
+                        onKeyDown={(e) => { if (e.key === "Enter") setEditingTitleNodeId(null); if (e.key === "Escape") { setEditingTitleNodeId(null); if (isEditing) setEditingNodeId(null); } }}
+                        className={`bg-slate-700 text-xs font-semibold text-white rounded px-1 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isEditing ? "max-w-[300px]" : "max-w-[150px]"}`}
+                        autoFocus={!isEditing}
                         onMouseDown={(e) => e.stopPropagation()}
                       />
                     ) : (
@@ -932,16 +952,22 @@ export default function FlowchartCanvas({
                     </div>
                   )}
 
-                  {/* Focus mode trigger — double-click to enter full editor */}
-                  {isSelected && editingNodeId !== node.id && (
-                    <div className="text-center border-t border-slate-700/50 pt-2 mt-2 -mx-3 -mb-3 px-3 pb-3 bg-slate-800/40">
-                      <button
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => setEditingNodeId(node.id)}
-                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
-                      >
-                        ✏️ Edit Scene
-                      </button>
+                  {/* Expanded editor — shown when selected or editing */}
+                  {(isSelected || isEditing) && (
+                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono text-slate-500">Double-click to {isEditing ? "close" : "edit"}</span>
+                        <button onClick={() => setEditingNodeId(isEditing ? null : node.id)}
+                          className="p-0.5 text-slate-500 hover:text-white cursor-pointer">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <BlockEditor
+                        project={project}
+                        blocks={isEditing ? focusBlocks : expandedBlocks}
+                        onChange={isEditing ? handleFocusBlocksChange : handleBlocksChange}
+                        onCreateNode={isEditing ? handleFocusCreateNode : handleCreateNodeFromBlock}
+                      />
                     </div>
                   )}
                 </div>
@@ -950,67 +976,6 @@ export default function FlowchartCanvas({
           })}
         </div>
       </div>
-
-      {/* Focus Mode Overlay — unified card */}
-      {editingNode && (
-        <div
-          className="absolute inset-0 z-30 bg-slate-950/90 backdrop-blur-sm"
-          style={{ bottom: 72 }}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setEditingNodeId(null); }}
-        >
-          {/* Unified card — centered horizontally, fills vertical space */}
-          <div
-            className="absolute top-0 flex flex-col bg-slate-900 border-x border-slate-800 shadow-2xl overflow-hidden"
-            style={{
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "100%",
-              maxWidth: "650px",
-              height: "100%",
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onMouseMove={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Card header — title + folder + close */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800 shrink-0 bg-slate-900">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <button onClick={() => setEditingNodeId(null)}
-                  className="text-slate-500 hover:text-white cursor-pointer shrink-0 text-sm">
-                  ←
-                </button>
-                <input type="text" value={editingNode.title}
-                  onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [editingNode.id]: { ...editingNode, title: e.target.value } }, lastModified: Date.now() })}
-                  className="bg-transparent text-base font-bold text-white min-w-0 focus:outline-none border-b border-transparent focus:border-indigo-500 flex-1"
-                  placeholder="Scene title..." />
-              </div>
-              <div className="flex items-center gap-2 shrink-0 ml-3">
-                <select value={editingNode.sceneId || "unassigned"}
-                  onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [editingNode.id]: { ...editingNode, sceneId: e.target.value === "unassigned" ? undefined : e.target.value } }, lastModified: Date.now() })}
-                  className="bg-slate-800 border border-slate-700 text-[10px] text-slate-300 rounded-lg p-1.5 cursor-pointer max-w-[130px]">
-                  <option value="unassigned">📂 Root</option>
-                  {(project.scenes || []).map(s => <option key={s.id} value={s.id}>📂 {s.name}</option>)}
-                </select>
-                <button onClick={() => setEditingNodeId(null)}
-                  className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable editor body */}
-            <div className="flex-1 overflow-y-auto p-5">
-              <BlockEditor
-                project={project}
-                blocks={focusBlocks}
-                onChange={handleFocusBlocksChange}
-                onCreateNode={handleFocusCreateNode}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Floating Instructions Banner */}
       <div className="absolute top-4 left-4 z-20 bg-slate-950/80 backdrop-blur-md border border-slate-800 rounded-xl p-3.5 max-w-xs shadow-2xl pointer-events-none">
