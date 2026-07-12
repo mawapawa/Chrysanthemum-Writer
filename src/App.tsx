@@ -678,7 +678,7 @@ export default function App() {
                 onEnterPlaytest={(id) => setPlaytestStartId(id)}
                 hiddenFolderIds={hiddenFolderIds}
                 centerNodeTrigger={centerNodeTrigger}
-                onCanvasBackgroundClick={() => {}}
+                onCanvasBackgroundClick={() => setSelectedNodeId(null)}
                 onAddBlankNode={handleAddBlankNode}
                 onAddLocation={handleAddLocation}
                 onAddEncounter={handleAddEncounter}

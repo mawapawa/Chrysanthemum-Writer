@@ -83,7 +83,7 @@ export default function FlowchartCanvas({
     if (selectedNode) {
       setExpandedBlocks(selectedNode.blocks || nodeToBlocks(selectedNode));
     }
-  }, [selectedNodeId]);
+  }, [selectedNodeId, project.nodes[selectedNodeId || ""]?.blocks]);
 
   const handleBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
     setExpandedBlocks(newBlocks);
@@ -496,62 +496,6 @@ export default function FlowchartCanvas({
     }
   };
 
-  // Helper: Create a choice and immediately link it to a brand new node to make flow creation ultra-fast
-  const handleQuickAddChild = (parentNodeId: string) => {
-    const parentNode = project.nodes[parentNodeId];
-    if (!parentNode) return;
-
-    const childId = crypto.randomUUID();
-    
-    // Position child based on layout direction
-    let newChildX = parentNode.position.x;
-    let newChildY = parentNode.position.y;
-
-    if (flowDirection === "vertical") {
-      newChildX = parentNode.position.x + (parentNode.choices.length - 0.5) * 260;
-      newChildY = parentNode.position.y + 220;
-    } else {
-      newChildX = parentNode.position.x + 320;
-      newChildY = parentNode.position.y + parentNode.choices.length * 120;
-    }
-
-    const newChildNode: StoryNode = {
-      id: childId,
-      displayId: generateDisplayId("SCN"),
-      title: "Scene Branch Continuation",
-      description: "Brief plot outline for this branch path...",
-      speaker: "Narrator",
-      dialogueLines: [],
-      choices: [],
-      statChanges: [],
-      position: { x: newChildX, y: newChildY },
-      isEnding: false,
-      nodeType: parentNode.nodeType || "story",
-      sceneId: parentNode.sceneId,
-    };
-
-    const newChoice: StoryChoice = {
-      id: crypto.randomUUID(),
-      text: `Option ${parentNode.choices.length + 1}`,
-      targetNodeId: childId,
-    };
-
-    onUpdateProject({
-      ...project,
-      nodes: {
-        ...project.nodes,
-        [parentNodeId]: {
-          ...parentNode,
-          choices: [...parentNode.choices, newChoice],
-        },
-        [childId]: newChildNode,
-      },
-      lastModified: Date.now(),
-    });
-
-    onSelectNode(childId);
-  };
-
   return (
     <div className="relative w-full h-full bg-slate-900 overflow-hidden select-none" id="canvas-container">
       {/* Grid Canvas Layer */}
@@ -919,20 +863,9 @@ export default function FlowchartCanvas({
                     </div>
                   )}
 
-                  {/* Connect points & child builder button */}
-                  <div className="flex items-center justify-between border-t border-slate-700/50 pt-2 mt-2 gap-1 bg-slate-800/40 -mx-3 -mb-3 px-3 pb-2.5">
-                    <span className="text-[9px] font-mono font-bold text-slate-500">
-                      {node.choices.length} Choice branches
-                    </span>
-                    <button
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={() => handleQuickAddChild(node.id)}
-                      className="py-1 px-2 hover:bg-indigo-600 bg-indigo-500 text-white font-semibold text-[10px] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                      title="Quick create linked option node"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Branch Out
-                    </button>
+                  {/* Connect points indicator — choice creation moved to BlockEditor */}
+                  <div className="text-[9px] font-mono font-bold text-slate-500 border-t border-slate-700/50 pt-2 mt-2 -mx-3 -mb-3 px-3 pb-2.5 bg-slate-800/40">
+                    {node.choices.length} Choice branches
                   </div>
 
                   {/* Expanded editor — shown when selected */}
