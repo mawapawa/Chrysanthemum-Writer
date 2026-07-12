@@ -158,6 +158,8 @@ export default function FlowchartCanvas({
   // Trigger state update to force line redraws when elements render or move
   const [, forceUpdate] = useState({});
 
+  const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
+
   // Close expanded editor on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -237,7 +239,9 @@ export default function FlowchartCanvas({
   // Dragging Canvas (Panning)
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only left click
-    if ((e.target as HTMLElement).closest(".node-card") || (e.target as HTMLElement).closest(".canvas-btn")) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".node-card") || target.closest(".canvas-btn") ||
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.closest("[contenteditable]")) return;
 
     setIsPanning(true);
     wasDragged.current = false;
@@ -781,9 +785,26 @@ export default function FlowchartCanvas({
 
                 <div className="p-3">
                   <div className="flex items-start justify-between gap-1 mb-1.5">
-                    <h3 className="text-xs font-semibold text-white truncate max-w-[150px] font-sans" title={node.title}>
-                      {node.title}
-                    </h3>
+                    {editingTitleNodeId === node.id ? (
+                      <input
+                        type="text"
+                        value={node.title}
+                        onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [node.id]: { ...node, title: e.target.value } }, lastModified: Date.now() })}
+                        onBlur={() => setEditingTitleNodeId(null)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingTitleNodeId(null); }}
+                        className="bg-slate-700 text-xs font-semibold text-white rounded px-1 py-0.5 w-full max-w-[150px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        autoFocus
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <h3
+                        className="text-xs font-semibold text-white truncate max-w-[150px] font-sans cursor-text"
+                        title={node.title}
+                        onDoubleClick={() => setEditingTitleNodeId(node.id)}
+                      >
+                        {node.title}
+                      </h3>
+                    )}
                     <div className="flex items-center gap-1 opacity-70 hover:opacity-100 shrink-0">
                       {!isStart && (
                         <button
