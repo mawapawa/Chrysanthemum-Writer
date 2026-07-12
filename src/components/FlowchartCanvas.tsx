@@ -160,16 +160,55 @@ export default function FlowchartCanvas({
 
   const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
 
-  // Close expanded editor on Escape
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const editingNode = editingNodeId ? project.nodes[editingNodeId] : null;
+  const [focusBlocks, setFocusBlocks] = useState<SceneBlock[]>(() =>
+    editingNode ? (editingNode.blocks || nodeToBlocks(editingNode)) : []
+  );
+
+  useEffect(() => {
+    if (editingNode) {
+      setFocusBlocks(editingNode.blocks || nodeToBlocks(editingNode));
+    }
+  }, [editingNodeId]);
+
+  const handleFocusBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
+    setFocusBlocks(newBlocks);
+    if (editingNodeId && project.nodes[editingNodeId]) {
+      const node = project.nodes[editingNodeId];
+      const legacy = blocksToNode(newBlocks, node);
+      onUpdateProject({
+        ...project,
+        nodes: { ...project.nodes, [editingNodeId]: { ...node, ...legacy, blocks: newBlocks } },
+        lastModified: Date.now(),
+      });
+    }
+  }, [editingNodeId, project]);
+
+  const handleFocusCreateNode = useCallback((): string => {
+    const childId = crypto.randomUUID();
+    const parent = editingNodeId ? project.nodes[editingNodeId] : null;
+    const childNode: StoryNode = {
+      id: childId, displayId: generateDisplayId("SCN"), title: "New Scene", description: "",
+      speaker: "Narrator", dialogueLines: [], choices: [], statChanges: [],
+      position: parent ? { x: parent.position.x + 320, y: parent.position.y + (parent.choices.length * 120) } : { x: 400, y: 300 },
+      isEnding: false, nodeType: "story",
+    };
+    onUpdateProject({ ...project, nodes: { ...project.nodes, [childId]: childNode }, lastModified: Date.now() });
+    return childId;
+  }, [editingNodeId, project]);
+
+  // Close focus mode on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectedNodeId) {
-        onSelectNode(null);
+      if (e.key === "Escape") {
+        if (editingNodeId) setEditingNodeId(null);
+        else if (selectedNodeId) onSelectNode(null);
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [selectedNodeId, onSelectNode]);
+  }, [editingNodeId, selectedNodeId, onSelectNode]);
 
   useEffect(() => {
     // Redraw connections when project updates
@@ -732,6 +771,7 @@ export default function FlowchartCanvas({
                   nodeRefs.current[node.id] = el;
                 }}
                 onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
+                onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
                 className={`node-card absolute pointer-events-auto ${isSelected ? "w-[400px]" : "w-[240px]"} bg-slate-800 border-2 rounded-xl shadow-xl ${draggedNodeId !== node.id ? "transition-all duration-150" : ""} cursor-grab active:cursor-grabbing hover:shadow-2xl ${isSelected ? "" : "overflow-hidden"} ${
                   isSelected
                     ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-105 z-40"
@@ -892,22 +932,16 @@ export default function FlowchartCanvas({
                     </div>
                   )}
 
-                  {/* Expanded editor — shown when selected */}
-                  {isSelected && (
-                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-slate-500">Press Esc or click canvas to close</span>
-                        <button onClick={() => onSelectNode(null)}
-                          className="p-0.5 text-slate-500 hover:text-white cursor-pointer">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <BlockEditor
-                        project={project}
-                        blocks={expandedBlocks}
-                        onChange={handleBlocksChange}
-                        onCreateNode={handleCreateNodeFromBlock}
-                      />
+                  {/* Focus mode trigger — double-click to enter full editor */}
+                  {isSelected && editingNodeId !== node.id && (
+                    <div className="text-center border-t border-slate-700/50 pt-2 mt-2 -mx-3 -mb-3 px-3 pb-3 bg-slate-800/40">
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={() => setEditingNodeId(node.id)}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+                      >
+                        ✏️ Edit Scene
+                      </button>
                     </div>
                   )}
                 </div>
@@ -916,6 +950,62 @@ export default function FlowchartCanvas({
           })}
         </div>
       </div>
+
+      {/* Focus Mode Overlay — double-click node to enter */}
+      {editingNode && (
+        <div
+          className="absolute inset-0 z-30 flex justify-center bg-slate-950/95 backdrop-blur-sm"
+          style={{ bottom: 72 }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setEditingNodeId(null); }}
+          onMouseUp={(e) => e.stopPropagation()}
+          onMouseMove={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="w-full max-w-2xl flex flex-col overflow-hidden"
+            style={{ marginTop: 0 }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onMouseMove={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800 shrink-0 bg-slate-900/80">
+              <div className="flex items-center gap-3 min-w-0">
+                <button onClick={() => setEditingNodeId(null)}
+                  className="text-slate-500 hover:text-white cursor-pointer shrink-0 text-sm">
+                  ← Back
+                </button>
+                <input type="text" value={editingNode.title}
+                  onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [editingNode.id]: { ...editingNode, title: e.target.value } }, lastModified: Date.now() })}
+                  className="bg-transparent text-base font-bold text-white min-w-0 focus:outline-none border-b border-transparent focus:border-indigo-500"
+                  placeholder="Scene title..." />
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <select value={editingNode.sceneId || "unassigned"}
+                  onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [editingNode.id]: { ...editingNode, sceneId: e.target.value === "unassigned" ? undefined : e.target.value } }, lastModified: Date.now() })}
+                  className="bg-slate-800 border border-slate-700 text-[10px] text-slate-300 rounded-lg p-1.5 cursor-pointer max-w-[150px]">
+                  <option value="unassigned">📂 Root</option>
+                  {(project.scenes || []).map(s => <option key={s.id} value={s.id}>📂 {s.name}</option>)}
+                </select>
+                <button onClick={() => setEditingNodeId(null)}
+                  className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable BlockEditor */}
+            <div className="flex-1 overflow-y-auto p-5">
+              <BlockEditor
+                project={project}
+                blocks={focusBlocks}
+                onChange={handleFocusBlocksChange}
+                onCreateNode={handleFocusCreateNode}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Instructions Banner */}
       <div className="absolute top-4 left-4 z-20 bg-slate-950/80 backdrop-blur-md border border-slate-800 rounded-xl p-3.5 max-w-xs shadow-2xl pointer-events-none">
