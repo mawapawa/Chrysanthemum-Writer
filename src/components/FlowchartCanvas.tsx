@@ -780,7 +780,7 @@ export default function FlowchartCanvas({
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
                 className={`node-card pointer-events-auto bg-slate-800 border-2 rounded-xl shadow-xl ${isEditing ? "" : "absolute"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
                   isEditing
-                    ? "fixed overflow-hidden"
+                    ? "fixed overflow-hidden flex flex-col"
                     : (draggedNodeId !== node.id ? "transition-all duration-150" : "") + (isSelected ? "" : " overflow-hidden") + " cursor-grab active:cursor-grabbing hover:shadow-2xl"
                 } ${
                   isEditing
@@ -952,21 +952,14 @@ export default function FlowchartCanvas({
                     </div>
                   )}
 
-                  {/* Expanded editor — shown when selected or editing */}
-                  {(isSelected || isEditing) && (
-                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-slate-500">Double-click to {isEditing ? "close" : "edit"}</span>
-                        <button onClick={() => setEditingNodeId(isEditing ? null : node.id)}
-                          className="p-0.5 text-slate-500 hover:text-white cursor-pointer">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
+                  {/* Focus editor — only shows when double-clicked into editing mode */}
+                  {isEditing && (
+                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-hidden">
                       <BlockEditor
                         project={project}
-                        blocks={isEditing ? focusBlocks : expandedBlocks}
-                        onChange={isEditing ? handleFocusBlocksChange : handleBlocksChange}
-                        onCreateNode={isEditing ? handleFocusCreateNode : handleCreateNodeFromBlock}
+                        blocks={focusBlocks}
+                        onChange={handleFocusBlocksChange}
+                        onCreateNode={handleFocusCreateNode}
                       />
                     </div>
                   )}
