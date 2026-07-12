@@ -951,39 +951,44 @@ export default function FlowchartCanvas({
         </div>
       </div>
 
-      {/* Focus Mode Overlay — double-click node to enter */}
+      {/* Focus Mode Overlay — unified card */}
       {editingNode && (
         <div
-          className="absolute inset-0 z-30 flex justify-center bg-slate-950/95 backdrop-blur-sm"
+          className="absolute inset-0 z-30 bg-slate-950/90 backdrop-blur-sm"
           style={{ bottom: 72 }}
           onMouseDown={(e) => { if (e.target === e.currentTarget) setEditingNodeId(null); }}
-          onMouseUp={(e) => e.stopPropagation()}
-          onMouseMove={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
         >
+          {/* Unified card — centered horizontally, fills vertical space */}
           <div
-            className="w-full max-w-2xl flex flex-col overflow-hidden"
-            style={{ marginTop: 0 }}
+            className="absolute top-0 flex flex-col bg-slate-900 border-x border-slate-800 shadow-2xl overflow-hidden"
+            style={{
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "100%",
+              maxWidth: "650px",
+              height: "100%",
+            }}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onMouseMove={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800 shrink-0 bg-slate-900/80">
-              <div className="flex items-center gap-3 min-w-0">
+            {/* Card header — title + folder + close */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800 shrink-0 bg-slate-900">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <button onClick={() => setEditingNodeId(null)}
                   className="text-slate-500 hover:text-white cursor-pointer shrink-0 text-sm">
-                  ← Back
+                  ←
                 </button>
                 <input type="text" value={editingNode.title}
                   onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [editingNode.id]: { ...editingNode, title: e.target.value } }, lastModified: Date.now() })}
-                  className="bg-transparent text-base font-bold text-white min-w-0 focus:outline-none border-b border-transparent focus:border-indigo-500"
+                  className="bg-transparent text-base font-bold text-white min-w-0 focus:outline-none border-b border-transparent focus:border-indigo-500 flex-1"
                   placeholder="Scene title..." />
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 ml-3">
                 <select value={editingNode.sceneId || "unassigned"}
                   onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [editingNode.id]: { ...editingNode, sceneId: e.target.value === "unassigned" ? undefined : e.target.value } }, lastModified: Date.now() })}
-                  className="bg-slate-800 border border-slate-700 text-[10px] text-slate-300 rounded-lg p-1.5 cursor-pointer max-w-[150px]">
+                  className="bg-slate-800 border border-slate-700 text-[10px] text-slate-300 rounded-lg p-1.5 cursor-pointer max-w-[130px]">
                   <option value="unassigned">📂 Root</option>
                   {(project.scenes || []).map(s => <option key={s.id} value={s.id}>📂 {s.name}</option>)}
                 </select>
@@ -994,7 +999,7 @@ export default function FlowchartCanvas({
               </div>
             </div>
 
-            {/* Scrollable BlockEditor */}
+            {/* Scrollable editor body */}
             <div className="flex-1 overflow-y-auto p-5">
               <BlockEditor
                 project={project}
