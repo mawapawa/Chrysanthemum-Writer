@@ -179,10 +179,8 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
     insertRange.deleteContents();
     insertRange.insertNode(fragment);
 
-    // Move cursor after the inserted badge
-    const lastInserted = fragment.lastChild || fragment;
-    insertRange.setStartAfter(lastInserted);
-    insertRange.collapse(true);
+    // Collapse to end — safely positions cursor after inserted content
+    insertRange.collapse(false);
     const sel = window.getSelection();
     if (sel) { sel.removeAllRanges(); sel.addRange(insertRange); }
     savedRangeRef.current = insertRange.cloneRange();
@@ -230,15 +228,27 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
     syncBlocks();
   }, [syncBlocks]);
 
-  // Command palette selection
+  // Command palette selection — insert badge and open editor
   const handleCommandSelect = useCallback((action: BlockAction) => {
     const block = createDefaultBlock(action, project, onCreateNode);
     if (block) {
       insertBadgeAtCursor(block);
+      // Open the editor popup for the newly inserted badge
+      const editorEl = editorRef.current;
+      if (editorEl) {
+        const badges = editorEl.querySelectorAll<HTMLSpanElement>("[data-block]");
+        const lastBadge = badges[badges.length - 1];
+        if (lastBadge) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(lastBadge.getAttribute("data-block")!)) as SceneBlock;
+            const rect = lastBadge.getBoundingClientRect();
+            setEditingBadge({ block: parsed, index: 0, x: rect.right + 8, y: rect.top });
+          } catch { /* ignore */ }
+        }
+      }
     }
     setCommandMode(false);
     setCommandText("");
-    if (editorRef.current) editorRef.current.focus();
   }, [project, onCreateNode, insertBadgeAtCursor]);
 
   // Palette open — use mousedown to save range BEFORE focus moves
@@ -422,13 +432,13 @@ function BadgeEditor({ block, project, onSave, onDelete, onCancel, onCreateNode 
         <span className="text-[10px] font-bold text-slate-400 uppercase">{label}</span>
         <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer text-xs">✕</button>
       </div>
-      <SimpleFields key={block.type} block={block} project={project} onSave={onSave} onDelete={onDelete} onCreateNode={onCreateNode} />
+      <SimpleFields key={block.type} block={block} project={project} onSave={onSave} onDelete={onDelete} onCancel={onCancel} onCreateNode={onCreateNode} />
     </div>
   );
 }
 
-function SimpleFields({ block, project, onSave, onDelete, onCreateNode }: {
-  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onDelete: () => void; onCreateNode?: () => string;
+function SimpleFields({ block, project, onSave, onDelete, onCancel, onCreateNode }: {
+  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onDelete: () => void; onCancel: () => void; onCreateNode?: () => string;
 }) {
   const onChange = (patch: Partial<SceneBlock>) => {
     const merged = { ...block, ...patch } as SceneBlock;
