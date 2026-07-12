@@ -52,6 +52,18 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
         endingType = block.endingType;
         endingName = block.endingName;
         break;
+      // New block types — preserved in the blocks array, not mapped to legacy fields
+      case "flag":
+      case "conditional":
+      case "bgm":
+      case "sfx":
+      case "background":
+      case "delay":
+      case "itemEffect":
+      case "statDisplay":
+      case "entity":
+      case "condition":
+        break;
     }
   }
 

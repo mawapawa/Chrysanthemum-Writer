@@ -79,8 +79,47 @@ export default function PlaytestSimulator({
 
     // Trigger immediate entry effects of starting node
     const startingNode = project.nodes[startNodeId];
-    if (startingNode && startingNode.statChanges.length > 0) {
-      applyStatChanges(startingNode.statChanges, initialVars);
+    if (startingNode) {
+      if (startingNode.statChanges.length > 0) {
+        applyStatChanges(startingNode.statChanges, initialVars);
+      }
+      processNodeBlocks(startingNode, initialVars, []);
+    }
+  };
+
+  const processNodeBlocks = (n: any, currentVars: Record<string, any>, currentInventory: string[]) => {
+    if (!n.blocks) return;
+    const newLogs: typeof logs = [];
+    let updatedVars = { ...currentVars };
+    let updatedInventory = [...currentInventory];
+
+    for (const block of n.blocks) {
+      if (block.type === "flag") {
+        updatedVars[block.flagName] = block.flagValue;
+        newLogs.push({ text: `🚩 ${block.flagName} = ${block.flagValue}`, type: "set" as const });
+      } else if (block.type === "itemEffect") {
+        if (block.action === "give") {
+          updatedInventory.push(block.itemName);
+          newLogs.push({ text: `🎒 + ${block.itemName}`, type: "set" as const });
+        } else {
+          updatedInventory = updatedInventory.filter(i => i !== block.itemName);
+          newLogs.push({ text: `🎒 - ${block.itemName}`, type: "set" as const });
+        }
+      } else if (block.type === "bgm") {
+        newLogs.push({ text: `🎵 BGM: ${block.trackName}`, type: "set" as const });
+      } else if (block.type === "sfx") {
+        newLogs.push({ text: `💥 SFX: ${block.soundName}`, type: "set" as const });
+      } else if (block.type === "background") {
+        newLogs.push({ text: `🖼️ BG: ${block.asset}`, type: "set" as const });
+      } else if (block.type === "delay") {
+        newLogs.push({ text: `⏳ Pause ${block.seconds}s`, type: "set" as const });
+      }
+    }
+
+    if (newLogs.length > 0) {
+      setVars(updatedVars);
+      setPlayerInventory(updatedInventory);
+      setLogs((prev) => [...newLogs, ...prev].slice(0, 20));
     }
   };
 
@@ -274,6 +313,7 @@ export default function PlaytestSimulator({
     setLogs((prev) => [...allLogs, ...prev].slice(0, 20));
     setCurrentNodeId(choice.targetNodeId);
     setLineIdx(0);
+    processNodeBlocks(nextNode, tempVars, tempInventory);
 
     // Story beat auto-trigger check
     const triggeredNode = Object.values(project.nodes).find(n => {
@@ -733,8 +773,12 @@ export default function PlaytestSimulator({
                       <button
                         onClick={() => {
                           setHistory([...history, { nodeId: currentNodeId, variables: { ...vars } }]);
-                          setCurrentNodeId(node.continueToNodeId!);
-                          setLineIdx(0);
+                          const next = project.nodes[node.continueToNodeId!];
+                          if (next) {
+                            setCurrentNodeId(node.continueToNodeId!);
+                            setLineIdx(0);
+                            processNodeBlocks(next, vars, playerInventory);
+                          }
                         }}
                         className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105 cursor-pointer flex items-center gap-2"
                       >
