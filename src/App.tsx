@@ -413,7 +413,7 @@ export default function App() {
     setIsProjectsModalOpen(false);
   };
 
-  const handleExportFolderJSON = (sceneId?: string) => {
+  const handleExportFolderJSON = async (sceneId?: string) => {
     let exportData: any;
     let fileName: string;
 
@@ -440,13 +440,30 @@ export default function App() {
       fileName = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_full_storyboard.json`;
     }
 
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", fileName);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    const content = JSON.stringify(exportData, null, 2);
+
+    // Try native file save dialog (Chromium File System Access API)
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{
+          description: "JSON File",
+          accept: { "application/json": [".json"] },
+        }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+    } catch {
+      // Fallback: data URI download
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(content);
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", fileName);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -4,6 +4,7 @@ import {
   Plus, MessageSquare, FileText, Activity, BarChart3,
   GitBranch, UserCheck, Filter, Flag, ArrowRight, X
 } from "lucide-react";
+import ScriptEditor from "./ScriptEditor";
 
 interface BlockEditorProps {
   project: VNProject;
@@ -33,33 +34,38 @@ function DialogueEdit({ block, project, onSave, onCancel }: {
 }) {
   const [speaker, setSpeaker] = useState(block.speaker);
   const [expression, setExpression] = useState(block.expression || "Neutral");
-  const [text, setText] = useState(block.text);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  const [html, setHtml] = useState(block.text ? `<p>${block.text}</p>` : "");
   const entity = project.entities.find(e => e.name === speaker);
   const tones = entity?.expressions?.length ? entity.expressions : DEFAULT_EXPRESSIONS;
+
+  const save = useCallback(() => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const plainText = doc.body.textContent || "";
+    if (plainText.trim()) onSave({ type: "dialogue", speaker, expression, text: plainText.trim() });
+  }, [html, speaker, expression, onSave]);
+
   return (
-    <div className="flex items-start gap-1.5 my-0.5" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-      <div className="flex flex-col gap-1 flex-1">
-        <div className="flex gap-1.5">
-          <select value={speaker} onChange={e => { setSpeaker(e.target.value); setExpression("Neutral"); }}
-            className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
-            <option value="Narrator">Narrator</option>
-            {project.entities.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-          </select>
-          <select value={expression} onChange={e => setExpression(e.target.value)}
-            className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
-            {tones.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+    <div className="flex flex-col gap-1 my-0.5">
+      <div className="flex gap-1.5">
+        <select value={speaker} onChange={e => { setSpeaker(e.target.value); setExpression("Neutral"); }}
+          className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+          <option value="Narrator">Narrator</option>
+          {project.entities.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+        </select>
+        <select value={expression} onChange={e => setExpression(e.target.value)}
+          className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer">
+          {tones.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden">
+        <div className="bg-slate-950">
+          <ScriptEditor initialContent={html} onChange={setHtml} placeholder="Write dialogue..." />
         </div>
-        <textarea ref={ref} value={text} onChange={e => setText(e.target.value)} rows={1}
-          className="bg-slate-800 border border-slate-700 text-xs rounded p-1.5 text-white w-full focus:outline-none focus:border-indigo-500 resize-none"
-          onKeyDown={e => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (text.trim()) onSave({ type: "dialogue", speaker, expression, text: text.trim() }); }
-            if (e.key === "Backspace" && !text) onCancel();
-          }}
-          onBlur={() => { if (text.trim()) onSave({ type: "dialogue", speaker, expression, text: text.trim() }); else onCancel(); }}
-        />
+      </div>
+      <div className="flex gap-1 justify-end">
+        <button onClick={save} className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white rounded cursor-pointer">Save</button>
+        <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Cancel</button>
       </div>
     </div>
   );
@@ -68,19 +74,27 @@ function DialogueEdit({ block, project, onSave, onCancel }: {
 function NarrativeEdit({ block, onSave, onCancel }: {
   block: SceneBlock & { type: "narrative" }; onSave: (b: SceneBlock) => void; onCancel: () => void;
 }) {
-  const [text, setText] = useState(block.text);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  const [html, setHtml] = useState(block.text ? `<p>${block.text}</p>` : "");
+
+  const save = useCallback(() => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const plainText = doc.body.textContent || "";
+    if (plainText.trim()) onSave({ type: "narrative", text: plainText.trim() });
+  }, [html, onSave]);
+
   return (
-    <textarea ref={ref} value={text} onChange={e => setText(e.target.value)} rows={1}
-      className="bg-slate-800 border border-slate-700 text-xs rounded p-1.5 text-slate-200 w-full focus:outline-none focus:border-indigo-500 resize-none my-0.5"
-      onKeyDown={e => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (text.trim()) onSave({ type: "narrative", text: text.trim() }); }
-        if (e.key === "Escape") onCancel();
-        if (e.key === "Backspace" && !text) onCancel();
-      }}
-      onBlur={() => { if (text.trim()) onSave({ type: "narrative", text: text.trim() }); else onCancel(); }}
-    />
+    <div className="my-0.5">
+      <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden">
+        <div className="bg-slate-950">
+          <ScriptEditor initialContent={html} onChange={setHtml} placeholder="Write narrative..." />
+        </div>
+      </div>
+      <div className="flex gap-1 justify-end mt-1">
+        <button onClick={save} className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white rounded cursor-pointer">Save</button>
+        <button onClick={onCancel} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded cursor-pointer">Cancel</button>
+      </div>
+    </div>
   );
 }
 
@@ -195,98 +209,6 @@ function InlineChoiceForm({ project, onSave, onCancel, onCreateNode }: {
   );
 }
 
-function SimpleForm({ action, project, onSave, onCancel, onCreateNode }: {
-  action: BlockAction; project: VNProject; onSave: (b: SceneBlock) => void; onCancel: () => void; onCreateNode?: () => string;
-}) {
-  switch (action) {
-    case "choice": return <InlineChoiceForm project={project} onSave={onSave} onCancel={onCancel} onCreateNode={onCreateNode} />;
-    case "effect": {
-      const [op, setOp] = useState("+" as const); const [val, setVal] = useState(0); const [name, setName] = useState("");
-      return (
-        <div className="flex items-center gap-1 py-1 flex-wrap" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-          <select value={op} onChange={e => setOp(e.target.value as any)} className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white w-10 text-center cursor-pointer"><option value="+">+</option><option value="-">−</option><option value="=">=</option></select>
-          <input type="number" value={val} onChange={e => setVal(Number(e.target.value))} className="w-14 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white text-center focus:outline-none focus:border-indigo-500" autoFocus
-            onKeyDown={e => { if (e.key === "Enter" && name.trim()) onSave({ type: "effect", operation: op, value: val, variableName: name.trim() }); }} />
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="stat" list="sf-tl"
-            className="w-24 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500" />
-          <datalist id="sf-tl">{project.trackers.map(t => <option key={t.id} value={t.name} />)}</datalist>
-          <button onClick={() => { if (name.trim()) onSave({ type: "effect", operation: op, value: val, variableName: name.trim() }); }} className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded cursor-pointer">add</button>
-        </div>
-      );
-    }
-    case "continue": {
-      const [targetId, setTargetId] = useState(""); const allNodes = Object.values(project.nodes).filter(n => n.nodeType === "story" || !n.nodeType);
-      return (
-        <div className="flex items-center gap-1 py-1 flex-wrap" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-          <select value={targetId} onChange={e => setTargetId(e.target.value)} autoFocus
-            className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[140px]"
-            onKeyDown={e => { if (e.key === "Enter" && targetId) onSave({ type: "continue", targetNodeId: targetId }); }}>
-            <option value="">→ target</option>
-            {allNodes.map(n => <option key={n.id} value={n.id}>{n.title.substring(0, 20)}</option>)}
-            {onCreateNode && <option value="__new__">+ New scene</option>}
-          </select>
-          <button onClick={() => { if (targetId) onSave({ type: "continue", targetNodeId: targetId }); }} className="text-[10px] bg-teal-600 text-white px-2 py-0.5 rounded cursor-pointer">add</button>
-        </div>
-      );
-    }
-    case "entity": {
-      const [entityId, setEntityId] = useState("");
-      return (
-        <div className="flex items-center gap-1 py-1 flex-wrap" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-          <select value={entityId} onChange={e => setEntityId(e.target.value)} autoFocus
-            className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[140px]"
-            onKeyDown={e => { if (e.key === "Enter" && entityId) onSave({ type: "entity", entityId }); }}>
-            <option value="">select entity</option>
-            {project.entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-          <button onClick={() => { if (entityId) onSave({ type: "entity", entityId }); }} className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded cursor-pointer">add</button>
-        </div>
-      );
-    }
-    case "ending": {
-      const [endingType, setEndingType] = useState("NORMAL" as any); const [endingName, setEndingName] = useState("");
-      return (
-        <div className="flex items-center gap-1 py-1 flex-wrap" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-          <select value={endingType} onChange={e => setEndingType(e.target.value)} autoFocus className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer"><option value="GOOD">Good</option><option value="BAD">Bad</option><option value="NORMAL">Normal</option><option value="NEUTRAL">Neutral</option></select>
-          <input value={endingName} onChange={e => setEndingName(e.target.value)} placeholder="ending name"
-            className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500"
-            onKeyDown={e => { if (e.key === "Enter") onSave({ type: "ending", endingType, endingName: endingName.trim() || undefined }); }} />
-          <button onClick={() => onSave({ type: "ending", endingType, endingName: endingName.trim() || undefined })} className="text-[10px] bg-rose-600 text-white px-2 py-0.5 rounded cursor-pointer">add</button>
-        </div>
-      );
-    }
-    case "statDisplay": {
-      const [name, setName] = useState("");
-      return (
-        <div className="flex items-center gap-1 py-1 flex-wrap" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="stat name" list="sf-sd" autoFocus
-            className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white focus:outline-none focus:border-indigo-500"
-            onKeyDown={e => { if (e.key === "Enter" && name.trim()) onSave({ type: "statDisplay", variableName: name.trim() }); }} />
-          <datalist id="sf-sd">{project.trackers.map(t => <option key={t.id} value={t.name} />)}</datalist>
-          <button onClick={() => { if (name.trim()) onSave({ type: "statDisplay", variableName: name.trim() }); }} className="text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded cursor-pointer">add</button>
-        </div>
-      );
-    }
-    case "condition": {
-      const [source, setSource] = useState("tracker" as const); const [targetId, setTargetId] = useState(""); const [op, setOp] = useState(">="); const [val, setVal] = useState(1);
-      return (
-        <div className="flex items-center gap-1 py-1 flex-wrap" onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }}>
-          <select value={source} onChange={e => setSource(e.target.value as any)} autoFocus className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer"><option value="tracker">Tracker</option><option value="flag">Flag</option></select>
-          {source === "tracker" ? (
-            <><select value={targetId} onChange={e => setTargetId(e.target.value)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[100px]"><option value="">stat</option>{project.trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-              <select value={op} onChange={e => setOp(e.target.value)} className="bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white w-12 text-center cursor-pointer"><option value=">=">≥</option><option value="<=">≤</option><option value=">">&gt;</option><option value="<">&lt;</option><option value="==">=</option><option value="!=">≠</option></select>
-              <input type="number" value={val} onChange={e => setVal(Number(e.target.value))} className="w-12 bg-slate-800 border border-slate-700 text-xs rounded p-1 text-white text-center" /></>
-          ) : (
-            <select value={targetId} onChange={e => setTargetId(e.target.value)} className="bg-slate-800 border border-slate-700 text-[11px] rounded p-1 text-slate-200 cursor-pointer max-w-[100px]"><option value="">flag</option>{project.flags.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
-          )}
-          <button onClick={() => { if (targetId) onSave({ type: "condition", source, targetId, ...(source === "tracker" ? { operator: op, compareValue: val } : {}) }); }} className="text-[10px] bg-rose-600 text-white px-2 py-0.5 rounded cursor-pointer">add</button>
-        </div>
-      );
-    }
-    default: return null;
-  }
-}
-
 function RenderedBlock({ block, project }: { block: SceneBlock; project?: VNProject }) {
   switch (block.type) {
     case "dialogue":
@@ -320,12 +242,12 @@ function RenderedBlock({ block, project }: { block: SceneBlock; project?: VNProj
 export default function BlockEditor({ project, blocks, onChange, onCreateNode }: BlockEditorProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [newForm, setNewForm] = useState<BlockAction | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const addBlock = useCallback((block: SceneBlock) => {
-    onChange([...blocks, block]);
-    setNewForm(null);
+  const insertBlock = useCallback((block: SceneBlock) => {
+    const next = [...blocks, block];
+    onChange(next);
+    setEditingIndex(next.length - 1);
     setPaletteOpen(false);
   }, [blocks, onChange]);
 
@@ -341,11 +263,26 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
     setEditingIndex(null);
   }, [blocks, onChange]);
 
+  const handlePaletteSelect = useCallback((action: BlockAction) => {
+    let newBlock: SceneBlock;
+    switch (action) {
+      case "dialogue": newBlock = { type: "dialogue", speaker: "Narrator", text: "" }; break;
+      case "narrative": newBlock = { type: "narrative", text: "" }; break;
+      case "effect": newBlock = { type: "effect", variableName: "", operation: "+", value: 0 }; break;
+      case "statDisplay": newBlock = { type: "statDisplay", variableName: "" }; break;
+      case "choice": newBlock = { type: "choice", text: "", targetNodeId: "" }; break;
+      case "entity": newBlock = { type: "entity", entityId: "" }; break;
+      case "condition": newBlock = { type: "condition", source: "tracker", targetId: "" }; break;
+      case "continue": newBlock = { type: "continue", targetNodeId: "" }; break;
+      case "ending": newBlock = { type: "ending", endingType: "NORMAL" }; break;
+    }
+    insertBlock(newBlock);
+  }, [insertBlock]);
+
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setEditingIndex(null);
-        setNewForm(null);
         setPaletteOpen(false);
       }
     };
@@ -355,7 +292,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
 
   return (
     <div ref={containerRef} className="text-xs leading-relaxed space-y-0.5">
-      {blocks.length === 0 && !newForm && (
+      {blocks.length === 0 && (
         <div className="py-3 text-center text-slate-500 italic border border-dashed border-slate-800 rounded">
           No content yet. Click + to add.
         </div>
@@ -384,19 +321,13 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
         </div>
       ))}
 
-      {newForm && (
-        <div className="py-0.5">
-          <SimpleForm action={newForm} project={project} onSave={addBlock} onCancel={() => setNewForm(null)} onCreateNode={onCreateNode} />
-        </div>
-      )}
-
       <div className="relative pt-1">
         {paletteOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPaletteOpen(false)} />
             <div className="absolute bottom-full right-0 mb-1 z-50 flex flex-row-reverse gap-1 flex-wrap justify-end">
               {BLOCK_ACTIONS.map(action => (
-                <button key={action.key} onClick={() => { setNewForm(action.key); setPaletteOpen(false); }}
+                <button key={action.key} onClick={() => { handlePaletteSelect(action.key); }}
                   className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-bold rounded-lg border border-slate-700 transition-all cursor-pointer">
                   {action.icon}{action.label}
                 </button>

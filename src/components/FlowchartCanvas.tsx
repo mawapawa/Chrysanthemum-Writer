@@ -158,6 +158,17 @@ export default function FlowchartCanvas({
   // Trigger state update to force line redraws when elements render or move
   const [, forceUpdate] = useState({});
 
+  // Close expanded editor on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedNodeId) {
+        onSelectNode(null);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [selectedNodeId, onSelectNode]);
+
   useEffect(() => {
     // Redraw connections when project updates
     forceUpdate({});
@@ -447,7 +458,11 @@ export default function FlowchartCanvas({
       }
     }
 
-    // Place location/encounter nodes next to the story node that links to them
+    // Place location/encounter nodes in their own lane below all story nodes
+    const maxStoryY = Math.max(...Object.values(storyPositions).map(p => p.y), 0) + 100;
+    const maxStoryX = Math.max(...Object.values(storyPositions).map(p => p.x), 0) + 100;
+    const nonStoryLaneY = isVert ? 120 : maxStoryY;
+    const nonStoryLaneX = isVert ? maxStoryX : 80;
     const placedNonStory = new Set<string>();
     for (const node of Object.values(project.nodes) as StoryNode[]) {
       if (!node.nodeType || node.nodeType === "story") continue;
@@ -455,27 +470,11 @@ export default function FlowchartCanvas({
       if (placedNonStory.has(node.id)) continue;
       placedNonStory.add(node.id);
 
-      // Find the parent story node that points to this one
-      const parent = Object.values(project.nodes).find(n =>
-        (n.choices?.some(c => c.targetNodeId === node.id) || n.continueToNodeId === node.id)
-      );
-      const parentPos = parent ? storyPositions[parent.id] : null;
-
-      const typeOffset = node.nodeType === "location" ? 1 : 2;
-      if (parentPos) {
-        if (isVert) {
-          updatedNodes[node.id] = { ...node, position: { x: parentPos.x + typeOffset * 280, y: parentPos.y } };
-        } else {
-          updatedNodes[node.id] = { ...node, position: { x: parentPos.x, y: parentPos.y + typeOffset * 200 } };
-        }
+      const typeOffset = node.nodeType === "location" ? 0 : 1;
+      if (isVert) {
+        updatedNodes[node.id] = { ...node, position: { x: nonStoryLaneX + typeOffset * 320, y: nonStoryLaneY + (placedNonStory.size - 1) * 220 } };
       } else {
-        // Orphan non-story node
-        const orphanIdx = Array.from(placedNonStory).indexOf(node.id);
-        if (isVert) {
-          updatedNodes[node.id] = { ...node, position: { x: 400 + typeOffset * 280, y: orphanIdx * 220 + 120 } };
-        } else {
-          updatedNodes[node.id] = { ...node, position: { x: orphanIdx * 320 + 80, y: 240 + typeOffset * 200 } };
-        }
+        updatedNodes[node.id] = { ...node, position: { x: nonStoryLaneX + (placedNonStory.size - 1) * 320, y: nonStoryLaneY + typeOffset * 240 } };
       }
     }
 
@@ -817,9 +816,18 @@ export default function FlowchartCanvas({
                     </div>
                   </div>
 
-                  <p className="text-[10px] text-slate-400 line-clamp-3 mb-2 leading-relaxed">
-                    {node.description || <span className="italic opacity-60">No plot details set yet.</span>}
-                  </p>
+                  {isSelected ? (
+                    <textarea
+                      value={node.description}
+                      onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [node.id]: { ...node, description: e.target.value } }, lastModified: Date.now() })}
+                      className="w-full bg-transparent text-[10px] text-slate-300 mb-2 leading-relaxed resize-none focus:outline-none border border-transparent focus:border-slate-600 rounded p-1"
+                      rows={2} placeholder="Scene summary..."
+                    />
+                  ) : (
+                    <p className="text-[10px] text-slate-400 line-clamp-3 mb-2 leading-relaxed">
+                      {node.description || <span className="italic opacity-60">No plot details set yet.</span>}
+                    </p>
+                  )}
 
                   {node.nodeType === "location" && node.locationData && (
                     <div className="mt-2 space-y-0.5">
@@ -863,16 +871,11 @@ export default function FlowchartCanvas({
                     </div>
                   )}
 
-                  {/* Connect points indicator — choice creation moved to BlockEditor */}
-                  <div className="text-[9px] font-mono font-bold text-slate-500 border-t border-slate-700/50 pt-2 mt-2 -mx-3 -mb-3 px-3 pb-2.5 bg-slate-800/40">
-                    {node.choices.length} Choice branches
-                  </div>
-
                   {/* Expanded editor — shown when selected */}
                   {isSelected && (
                     <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-slate-500">Scene Content</span>
+                        <span className="text-[9px] font-mono text-slate-500">Press Esc or click canvas to close</span>
                         <button onClick={() => onSelectNode(null)}
                           className="p-0.5 text-slate-500 hover:text-white cursor-pointer">
                           <X className="w-3 h-3" />

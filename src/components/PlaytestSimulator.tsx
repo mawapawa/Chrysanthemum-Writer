@@ -327,18 +327,18 @@ export default function PlaytestSimulator({
   const totalLines = node.dialogueLines?.length ?? 0;
   const activeLine = node.dialogueLines?.[lineIdx] ?? null;
 
-  // Sequential block processing — determine ending state
-  const isOnLastLine = !hasDialogue || lineIdx === totalLines - 1;
-  const endingBlock = (node.blocks || []).find((b): b is SceneBlock & { type: "ending" } => b.type === "ending");
-  const showEndingNow = !!endingBlock && isOnLastLine && (node.choices.length === 0 || (!hasDialogue || lineIdx === totalLines - 1)) && !node.choices.some(c => !c.targetNodeId);
-  const activeEndingType = endingBlock?.endingType || node.endingType;
-  const activeEndingName = endingBlock?.endingName || node.endingName;
-
   // Pre-compute visible choices — single evaluation pass
   const availableChoices = node.choices.filter((choice) => {
     const evalResult = checkChoiceCondition(choice);
     return evalResult.passed || showLockedChoices;
   });
+
+  // Sequential block processing — determine ending state
+  const isOnLastLine = !hasDialogue || lineIdx === totalLines - 1;
+  const endingBlock = (node.blocks || []).find((b): b is SceneBlock & { type: "ending" } => b.type === "ending");
+  const showEndingNow = !!endingBlock && isOnLastLine && availableChoices.length === 0;
+  const activeEndingType = endingBlock?.endingType || node.endingType;
+  const activeEndingName = endingBlock?.endingName || node.endingName;
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 divide-y md:divide-y-0 md:divide-x divide-slate-800" id="vn-player-screen">
