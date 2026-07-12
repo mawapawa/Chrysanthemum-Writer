@@ -13,11 +13,34 @@ interface BlockEditorProps {
   onCreateNode?: () => string;
 }
 
+// Check if a block has meaningful content
+function blockHasContent(b: SceneBlock): boolean {
+  switch (b.type) {
+    case "dialogue": return b.text.trim().length > 0;
+    case "narrative": return b.text.trim().length > 0;
+    case "effect": return b.variableName.trim().length > 0;
+    case "statDisplay": return b.variableName.trim().length > 0;
+    case "choice": return b.text.trim().length > 0 && b.targetNodeId.length > 0;
+    case "entity": return b.entityId.length > 0;
+    case "condition": return b.condition.targetId.length > 0;
+    case "continue": return b.targetNodeId.length > 0;
+    case "ending": return true; // always render
+    case "flag": return b.flagName.trim().length > 0;
+    case "bgm": return b.trackName.trim().length > 0;
+    case "sfx": return b.soundName.trim().length > 0;
+    case "background": return b.asset.trim().length > 0;
+    case "delay": return b.seconds > 0;
+    case "itemEffect": return b.itemName.trim().length > 0;
+    default: return true;
+  }
+}
+
 // Convert blocks to TipTap HTML
 function blocksToHTML(blocks: SceneBlock[], project: VNProject): string {
   const paragraphs: string[] = [];
   let para: string[] = [];
   for (const b of blocks) {
+    if (!blockHasContent(b)) continue; // Skip empty blocks
     if (b.type === "narrative") {
       para.push(escapeHTML(b.text));
     } else {

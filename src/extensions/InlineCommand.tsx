@@ -6,6 +6,7 @@ export interface InlineCommandAttrs {
   type: string;
   label: string;
   isFinalized: boolean;
+  blockData: string; // JSON of full SceneBlock for round-tripping
 }
 
 export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineCommandAttrs) => void }>({
@@ -21,21 +22,36 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
       type: { default: "" },
       label: { default: "" },
       isFinalized: { default: false },
+      blockData: { default: "" },
     };
   },
 
   parseHTML() {
-    return [{ tag: "span[data-inline-command]" }];
+    return [{
+      tag: "span[data-block]",
+      getAttrs: (el) => {
+        if (typeof el === "string") return false;
+        const blockAttr = (el as HTMLElement).getAttribute("data-block");
+        if (!blockAttr) return false;
+        try {
+          const parsed = JSON.parse(decodeURIComponent(blockAttr));
+          return { type: parsed.type || "", label: "", isFinalized: true };
+        } catch {
+          return false;
+        }
+      },
+    }];
   },
 
   renderHTML({ node }) {
     const attrs = node.attrs as unknown as InlineCommandAttrs;
     if (attrs.isFinalized) {
       const color = commandColor(attrs.type);
+      const data = attrs.blockData || encodeURIComponent(JSON.stringify({ type: attrs.type, label: attrs.label }));
       return [
         "span",
         {
-          "data-inline-command": "",
+          "data-block": data,
           class: `inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${color} border`,
           style: "user-select: none; cursor: default; vertical-align: middle;",
         },
@@ -210,14 +226,15 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
 
       const steps = COMMAND_STEPS[attrs.type];
       if (!steps) {
-        finalize(attrs.type, newValues.filter(Boolean).join(" "));
+        const full = newValues.filter(Boolean).join(" ");
+        finalize(attrs.type, full, buildBlockData(attrs.type, newValues));
         return;
       }
 
       if (step >= steps.length - 1) {
         // Final step — build label and finalize
         const label = buildLabel(attrs.type, newValues);
-        finalize(attrs.type, label);
+        finalize(attrs.type, label, buildBlockData(attrs.type, newValues));
       } else {
         setStep(s => s + 1);
         setCurrentInput("");
@@ -245,8 +262,10 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
     }
   }, [currentInput, values, step, attrs.type, attrs.isFinalized]);
 
-  const finalize = useCallback((type: string, label: string) => {
-    updateAttributes({ type, label, isFinalized: true });
+  const finalize = useCallback((type: string, label: string, blockData?: string) => {
+    const attrs: Record<string, any> = { type, label, isFinalized: true };
+    if (blockData) attrs.blockData = blockData;
+    updateAttributes(attrs);
     // Move cursor after the badge
     const pos = getPos();
     if (typeof pos === "number") {
@@ -317,4 +336,26 @@ function buildLabel(type: string, values: string[]): string {
     case "item": return `${values[0]} ${values[1] || ""}`;
     default: return values.filter(Boolean).join(" ");
   }
+}
+
+function buildBlockData(type: string, values: string[]): string {
+  // Build a proper SceneBlock from the command input values
+  let block: Record<string, any> = { type };
+  switch (type) {
+    case "stat": block.variableName = values[0] || ""; block.operation = "+"; block.value = parseInt(values[1]) || 0; break;
+    case "flag": block.flagName = values[0] || ""; block.flagValue = values[1] !== "false"; break;
+    case "link": block.text = values[0] || ""; block.targetNodeId = values[1] || ""; break;
+    case "dialogue": block.speaker = values[0] || "Narrator"; block.text = values[1] || ""; break;
+    case "effect": block.operation = values[0] || "+"; block.value = parseInt(values[1]) || 0; block.variableName = values[2] || ""; break;
+    case "condition": block.source = "tracker"; block.targetId = values[0] || ""; block.operator = values[1] || ">="; block.compareValue = parseInt(values[2]) || 1; break;
+    case "redirect": block.targetNodeId = values[0] || ""; break;
+    case "ending": block.endingType = values[0] || "NORMAL"; block.endingName = values[1] || ""; break;
+    case "item": block.action = values[0] || "give"; block.itemName = values[1] || ""; break;
+    case "bgm": block.trackName = values[0] || ""; break;
+    case "sfx": block.soundName = values[0] || ""; break;
+    case "bg": block.asset = values[0] || ""; break;
+    case "delay": block.seconds = parseFloat(values[0]) || 1; break;
+    default: block.label = values.join(" "); break;
+  }
+  return encodeURIComponent(JSON.stringify(block));
 }
