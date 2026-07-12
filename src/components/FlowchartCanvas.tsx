@@ -170,9 +170,8 @@ export default function FlowchartCanvas({
   // Trigger state update to force line redraws when elements render or move
   const [, forceUpdate] = useState({});
 
-  const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
-
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
 
   // Close focus mode on Escape
   useEffect(() => {
@@ -571,6 +570,10 @@ export default function FlowchartCanvas({
         }}
         id="storyboard-grid"
       >
+        {/* Ambient underglow blobs */}
+        <div className="ambient-blob ambient-blob-1" />
+        <div className="ambient-blob ambient-blob-2" />
+        <div className="ambient-blob ambient-blob-3" />
         {/* SVG Bezier wires connecting choices to target nodes */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full" id="canvas-wires-svg">
           <defs>
@@ -788,16 +791,16 @@ export default function FlowchartCanvas({
                 }}
                 onMouseDown={(e) => { if (!isEditing) handleNodeMouseDown(node.id, e); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
-                className={`node-card pointer-events-auto bg-slate-800 border-2 rounded-xl shadow-xl ${isEditing ? "" : "absolute"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
+                className={`node-card pointer-events-auto glass-card ${isEditing ? "" : "absolute"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
                   isEditing
                     ? "fixed overflow-hidden flex flex-col"
-                    : (draggedNodeId !== node.id ? "transition-all duration-150" : "") + (isSelected ? "" : " overflow-hidden") + " cursor-grab active:cursor-grabbing hover:shadow-2xl"
+                    : (draggedNodeId !== node.id ? "transition-all duration-150" : "") + (isSelected ? "" : " overflow-hidden") + " cursor-grab active:cursor-grabbing"
                 } ${
                   isEditing
-                    ? "border-indigo-500 ring-4 ring-indigo-500/20"
+                    ? "ring-4 ring-indigo-500/20"
                     : isSelected
-                      ? "border-indigo-500 ring-4 ring-indigo-500/20 scale-105"
-                      : "border-slate-700/80 hover:border-slate-600"
+                      ? "selected scale-105"
+                      : ""
                 }`}
                 style={isEditing ? {
                   left: "50%",
