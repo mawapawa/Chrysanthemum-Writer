@@ -130,7 +130,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [commandMode, setCommandMode] = useState(false);
   const [commandText, setCommandText] = useState("");
-  const [editingBadge, setEditingBadge] = useState<{ block: SceneBlock; index: number } | null>(null);
+  const [editingBadge, setEditingBadge] = useState<{ block: SceneBlock; index: number; x: number; y: number } | null>(null);
   const palettePosRef = useRef({ x: 0, y: 0 });
   const savedRangeRef = useRef<Range | null>(null);
   const isInternalUpdate = useRef(false);
@@ -156,28 +156,37 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
   const insertBadgeAtCursor = useCallback((block: SceneBlock) => {
     const range = savedRangeRef.current;
     const el = editorRef.current;
-    if (!el || !range) return;
-    if (!el.contains(range.commonAncestorContainer) && el.contains(range.startContainer)) {
-      // range is in a child
-    } else if (!el.contains(range.commonAncestorContainer)) {
-      // Fallback: append to end
-      const p = document.createElement("p");
-      el.appendChild(p);
-      range.selectNodeContents(p);
-      range.collapse(true);
+    if (!el) {
+      // No editor — append fallback is not possible
+      return;
+    }
+
+    // If no saved range or it's outside the editor, append to end
+    let insertRange: Range;
+    if (range && el.contains(range.commonAncestorContainer)) {
+      insertRange = range;
+    } else {
+      // Append to the end of the editor
+      const lastP = document.createElement("p");
+      el.appendChild(lastP);
+      insertRange = document.createRange();
+      insertRange.selectNodeContents(lastP);
+      insertRange.collapse(true);
     }
 
     const html = blockToBadgeHTML(block, project);
-    const fragment = range.createContextualFragment(html);
-    range.deleteContents();
-    range.insertNode(fragment);
+    const fragment = insertRange.createContextualFragment(html);
+    insertRange.deleteContents();
+    insertRange.insertNode(fragment);
 
     // Move cursor after the inserted badge
-    const newNode = fragment.lastChild || fragment;
-    range.setStartAfter(newNode);
-    range.collapse(true);
+    const lastInserted = fragment.lastChild || fragment;
+    insertRange.setStartAfter(lastInserted);
+    insertRange.collapse(true);
     const sel = window.getSelection();
-    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    if (sel) { sel.removeAllRanges(); sel.addRange(insertRange); }
+    savedRangeRef.current = insertRange.cloneRange();
+
     isInternalUpdate.current = true;
     syncBlocks();
     isInternalUpdate.current = false;
@@ -232,11 +241,16 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
     if (editorRef.current) editorRef.current.focus();
   }, [project, onCreateNode, insertBadgeAtCursor]);
 
-  // Palette open
+  // Palette open — use mousedown to save range BEFORE focus moves
   const openPalette = useCallback(() => {
-    saveRange();
+    // Restore the saved range (from saveRange or from the previous editor focus)
     const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
+    if (sel && savedRangeRef.current) {
+      sel.removeAllRanges();
+      sel.addRange(savedRangeRef.current);
+      const rect = savedRangeRef.current.getBoundingClientRect();
+      palettePosRef.current = { x: rect.left, y: rect.bottom + 4 };
+    } else if (sel && sel.rangeCount > 0) {
       const rect = sel.getRangeAt(0).getBoundingClientRect();
       palettePosRef.current = { x: rect.left, y: rect.bottom + 4 };
     } else {
@@ -255,11 +269,10 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
     e.stopPropagation();
     try {
       const block = JSON.parse(decodeURIComponent(badge.getAttribute("data-block")!)) as SceneBlock;
-      // Find index in blocks
-      const idx = blocks.findIndex(b => JSON.stringify(b) === JSON.stringify(block));
-      setEditingBadge({ block, index: idx >= 0 ? idx : blocks.length });
+      const rect = badge.getBoundingClientRect();
+      setEditingBadge({ block, index: 0, x: rect.right + 8, y: rect.top });
     } catch { /* ignore */ }
-  }, [blocks]);
+  }, []);
 
   // Update a badge after editing
   const handleBadgeUpdate = useCallback((newBlock: SceneBlock) => {
@@ -332,9 +345,9 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
         style={{ minHeight: "150px", maxHeight: "400px" }}
       />
 
-      {/* + button */}
+      {/* + button — mousedown to save selection before focus moves */}
       <div className="flex justify-end mt-1.5">
-        <button onClick={openPalette}
+        <button onMouseDown={(e) => { e.preventDefault(); saveRange(); openPalette(); }}
           className="p-1.5 bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
           title="Insert badge">
           <Plus className="w-4 h-4" />
@@ -373,13 +386,13 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
         </div>
       )}
 
-      {/* Badge editor popover */}
+      {/* Badge editor popover — positioned near the badge */}
       {editingBadge && (
         <div
           className="cm-edit-popup fixed z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 min-w-[260px]"
           style={{
-            left: Math.min(palettePosRef.current.x, window.innerWidth - 300),
-            top: Math.min(palettePosRef.current.y, window.innerHeight - 200),
+            left: Math.min(editingBadge.x, window.innerWidth - 300),
+            top: Math.min(editingBadge.y, window.innerHeight - 250),
           }}
           onMouseDown={(e) => e.preventDefault()}
         >
@@ -409,7 +422,7 @@ function BadgeEditor({ block, project, onSave, onDelete, onCancel, onCreateNode 
         <span className="text-[10px] font-bold text-slate-400 uppercase">{label}</span>
         <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer text-xs">✕</button>
       </div>
-      <SimpleFields block={block} project={project} onSave={onSave} onDelete={onDelete} onCreateNode={onCreateNode} />
+      <SimpleFields key={block.type} block={block} project={project} onSave={onSave} onDelete={onDelete} onCreateNode={onCreateNode} />
     </div>
   );
 }
