@@ -257,11 +257,19 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
 
   if (attrs.isFinalized) {
     const color = commandColor(attrs.type);
+    const handleClick = () => {
+      // Re-open for editing — reset to command selection
+      setStep(0);
+      setValues([]);
+      setCurrentInput("");
+      updateAttributes({ isFinalized: false, type: "", label: "" });
+    };
     return (
       <span
-        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${color} border`}
-        style={{ userSelect: "none", cursor: "default", verticalAlign: "middle" }}
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${color} border cursor-pointer hover:opacity-80 transition-opacity`}
+        style={{ userSelect: "none", verticalAlign: "middle" }}
         contentEditable={false}
+        onClick={handleClick}
       >
         {commandIcon(attrs.type)} {attrs.label}
       </span>
