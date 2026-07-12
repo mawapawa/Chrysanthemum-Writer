@@ -154,36 +154,48 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
 
   // Insert a badge at the saved cursor position
   const insertBadgeAtCursor = useCallback((block: SceneBlock) => {
-    const range = savedRangeRef.current;
     const el = editorRef.current;
-    if (!el) {
-      // No editor — append fallback is not possible
-      return;
-    }
-
-    // If no saved range or it's outside the editor, append to end
-    let insertRange: Range;
-    if (range && el.contains(range.commonAncestorContainer)) {
-      insertRange = range;
-    } else {
-      // Append to the end of the editor
-      const lastP = document.createElement("p");
-      el.appendChild(lastP);
-      insertRange = document.createRange();
-      insertRange.selectNodeContents(lastP);
-      insertRange.collapse(true);
-    }
+    if (!el) return;
 
     const html = blockToBadgeHTML(block, project);
-    const fragment = insertRange.createContextualFragment(html);
-    insertRange.deleteContents();
-    insertRange.insertNode(fragment);
 
-    // Collapse to end — safely positions cursor after inserted content
-    insertRange.collapse(false);
-    const sel = window.getSelection();
-    if (sel) { sel.removeAllRanges(); sel.addRange(insertRange); }
-    savedRangeRef.current = insertRange.cloneRange();
+    try {
+      const range = savedRangeRef.current;
+      // Use insertAdjacentHTML at the cursor position via a text node split
+      if (range && el.contains(range.commonAncestorContainer) && range.startContainer) {
+        // Split the text node at cursor, insert between
+        const textNode = range.startContainer;
+        const offset = range.startOffset;
+        if (textNode.nodeType === Node.TEXT_NODE) {
+          const after = textNode.splitText(offset);
+          const wrapper = document.createElement("span");
+          wrapper.innerHTML = html;
+          // Insert all children of wrapper before `after`
+          while (wrapper.firstChild) {
+            textNode.parentNode?.insertBefore(wrapper.firstChild, after);
+          }
+          // Move cursor after inserted content
+          const sel = window.getSelection();
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.setStartAfter(after.previousSibling || after);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          }
+        } else {
+          // Element node — just append to end of editor
+          el.insertAdjacentHTML("beforeend", html);
+        }
+      } else {
+        // Append to end of editor
+        el.insertAdjacentHTML("beforeend", html);
+      }
+    } catch (e) {
+      // Fallback: append to end
+      console.error("[BlockEditor] insertBadgeAtCursor failed:", e);
+      el.insertAdjacentHTML("beforeend", html);
+    }
 
     isInternalUpdate.current = true;
     syncBlocks();
@@ -437,9 +449,10 @@ function BadgeEditor({ block, project, onSave, onDelete, onCancel, onCreateNode 
   );
 }
 
-function SimpleFields({ block, project, onSave, onDelete, onCancel, onCreateNode }: {
-  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onDelete: () => void; onCancel: () => void; onCreateNode?: () => string;
+function SimpleFields({ block, project, onSave, onDelete, onCancel: _onCancel, onCreateNode }: {
+  block: SceneBlock; project: VNProject; onSave: (b: SceneBlock) => void; onDelete: () => void; onCancel?: () => void; onCreateNode?: () => string;
 }) {
+  const onCancel = _onCancel || (() => {}); // always safe to call
   const onChange = (patch: Partial<SceneBlock>) => {
     const merged = { ...block, ...patch } as SceneBlock;
     onSave(merged);
