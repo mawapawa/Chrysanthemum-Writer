@@ -1,0 +1,754 @@
+{
+  "id": "c589b86c-fc3b-456d-a33d-4ea4500427f0",
+  "schemaVersion": 2,
+  "name": "Cravings",
+  "description": "Date a Cannibal ♥ Or don't.",
+  "startNodeId": "node-start",
+  "lastModified": 1783712612110,
+  "entities": [
+    {
+      "id": "51cbde02-8928-41be-90f0-7cbbb577e433",
+      "displayId": "ENT-001",
+      "name": "Luka",
+      "color": "#3b82f6",
+      "tags": [],
+      "stats": {}
+    },
+    {
+      "id": "dee00a9e-7754-42f4-95ac-5024136421dc",
+      "displayId": "ENT-001",
+      "name": "Hunter",
+      "color": "#10b981",
+      "tags": []
+    },
+    {
+      "id": "28291274-bba3-4a09-9d74-4d70670be851",
+      "displayId": "ENT-002",
+      "name": "Peregrine",
+      "color": "#a855f7",
+      "tags": []
+    },
+    {
+      "id": "a14ad9f1-1d7a-4d19-9962-e6683fa173d8",
+      "displayId": "ENT-003",
+      "name": "Sonja",
+      "color": "#ec4899",
+      "tags": []
+    },
+    {
+      "id": "f9d46ecc-768e-4d49-b799-8b2d5f3ff55f",
+      "displayId": "ENT-005",
+      "name": "KIRA",
+      "color": "#f59e0b",
+      "tags": []
+    },
+    {
+      "id": "ff899d85-ecce-4229-8129-e59614cb8b99",
+      "displayId": "ENT-006",
+      "name": "Fortune Teller",
+      "color": "#ea580c",
+      "tags": []
+    }
+  ],
+  "trackers": [
+    {
+      "id": "16c9443b-77d8-4e17-915d-4b41019a0665",
+      "displayId": "TRK-001",
+      "name": "love_peregrine",
+      "defaultValue": 0
+    },
+    {
+      "id": "5fe25c3c-6418-443e-86b6-6b808a55a9a6",
+      "displayId": "TRK-002",
+      "name": "love_hunter",
+      "defaultValue": 0
+    },
+    {
+      "id": "f6fc0c28-36ee-4278-b48a-5397c0ae7736",
+      "displayId": "TRK-003",
+      "name": "love_sonja",
+      "defaultValue": 0
+    },
+    {
+      "id": "5c595648-50e6-4a01-a993-a5ccc3d8fc77",
+      "displayId": "TRK-005",
+      "name": "mystery_meat",
+      "defaultValue": 0,
+      "description": "tracks how many times player has eaten sonja's meal prep"
+    }
+  ],
+  "flags": [
+    {
+      "id": "e2d0f29c-5fd8-495f-8db3-dc5311d59f7c",
+      "displayId": "FLG-001",
+      "name": "mystery_meat_bangs",
+      "defaultValue": false,
+      "description": "player selects \"yes\" when asked if sonja's meal prep is good"
+    },
+    {
+      "id": "32f23755-57c0-48d7-8736-d068cd094e47",
+      "displayId": "FLG-002",
+      "name": "mystery_meat_sucks",
+      "defaultValue": false,
+      "description": "player selects \"no\" when asked if sonja's meal prep is good"
+    },
+    {
+      "id": "12ee8bc2-ab11-4390-abc8-e27b5cceda21",
+      "displayId": "FLG-001",
+      "name": "achieve_backtobed",
+      "defaultValue": false,
+      "description": "\"Back to Bed\" achievement."
+    }
+  ],
+  "inventory": [],
+  "scenes": [
+    {
+      "id": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "name": "Opening",
+      "color": "border-indigo-500",
+      "order": 0
+    },
+    {
+      "id": "ab5c5f24-d80d-477f-b18f-a9fa2fa3dbf5",
+      "name": "University",
+      "color": "border-indigo-500",
+      "order": 1
+    },
+    {
+      "id": "13e1c840-66ce-40c4-af6e-128589d3ea5d",
+      "name": "Shops",
+      "color": "border-indigo-500",
+      "order": 2
+    },
+    {
+      "id": "999395a6-fdb4-47d4-bc90-6f2aca514370",
+      "name": "Character Spaces",
+      "color": "border-indigo-500",
+      "order": 3
+    }
+  ],
+  "nodes": {
+    "node-start": {
+      "id": "node-start",
+      "title": "The Dream [A]",
+      "description": "Luka has recurring dream about surreal space.\n(SCENE) Completely white for a few seconds before text box appears at the bottom of the screen.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        {
+          "id": "3a11fa3a-ea3a-4389-ba72-5e8b1778d9e7",
+          "speaker": "Narrator",
+          "text": "Light shines down upon me, as if this plane has placed me center stage in a spotlight.",
+          "expression": "Neutral",
+          "formattedText": "<p>Light shines down upon me, as if this plane has placed me center stage in a spotlight.</p>"
+        },
+        {
+          "id": "4b295f69-5801-4b7d-a7a8-415f7d21d8b6",
+          "speaker": "Narrator",
+          "text": "At first, the light was disorienting, alien, but how many times have I walked down this path now?",
+          "expression": "Neutral",
+          "formattedText": "<p>At first, the light was disorienting, alien, but how many times have I walked down this path now?</p>"
+        },
+        {
+          "id": "aadf00c5-f462-4b3f-af50-c77288e541c7",
+          "speaker": "Narrator",
+          "text": "I play a game with myself when I arrive, trying to make connections to visits prior; I never find any.",
+          "expression": "Neutral",
+          "formattedText": "<p>I play a game with myself when I arrive, trying to make connections to visits prior; I never find any.</p>"
+        },
+        {
+          "id": "7c55fb11-ede4-4631-889d-b8ab2bcf18d6",
+          "speaker": "Narrator",
+          "text": "Despite the absurdity of this place, I find myself growing used to it. ",
+          "expression": "Neutral",
+          "formattedText": "<p>Despite the absurdity of this place, I find myself growing used to it. </p>"
+        },
+        {
+          "id": "4682ded8-18fa-44eb-a7dd-a060a87c7297",
+          "speaker": "Narrator",
+          "text": "What was once unknown to me, unsettling… it's become oddly comforting in it's unfamiliarity.",
+          "expression": "Neutral",
+          "formattedText": "<p>What was once unknown to me, unsettling… it's become oddly comforting in it's unfamiliarity.</p>"
+        },
+        {
+          "id": "8ebe3b72-f0eb-4eab-8746-896be0f77812",
+          "speaker": "Narrator",
+          "text": "Does this journey always start in the same place?",
+          "expression": "Neutral",
+          "formattedText": "<p><span data-style=\"whisper\" class=\"text-whisper\">Does this journey always start in the same place?</span></p>"
+        }
+      ],
+      "choices": [
+        {
+          "id": "fe936ffc-9384-4400-a3f9-eebcf0aba984",
+          "text": "Sometimes the colors change.",
+          "targetNodeId": "9dd6fc19-bb96-47b0-ad0b-3f8d82f099d1"
+        },
+        {
+          "id": "4a417000-7985-4bbd-b7eb-e142374c543c",
+          "text": "Sometimes the sun is not as bright.",
+          "targetNodeId": "9dd6fc19-bb96-47b0-ad0b-3f8d82f099d1"
+        },
+        {
+          "id": "4daade1c-79ba-4406-9a59-2b31a696a0cb",
+          "text": "Sometimes there's a distant cry. A cat? A crow?",
+          "targetNodeId": "9dd6fc19-bb96-47b0-ad0b-3f8d82f099d1"
+        }
+      ],
+      "statChanges": [],
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "order": 0
+    },
+    "9dd6fc19-bb96-47b0-ad0b-3f8d82f099d1": {
+      "id": "9dd6fc19-bb96-47b0-ad0b-3f8d82f099d1",
+      "displayId": "SCN-003",
+      "title": "The Dream [B]",
+      "description": "(SCENE) Dots of colour appear, floating around the screen. \nChanges to weird amalgamation of plants; a \"garden\" but not in the traditional sense.\nOnce again changes to \"rose\" bush (glitch/abberation effects?) sitting standalone in the light. ",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        {
+          "id": "920c6390-55e4-4456-9221-fe89be2a9760",
+          "speaker": "Narrator",
+          "text": "Even without seeing them, I know something is there, but I never know what, exactly.",
+          "expression": "Neutral",
+          "formattedText": "<p>Even without seeing them, I know something is there, but I never know what, exactly.</p>"
+        },
+        {
+          "id": "f92f922f-c110-4b3c-adde-116e27d1f9e2",
+          "speaker": "Narrator",
+          "text": "There is one persistence, however. One stable variable in this sea of unquantifiable light.",
+          "expression": "Neutral",
+          "formattedText": "<p>There is one persistence, however. One stable variable in this sea of unquantifiable light.</p>"
+        },
+        {
+          "id": "979fc293-ca84-4568-a9a5-e72dec611718",
+          "speaker": "Narrator",
+          "text": "A garden.",
+          "expression": "Neutral",
+          "formattedText": "<p><span data-style=\"glow\" class=\"text-glow\">A garden.</span></p>"
+        },
+        {
+          "id": "cb9ed697-f76e-4353-83b9-d91d2fb10e18",
+          "speaker": "Narrator",
+          "text": " It looks nothing like the flora near town, or anything I've seen, really. It never looks the same, but somehow I always know that it is what it is.",
+          "expression": "Neutral",
+          "formattedText": "<p> It looks nothing like the flora near town, or anything I've seen, really. It never looks the same, but somehow I always know that it is what it is.</p>"
+        },
+        {
+          "id": "70ad45ca-1343-4bb5-989c-321b9f212474",
+          "speaker": "Narrator",
+          "text": "It is the same, yet not.",
+          "expression": "Neutral",
+          "formattedText": "<p>It is the same, yet not.</p>"
+        },
+        {
+          "id": "122dcf57-29a3-4e33-9262-07b865d33d73",
+          "speaker": "Narrator",
+          "text": "The surreality is somehow refreshing.",
+          "expression": "Neutral",
+          "formattedText": "<p>The surreality is somehow refreshing.</p><p></p>"
+        },
+        {
+          "id": "9970dd8b-1621-4257-acd4-17fd9f32aa93",
+          "speaker": "Narrator",
+          "text": "Against my will, an unknown force urges me forward into the neverending brightness.",
+          "expression": "Neutral",
+          "formattedText": "<p>Against my will, an unknown force urges me forward into the neverending <span data-style=\"glow\" class=\"text-glow\">brightness</span>.</p>"
+        },
+        {
+          "id": "564a5ba7-991b-465a-8ff1-a1da31d1bf20",
+          "speaker": "Narrator",
+          "text": "The unknown begins to make itself knowable, and what was one abstract forms into familiar shapes.",
+          "expression": "Neutral",
+          "formattedText": "<p>The unknown begins to make itself knowable, and what was one abstract forms into familiar shapes.</p>"
+        },
+        {
+          "id": "5ab336e5-6097-4589-be79-4629ce4d7a68",
+          "speaker": "Narrator",
+          "text": "The light, always everywhere and nowhere at once is now before me. I don't need to squint to see what it has become. ",
+          "expression": "Neutral",
+          "formattedText": "<p>The light, always everywhere and nowhere at once is now before me. I don't need to squint to see what it has become. </p><p></p>"
+        },
+        {
+          "id": "8c060495-d0c8-43c0-ab45-cea13ad144c6",
+          "speaker": "Narrator",
+          "text": "This time, without the help of the unseen, I move my hand forward for what feels like an eternity. As the tips of my fingers inch ever closer to the strange flower, I become more aware of myself; inch by inch, my body grows heavy, as if I am not meant to pluck the rose from it's sanctuary. ",
+          "expression": "Neutral",
+          "formattedText": "<p>This time, without the help of the unseen, I move my hand forward for what feels like an eternity. As the tips of my fingers inch ever closer to the strange flower, I become more aware of myself; inch by inch, my body grows heavy, as if I am not meant to pluck the rose from it's sanctuary. </p>"
+        },
+        {
+          "id": "a8d752b3-8a43-47f6-964a-0d98f501de57",
+          "speaker": "Narrator",
+          "text": " Against the screaming unheard but heard that seems to be begging me to stop, all I can think is that I want to take this bloom. I want to give it to xxxxxx. ",
+          "expression": "Neutral",
+          "formattedText": "<p> Against the screaming unheard but heard that seems to be begging me to stop, all I can think is that I want to take this bloom. I want to give it to <span data-style=\"redacted\" class=\"text-redacted\">xxxxxx</span>. </p><p></p>"
+        }
+      ],
+      "choices": [
+        {
+          "id": "5bba88b8-e9b9-4ef4-99fa-69f3371bfa3b",
+          "text": "It's gone. ",
+          "targetNodeId": "56fb7946-1ba4-422e-bfff-0eebc3126a65"
+        },
+        {
+          "id": "d4da3199-5dbf-4140-b8bc-2b1ba8c839a7",
+          "text": "It's been ripped away.",
+          "targetNodeId": "56fb7946-1ba4-422e-bfff-0eebc3126a65"
+        },
+        {
+          "id": "a81ddc0c-4fc8-49f3-b141-c96f7db35db6",
+          "text": "Right before your eyes.",
+          "targetNodeId": "56fb7946-1ba4-422e-bfff-0eebc3126a65"
+        }
+      ],
+      "statChanges": [],
+      "position": {
+        "x": 400,
+        "y": 380
+      },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "order": 2
+    },
+    "56fb7946-1ba4-422e-bfff-0eebc3126a65": {
+      "id": "56fb7946-1ba4-422e-bfff-0eebc3126a65",
+      "displayId": "SCN-001",
+      "title": "The Dream [C]",
+      "description": "(SCENE) Something shoots out from behind Luka and snatches the flower (animated); screen flashes white, then black.\n",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        {
+          "id": "18e22044-f025-44d9-a20c-fbccdc579eb5",
+          "speaker": "Narrator",
+          "text": "I hadn't noticed the break in the relentless light; the swift shadow overhead, as what I could only understand to be an arm, or some kind of... appendage, shoot past my head and into the bush.  ",
+          "expression": "Neutral",
+          "formattedText": "<p>I hadn't noticed the break in the relentless light; the swift shadow overhead, as what I could only understand to be an arm, or some kind of... appendage, shoot past my head and into the bush.  </p>"
+        }
+      ],
+      "choices": [
+        {
+          "id": "2c2cec81-17dd-4b06-91e3-af7fdf82b00d",
+          "text": "Who?",
+          "targetNodeId": "d6a9c30a-03f3-4aa1-b9e8-81ace5cabdd6"
+        },
+        {
+          "id": "a2390062-97ce-4467-89c3-edd7b652181f",
+          "text": "What?",
+          "targetNodeId": "d6a9c30a-03f3-4aa1-b9e8-81ace5cabdd6"
+        },
+        {
+          "id": "6a9e12ed-ab3c-4ae9-9328-29922b46a4a9",
+          "text": "Why?",
+          "targetNodeId": "d6a9c30a-03f3-4aa1-b9e8-81ace5cabdd6"
+        }
+      ],
+      "statChanges": [],
+      "position": {
+        "x": 400,
+        "y": 640
+      },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "order": 3
+    },
+    "c9e07603-91e7-4e2e-a915-8d8e2618b269": {
+      "id": "c9e07603-91e7-4e2e-a915-8d8e2618b269",
+      "title": "Luka's Home",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 120
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "999395a6-fdb4-47d4-bc90-6f2aca514370",
+      "order": 0
+    },
+    "367b7deb-2113-4502-bf07-dbd8a6de3431": {
+      "id": "367b7deb-2113-4502-bf07-dbd8a6de3431",
+      "title": "Gate",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [
+        {
+          "id": "2931cdbf-9cea-4ccc-b614-3c86175dfefb",
+          "text": "Option 1",
+          "targetNodeId": ""
+        }
+      ],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 340
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "ab5c5f24-d80d-477f-b18f-a9fa2fa3dbf5",
+      "order": 0
+    },
+    "a4b56e2a-f1f2-42a3-a888-884aec4024ed": {
+      "id": "a4b56e2a-f1f2-42a3-a888-884aec4024ed",
+      "title": "Hallway",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 560
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "day",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "ab5c5f24-d80d-477f-b18f-a9fa2fa3dbf5",
+      "order": 1
+    },
+    "ed59c570-89bb-4d5d-b149-4387a760edce": {
+      "id": "ed59c570-89bb-4d5d-b149-4387a760edce",
+      "title": "Classroom",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 780
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "day",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "ab5c5f24-d80d-477f-b18f-a9fa2fa3dbf5",
+      "order": 2
+    },
+    "070696a5-0046-466d-9205-ffac5968053d": {
+      "id": "070696a5-0046-466d-9205-ffac5968053d",
+      "title": "Library",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 1000
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "ab5c5f24-d80d-477f-b18f-a9fa2fa3dbf5",
+      "order": 3
+    },
+    "3b2df8dd-42c6-42fd-ab7f-f90a7dc3cbc8": {
+      "id": "3b2df8dd-42c6-42fd-ab7f-f90a7dc3cbc8",
+      "title": "Peregrine's Home",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 1220
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "999395a6-fdb4-47d4-bc90-6f2aca514370",
+      "order": 1
+    },
+    "c1af609d-6d3d-4121-9800-a671a08fb1c2": {
+      "id": "c1af609d-6d3d-4121-9800-a671a08fb1c2",
+      "title": "Hunter's Home",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 1440
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "999395a6-fdb4-47d4-bc90-6f2aca514370",
+      "order": 2
+    },
+    "b0e3dd05-6b09-4b03-9773-10fbe1c3f834": {
+      "id": "b0e3dd05-6b09-4b03-9773-10fbe1c3f834",
+      "title": "Sonja's Home",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 1660
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "999395a6-fdb4-47d4-bc90-6f2aca514370",
+      "order": 3
+    },
+    "440d622a-d5ea-4f29-bbe2-12266ef32dc1": {
+      "id": "440d622a-d5ea-4f29-bbe2-12266ef32dc1",
+      "title": "Bakery",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 1880
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "13e1c840-66ce-40c4-af6e-128589d3ea5d"
+    },
+    "c2aa605d-d36b-4cf9-85ff-38dad1c85a92": {
+      "id": "c2aa605d-d36b-4cf9-85ff-38dad1c85a92",
+      "title": "Bookstore",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 2100
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "13e1c840-66ce-40c4-af6e-128589d3ea5d"
+    },
+    "76f6a38b-f192-4061-a6d3-97d78d4f56fc": {
+      "id": "76f6a38b-f192-4061-a6d3-97d78d4f56fc",
+      "title": "Grocery Store",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 2320
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "13e1c840-66ce-40c4-af6e-128589d3ea5d"
+    },
+    "724ee248-c14d-4f6b-9e98-f1db78102f14": {
+      "id": "724ee248-c14d-4f6b-9e98-f1db78102f14",
+      "title": "Karaoke Bar",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 2540
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "13e1c840-66ce-40c4-af6e-128589d3ea5d"
+    },
+    "649d1560-0d24-41bb-b5e3-953c8c1340cf": {
+      "id": "649d1560-0d24-41bb-b5e3-953c8c1340cf",
+      "title": "Noodle Shop",
+      "description": "A location in your world.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 680,
+        "y": 2760
+      },
+      "isEnding": false,
+      "nodeType": "location",
+      "locationData": {
+        "openTime": "any",
+        "inventory": [],
+        "tags": []
+      },
+      "sceneId": "13e1c840-66ce-40c4-af6e-128589d3ea5d"
+    },
+    "d6a9c30a-03f3-4aa1-b9e8-81ace5cabdd6": {
+      "id": "d6a9c30a-03f3-4aa1-b9e8-81ace5cabdd6",
+      "displayId": "SCN-001",
+      "title": "The Dream [D]",
+      "description": "(SCENE) Dream ends and Luka wakes in bed.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        {
+          "id": "1770e78b-8ce4-4c0f-815a-d909891ddd11",
+          "speaker": "Narrator",
+          "text": "BEEP-BEEP-BEEP-BEEP-BEEP-BEE--",
+          "expression": "Neutral",
+          "formattedText": "<p><span data-style=\"shake\" class=\"animate-shake\">BEEP-BEEP-BEEP-BEEP-BEEP-BEE--</span></p>"
+        },
+        {
+          "id": "5932e87c-a577-4f80-9601-53d9850fd4f7",
+          "speaker": "Narrator",
+          "text": "With a groan, you sit up and swing your legs out from under the covers and over the bed. It's time to get up. ",
+          "expression": "Neutral",
+          "formattedText": "<p>With a groan, you sit up and swing your legs out from under the covers and over the bed. It's time to get up. </p>"
+        },
+        {
+          "id": "9cea92d1-369e-4d56-b88d-73aa31a50135",
+          "speaker": "Narrator",
+          "text": "Class starts soon. You thankfully didn't oversleep, but you're still dead tired... ",
+          "expression": "Neutral",
+          "formattedText": "<p>Class starts soon. You thankfully didn't oversleep, but you're still dead tired... </p>"
+        },
+        {
+          "id": "a14e191d-297d-43a8-b9c0-2844e3359579",
+          "speaker": "Narrator",
+          "text": "You look at your bed, still warm from your body heat. You purse your lips. Should you?",
+          "expression": "Neutral",
+          "formattedText": "<p>You look at your bed, still warm from your body heat. You purse your lips. Should you?</p>"
+        }
+      ],
+      "choices": [
+        {
+          "id": "ca51f8cc-9b6a-43b8-9222-1b6398e6a39d",
+          "text": "Back to bed!",
+          "targetNodeId": "b02231c1-b27b-44a0-aa85-3cbff9e9d89f"
+        },
+        {
+          "id": "6e812d0b-430e-4b62-97db-7cf62afffef7",
+          "text": "Head to class...",
+          "targetNodeId": "19f5df44-ef87-4d48-8626-c1cfc69fe19c"
+        }
+      ],
+      "statChanges": [],
+      "position": {
+        "x": 400,
+        "y": 900
+      },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "order": 1
+    },
+    "19f5df44-ef87-4d48-8626-c1cfc69fe19c": {
+      "id": "19f5df44-ef87-4d48-8626-c1cfc69fe19c",
+      "displayId": "SCN-002",
+      "title": "4-12 Morning [A]",
+      "description": "Gameplay Tutorial, guided gameplay.",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [
+        {
+          "id": "bb0a745e-1c55-45cc-8f2d-f9901860124c",
+          "text": "Go to Class",
+          "targetNodeId": "bd75838c-cbbd-4f38-88ce-437f3c1fba61"
+        }
+      ],
+      "statChanges": [],
+      "position": {
+        "x": 260,
+        "y": 1160
+      },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "order": 4
+    },
+    "b02231c1-b27b-44a0-aa85-3cbff9e9d89f": {
+      "id": "b02231c1-b27b-44a0-aa85-3cbff9e9d89f",
+      "displayId": "SCN-003",
+      "title": "Back to Bed [ENDING]",
+      "description": "Brief plot outline for this branch path...",
+      "speaker": "Narrator",
+      "dialogueLines": [],
+      "choices": [],
+      "statChanges": [],
+      "position": {
+        "x": 540,
+        "y": 1160
+      },
+      "isEnding": true,
+      "nodeType": "story",
+      "sceneId": "4abcf45e-14c7-4d9b-b8c9-79bcdccfdbe6",
+      "endingType": "BAD",
+      "endingName": "Back to Bed",
+      "order": 5
+    }
+  },
+  "flowDirection": "vertical",
+  "driveFolderId": "1QcxoOvJ05UlgJV7JTmrdY5fbE5ZW3Kco",
+  "driveFileId": "1_3NMySam63WR4hIPwmyw8ZSTnwbPOqD0"
+}

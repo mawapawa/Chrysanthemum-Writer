@@ -1,4 +1,4 @@
-interface VNVariable {
+export interface VNVariable {
   id?: string;
   name: string;
   type: "number" | "boolean";
@@ -7,7 +7,7 @@ interface VNVariable {
   displayId?: string;
 }
 
-interface VNCharacter {
+export interface VNCharacter {
   id: string;
   name: string;
   color: string;
@@ -15,7 +15,7 @@ interface VNCharacter {
   displayId?: string;
 }
 
-interface ChoiceCondition {
+export interface ChoiceCondition {
   variableName: string;
   operator: "==" | "!=" | ">=" | "<=" | ">" | "<";
   value: number | boolean | string;
@@ -27,6 +27,16 @@ export interface StatChange {
   value: number | boolean | string;
 }
 
+export interface VNEntityStat {
+  name: string;
+  defaultValue: number;
+}
+
+export interface VNEntityFlag {
+  name: string;
+  defaultValue: boolean;
+}
+
 export interface VNEntity {
   id: string;
   name: string;
@@ -35,6 +45,9 @@ export interface VNEntity {
   displayId?: string;
   tags: string[];
   stats?: Record<string, number>;
+  ownedTrackers?: VNEntityStat[];
+  ownedFlags?: VNEntityFlag[];
+  expressions?: string[];
 }
 
 export interface VNTracker {
@@ -68,14 +81,6 @@ export interface InlineEffect {
   operation?: "add" | "subtract" | "set";
   value?: number;
   flagValue?: boolean;
-}
-
-export interface DialogueBlock {
-  id: string;
-  speaker: string;
-  text: string;
-  expression?: string;
-  effects: InlineEffect[];
 }
 
 export interface ChoiceRequirement {
@@ -154,6 +159,24 @@ export interface StoryBeatTrigger {
   min?: number;
 }
 
+export type SceneBlock =
+  | { type: "dialogue"; speaker: string; expression?: string; text: string }
+  | { type: "narrative"; text: string }
+  | { type: "effect"; variableName: string; operation: "+" | "-" | "="; value: number }
+  | { type: "statDisplay"; variableName: string }
+  | { type: "choice"; text: string; targetNodeId: string; random?: number; effects?: InlineEffect[]; requirement?: ChoiceRequirement }
+  | { type: "entity"; entityId: string }
+  | { type: "condition"; source: "tracker" | "flag"; targetId: string; operator?: string; compareValue?: number }
+  | { type: "continue"; targetNodeId: string }
+  | { type: "ending"; endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL"; endingName?: string }
+  | { type: "flag"; flagName: string; flagValue: boolean }
+  | { type: "conditional"; condition: ChoiceRequirement }
+  | { type: "bgm"; trackName: string; fadeIn?: number }
+  | { type: "sfx"; soundName: string }
+  | { type: "background"; asset: string }
+  | { type: "delay"; seconds: number }
+  | { type: "itemEffect"; action: "give" | "take"; itemName: string };
+
 export interface StoryNode {
   id: string;
   title: string;
@@ -169,11 +192,12 @@ export interface StoryNode {
   sceneId?: string;
   displayId?: string;
   order?: number;
-  dialogueTimeline?: DialogueBlock[];
   nodeType: "story" | "location" | "encounter";
   locationData?: LocationData;
   encounterData?: EncounterData;
+  continueToNodeId?: string;
   trigger?: StoryBeatTrigger;
+  blocks?: SceneBlock[];
 }
 
 export interface NodeLock {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { VNProject, StoryNode, StoryChoice, StatChange, InlineEffect } from "../types";
+import { VNProject, StoryNode, StoryChoice, SceneBlock, StatChange, InlineEffect } from "../types";
 import { 
   RefreshCw, ChevronRight, ChevronLeft, 
   Flag, AlertTriangle, Eye, EyeOff, Sliders
@@ -15,6 +15,21 @@ interface PlaytestSimulatorProps {
   startNodeId: string;
   onExit: () => void;
   onUpdateProject?: (project: VNProject) => void;
+}
+
+function expandWiggleSpans(html: string): string {
+  return html.replace(
+    /<span([^>]*class="[^"]*animate-wiggle[^"]*"[^>]*)>([^<]+)<\/span>/g,
+    (_match, attrs, text: string) => {
+      const chars = text
+        .split("")
+        .map((ch: string, i: number) =>
+          `<span style="animation-delay:${(i * 0.12).toFixed(2)}s">${ch === " " ? "\u00A0" : ch}</span>`
+        )
+        .join("");
+      return `<span ${attrs} style="display:inline-flex">${chars}</span>`;
+    }
+  );
 }
 
 export default function PlaytestSimulator({ 
@@ -64,8 +79,47 @@ export default function PlaytestSimulator({
 
     // Trigger immediate entry effects of starting node
     const startingNode = project.nodes[startNodeId];
-    if (startingNode && startingNode.statChanges.length > 0) {
-      applyStatChanges(startingNode.statChanges, initialVars);
+    if (startingNode) {
+      if (startingNode.statChanges.length > 0) {
+        applyStatChanges(startingNode.statChanges, initialVars);
+      }
+      processNodeBlocks(startingNode, initialVars, []);
+    }
+  };
+
+  const processNodeBlocks = (n: any, currentVars: Record<string, any>, currentInventory: string[]) => {
+    if (!n.blocks) return;
+    const newLogs: typeof logs = [];
+    let updatedVars = { ...currentVars };
+    let updatedInventory = [...currentInventory];
+
+    for (const block of n.blocks) {
+      if (block.type === "flag") {
+        updatedVars[block.flagName] = block.flagValue;
+        newLogs.push({ text: `🚩 ${block.flagName} = ${block.flagValue}`, type: "set" as const });
+      } else if (block.type === "itemEffect") {
+        if (block.action === "give") {
+          updatedInventory.push(block.itemName);
+          newLogs.push({ text: `🎒 + ${block.itemName}`, type: "set" as const });
+        } else {
+          updatedInventory = updatedInventory.filter(i => i !== block.itemName);
+          newLogs.push({ text: `🎒 - ${block.itemName}`, type: "set" as const });
+        }
+      } else if (block.type === "bgm") {
+        newLogs.push({ text: `🎵 BGM: ${block.trackName}`, type: "set" as const });
+      } else if (block.type === "sfx") {
+        newLogs.push({ text: `💥 SFX: ${block.soundName}`, type: "set" as const });
+      } else if (block.type === "background") {
+        newLogs.push({ text: `🖼️ BG: ${block.asset}`, type: "set" as const });
+      } else if (block.type === "delay") {
+        newLogs.push({ text: `⏳ Pause ${block.seconds}s`, type: "set" as const });
+      }
+    }
+
+    if (newLogs.length > 0) {
+      setVars(updatedVars);
+      setPlayerInventory(updatedInventory);
+      setLogs((prev) => [...newLogs, ...prev].slice(0, 20));
     }
   };
 
@@ -259,6 +313,7 @@ export default function PlaytestSimulator({
     setLogs((prev) => [...allLogs, ...prev].slice(0, 20));
     setCurrentNodeId(choice.targetNodeId);
     setLineIdx(0);
+    processNodeBlocks(nextNode, tempVars, tempInventory);
 
     // Story beat auto-trigger check
     const triggeredNode = Object.values(project.nodes).find(n => {
@@ -318,12 +373,19 @@ export default function PlaytestSimulator({
     return evalResult.passed || showLockedChoices;
   });
 
+  // Sequential block processing — determine ending state
+  const isOnLastLine = !hasDialogue || lineIdx === totalLines - 1;
+  const endingBlock = (node.blocks || []).find((b): b is SceneBlock & { type: "ending" } => b.type === "ending");
+  const showEndingNow = !!endingBlock && isOnLastLine && availableChoices.length === 0;
+  const activeEndingType = endingBlock?.endingType || node.endingType;
+  const activeEndingName = endingBlock?.endingName || node.endingName;
+
   return (
     <div className="h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 divide-y md:divide-y-0 md:divide-x divide-slate-800" id="vn-player-screen">
       
       {/* Left variables registry bar */}
-      <div className="md:w-72 bg-slate-900 p-5 flex flex-col overflow-y-auto" id="vn-player-sidebar">
-        <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+      <div className="md:w-72 glass-card p-5 flex flex-col overflow-y-auto" id="vn-player-sidebar">
+        <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <Sliders className="w-4 h-4 text-emerald-400 animate-pulse" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Live Memory Registry</h3>
@@ -451,22 +513,22 @@ export default function PlaytestSimulator({
 
         {/* Narrative / Script stage visualization area */}
         <div className="flex-1 flex flex-col justify-start py-4" id="vn-player-expressive-stage">
-          {/* If ending node is active, show giant beautiful ending splashes */}
-          {node.isEnding ? (
-            <div className="text-center p-8 max-w-md bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden" id="ending-splash-card">
+          {/* If ending node is active (sequential), show giant beautiful ending splashes */}
+           {showEndingNow ? (
+            <div className="text-center p-8 max-w-md glass-card" id="ending-splash-card">
               <div className="absolute top-0 left-0 w-full h-1 bg-rose-500" />
               <Flag className="w-14 h-14 text-rose-400 mx-auto mb-4 animate-bounce" />
               <span className={`text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded-full ${
-                node.endingType === "GOOD"
+                activeEndingType === "GOOD"
                   ? "bg-emerald-500/20 text-emerald-400"
-                  : node.endingType === "BAD"
+                  : activeEndingType === "BAD"
                   ? "bg-rose-500/20 text-rose-400"
                   : "bg-cyan-500/20 text-cyan-400"
               }`}>
-                {node.endingType || "NORMAL"} ENDING
+                {activeEndingType || "NORMAL"} ENDING
               </span>
 
-              <h3 className="text-2xl font-black text-white mt-4 tracking-tight">{node.endingName || "Story Completed"}</h3>
+              <h3 className="text-2xl font-black text-white mt-4 tracking-tight">{activeEndingName || "Story Completed"}</h3>
               <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
                 {node.description || "You have charted a course through the branches and arrived at a distinct conclusion."}
               </p>
@@ -482,7 +544,7 @@ export default function PlaytestSimulator({
             </div>
           ) : node.nodeType === "location" && node.locationData ? (
             <div className="w-full">
-              <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
+              <div className="glass-card p-6 border-amber-500/30">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">🏪</span>
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
@@ -542,7 +604,7 @@ export default function PlaytestSimulator({
             </div>
           ) : node.nodeType === "encounter" && node.encounterData ? (
             <div className="w-full">
-              <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-6 shadow-2xl">
+              <div className="glass-card p-6 border-rose-500/30">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">⚔️</span>
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
@@ -603,7 +665,7 @@ export default function PlaytestSimulator({
           ) : (
             <div className="w-full" id="playtest-story-stage">
               {/* Standard dialogue box player */}
-              <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl relative" style={{ minHeight: "160px" }}>
+              <div className="glass-card p-6" style={{ minHeight: "160px" }}>
                 
                 {/* Scene Outline Indicator */}
                 <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase">
@@ -626,13 +688,44 @@ export default function PlaytestSimulator({
                       </div>
 
                       {activeLine.formattedText ? (
-                        <div className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }} dangerouslySetInnerHTML={{ __html: activeLine.formattedText }} />
+                        <div className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }} dangerouslySetInnerHTML={{ __html: expandWiggleSpans(activeLine.formattedText) }} />
                       ) : (
                         <p className="text-sm text-slate-100 leading-relaxed font-sans italic" style={{ minHeight: "60px" }}>
                           {(activeLine.speaker === "Narrator" || !activeLine.speaker) ? activeLine.text : `"${activeLine.text}"`}
                         </p>
                       )}
                     </div>
+
+                    {/* Stat displays and entity cards from blocks */}
+                    {node.blocks && !hasDialogue && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {node.blocks.filter(b => b.type === "statDisplay" || b.type === "entity").map((block, i) => {
+                          if (block.type === "statDisplay") {
+                            const val = vars[block.variableName] ?? project.trackers.find(t => t.name === block.variableName)?.defaultValue ?? "?";
+                            return (
+                              <span key={`sd-${i}`} className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-mono font-bold">
+                                {block.variableName}: {String(val)}
+                              </span>
+                            );
+                          }
+                          if (block.type === "entity") {
+                            const entity = project.entities.find(e => e.id === block.entityId);
+                            if (!entity) return null;
+                            return (
+                              <div key={`ent-${i}`} className="px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-mono flex items-center gap-2">
+                                <span className="font-bold">{entity.name}</span>
+                                {entity.ownedTrackers?.map((t, ti) => {
+                                  const trackerName = `${entity.name.toLowerCase()}_${t.name}`.replace(/[^a-zA-Z0-9_]/g, "_");
+                                  const val = vars[trackerName] ?? t.defaultValue;
+                                  return <span key={ti} className="text-purple-400">{t.name}: {val}</span>;
+                                })}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    )}
 
                     {/* Lines pager */}
                     <div className="flex items-center justify-between border-t border-slate-800/60 pt-3 mt-4 text-xs">
@@ -673,8 +766,30 @@ export default function PlaytestSimulator({
                   </div>
                 )}
 
+                {/* Continue-to auto-advance */}
+                {!showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && node.continueToNodeId && project.nodes[node.continueToNodeId] && (
+                  <div className="border-t border-slate-800/60 pt-4 mt-4">
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => {
+                          setHistory([...history, { nodeId: currentNodeId, variables: { ...vars } }]);
+                          const next = project.nodes[node.continueToNodeId!];
+                          if (next) {
+                            setCurrentNodeId(node.continueToNodeId!);
+                            setLineIdx(0);
+                            processNodeBlocks(next, vars, playerInventory);
+                          }
+                        }}
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105 cursor-pointer flex items-center gap-2"
+                      >
+                        Continue →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Choices inside the dialogue card */}
-                {!node.isEnding && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length > 0 && (
+                {!showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length > 0 && (
                   <div className="border-t border-slate-800/60 pt-4 mt-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {availableChoices.map((choice) => {

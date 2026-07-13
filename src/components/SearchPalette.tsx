@@ -19,8 +19,8 @@ const CATEGORIES: Record<string, { icon: string; tab: string; label: string }> =
   node: { icon: "📄", tab: "storyboard", label: "Node" },
   entity: { icon: "👤", tab: "entities", label: "Entity" },
   item: { icon: "📦", tab: "items", label: "Item" },
-  flag: { icon: "🏁", tab: "flags", label: "Flag" },
-  tracker: { icon: "📊", tab: "trackers", label: "Tracker" },
+  flag: { icon: "🏁", tab: "storyboard", label: "Flag" },
+  tracker: { icon: "📊", tab: "storyboard", label: "Tracker" },
 };
 
 export default function SearchPalette({ project, onSelectNode, onSwitchTab, onClose }: SearchPaletteProps) {
@@ -92,15 +92,15 @@ export default function SearchPalette({ project, onSelectNode, onSwitchTab, onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-slate-950/60 backdrop-blur-sm">
-      <div ref={overlayRef} className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="p-3 border-b border-slate-800">
+      <div ref={overlayRef} className="glass-card w-full max-w-lg overflow-hidden">
+        <div className="p-3 border-b border-white/10">
           <input
             ref={inputRef}
             type="text"
             placeholder="Search nodes, entities, items, flags, trackers..."
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelectedIdx(0); }}
-            className="w-full bg-slate-800 border border-slate-700 text-sm text-white rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 placeholder-slate-500"
+            className="w-full glass-input text-sm rounded-xl px-3 py-2"
           />
         </div>
         <div className="max-h-80 overflow-y-auto p-2 space-y-0.5">
@@ -132,7 +132,7 @@ export default function SearchPalette({ project, onSelectNode, onSwitchTab, onCl
             );
           })}
         </div>
-        <div className="p-2 border-t border-slate-800 flex items-center justify-center gap-3 text-[10px] text-slate-500">
+        <div className="p-2 border-t border-white/10 flex items-center justify-center gap-3 text-[10px] text-slate-500">
           <span>↑↓ Navigate</span>
           <span>↵ Open</span>
           <span>Esc Close</span>

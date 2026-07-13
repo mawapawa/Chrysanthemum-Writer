@@ -14,6 +14,7 @@ type MenuLevel = "main" | "style" | "color";
 
 const STYLE_NAMES: { key: string; label: string }[] = [
   { key: "shake", label: "Shake" },
+  { key: "wiggle", label: "Wiggle" },
   { key: "glitch", label: "Glitch" },
   { key: "glow", label: "Glow" },
   { key: "whisper", label: "Whisper" },

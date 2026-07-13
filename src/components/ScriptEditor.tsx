@@ -1,9 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Mark } from "@tiptap/core";
 import ContextMenu from "./ContextMenu";
+import { InlineCommandNode } from "../extensions/InlineCommand";
+import { handleSlashCommand } from "../utils/inlineCommandUtils";
 
 const STYLE_CLASS_MAP: Record<string, string> = {
   shake: "animate-shake",
@@ -11,6 +13,7 @@ const STYLE_CLASS_MAP: Record<string, string> = {
   glow: "text-glow",
   whisper: "text-whisper",
   redacted: "text-redacted",
+  wiggle: "animate-wiggle",
 };
 
 interface ScriptEditorProps {
@@ -43,15 +46,21 @@ const TextColorMark = Mark.create({
 export default function ScriptEditor({ initialContent, onChange, placeholder }: ScriptEditorProps) {
   const [menuState, setMenuState] = React.useState<{ x: number; y: number; selectedText: string } | null>(null);
 
+  const handleSlashKey = useCallback((view: any, event: KeyboardEvent) => {
+    return handleSlashCommand(view, event);
+  }, []);
+
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ heading: false, code: false, blockquote: false, horizontalRule: false, codeBlock: false }),
       TextStyleMark,
       TextColorMark,
+      InlineCommandNode,
       Placeholder.configure({ placeholder: placeholder || "Write your scene script here..." }),
     ],
     editorProps: {
       attributes: { class: "max-w-none focus:outline-none min-h-[60px] p-2 text-sm leading-relaxed" },
+      handleKeyDown: handleSlashKey,
       handleDOMEvents: {
         contextmenu: (view, event) => {
           event.preventDefault();
@@ -76,8 +85,19 @@ export default function ScriptEditor({ initialContent, onChange, placeholder }: 
 
   const handleApplyStyle = React.useCallback((style: string) => {
     if (!editor) return;
-    const { to } = editor.state.selection;
-    editor.chain().focus().toggleMark("textStyle", { styles: style }).setTextSelection(to).run();
+    const currentStyles = editor.getAttributes("textStyle").styles as string || "";
+    const styles = currentStyles ? currentStyles.split(" ").filter(Boolean) : [];
+    const idx = styles.indexOf(style);
+    if (idx >= 0) {
+      styles.splice(idx, 1);
+    } else {
+      styles.push(style);
+    }
+    if (styles.length > 0) {
+      editor.chain().focus().setMark("textStyle", { styles: styles.join(" ") }).setTextSelection(editor.state.selection.to).run();
+    } else {
+      editor.chain().focus().unsetMark("textStyle").setTextSelection(editor.state.selection.to).run();
+    }
     setMenuState(null);
   }, [editor]);
 

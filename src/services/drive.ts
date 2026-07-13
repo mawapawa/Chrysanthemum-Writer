@@ -100,13 +100,18 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
   return meta.id;
 }
 
-export async function scanDriveForProjects(): Promise<Array<{ fileId: string; name: string }>> {
+export async function scanDriveForProjects(folderId?: string): Promise<Array<{ fileId: string; name: string }>> {
   try {
+    let query = `name contains 'chrysanthemum-' and trashed=false`;
+    if (folderId) {
+      query += ` and '${folderId.replace(/'/g, "\\'")}' in parents`;
+    }
     const resp = await apiFetch(
-      `/files?q=name contains 'chrysanthemum-' and trashed=false&fields=files(id,name)`
+      `/files?q=${query}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`
     );
     return (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name }));
-  } catch {
+  } catch (e) {
+    console.error("[DRIVE] scanDriveForProjects failed", e);
     return [];
   }
 }
@@ -129,6 +134,30 @@ export function driveFolderUrl(folderId: string): string {
 export function parseFolderIdFromUrl(url: string): string | null {
   const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
+}
+
+const DRIVE_META_KEY = "chrysanthemum_drive_meta";
+
+export interface DriveMeta {
+  folderId: string;
+  fileId?: string;
+}
+
+export function getLinkedDriveMeta(): DriveMeta | null {
+  try {
+    const raw = localStorage.getItem(DRIVE_META_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setLinkedDriveMeta(meta: DriveMeta): void {
+  localStorage.setItem(DRIVE_META_KEY, JSON.stringify(meta));
+}
+
+export function clearLinkedDriveMeta(): void {
+  localStorage.removeItem(DRIVE_META_KEY);
 }
 
 
