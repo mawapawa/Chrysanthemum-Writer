@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { VNProject, StoryNode } from "./types";
 import { generateDisplayId } from "./utils/displayIds";
 import FlowchartCanvas from "./components/FlowchartCanvas";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 import PlaytestSimulator from "./components/PlaytestSimulator";
 import SyncIndicator from "./components/SyncIndicator";
 import TutorialDialog from "./components/TutorialDialog";
-import BackupDialog from "./components/BackupDialog";
 import SettingsDialog from "./components/SettingsDialog";
 import SceneDirectory from "./components/SceneDirectory";
 
@@ -18,7 +18,7 @@ import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateF
 import { loadProjectFromDrive, scanDriveForProjects, getLinkedDriveMeta, setLinkedDriveMeta } from "./services/drive";
 import {
   Package, Users, Clock,
-  Layers, BookOpen, History, Settings, Pencil
+  Layers, BookOpen, Settings, Pencil
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -127,7 +127,6 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
 
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
-  const [backupDialogOpen, setBackupDialogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
@@ -582,8 +581,9 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden font-sans text-slate-800" id="app-root-container">
-      <header className="bg-slate-900 text-white shrink-0 border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl z-20">
+    <ErrorBoundary>
+    <div className="h-screen flex flex-col bg-slate-950 overflow-hidden font-sans text-slate-300" id="app-root-container">
+      <header className="glass-header text-white shrink-0 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-20">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => setIsProjectsModalOpen(true)}
@@ -635,31 +635,26 @@ export default function App() {
         </div>
         <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
           <SyncIndicator status={syncStatus} errorMsg={syncError} onSyncNow={syncNow} />
-          {project.driveFolderId && (
-            <button onClick={() => setBackupDialogOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
-              <History className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 glass-button text-slate-400 hover:text-indigo-400 rounded-xl cursor-pointer">
             <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
 
-      <div className="bg-white border-b border-gray-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs z-10">
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-          <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Layers className="w-4 h-4 text-indigo-500" /> Storyboard
+      <div className="glass-tabbar px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0 z-10">
+        <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-xl">
+          <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "bg-white/10 text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Layers className="w-4 h-4 text-indigo-400" /> Storyboard
           </button>
 
-          <button onClick={() => setActiveTab("items")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "items" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Package className="w-4 h-4 text-purple-500" /> Items ({itemCount})
+          <button onClick={() => setActiveTab("items")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "items" ? "bg-white/10 text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Package className="w-4 h-4 text-purple-400" /> Items ({itemCount})
           </button>
-          <button onClick={() => setActiveTab("entities")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "entities" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Users className="w-4 h-4 text-indigo-500" /> Entities ({entityCount})
+          <button onClick={() => setActiveTab("entities")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "entities" ? "bg-white/10 text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Users className="w-4 h-4 text-indigo-400" /> Entities ({entityCount})
           </button>
-          <button onClick={() => setActiveTab("calendar")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "calendar" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Clock className="w-4 h-4 text-cyan-500" /> Calendar ({calendarCount})
+          <button onClick={() => setActiveTab("calendar")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "calendar" ? "bg-white/10 text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Clock className="w-4 h-4 text-cyan-400" /> Calendar ({calendarCount})
           </button>
         </div>
       </div>
@@ -678,7 +673,7 @@ export default function App() {
               }}
               onTriggerCenterNode={(nodeId) => setCenterNodeTrigger({ id: nodeId, timestamp: Date.now() })}
             />
-            <div className="flex-1 h-full relative border-r border-slate-200">
+            <div className="flex-1 h-full relative border-r border-white/5">
               <FlowchartCanvas
                 project={project}
                 onUpdateProject={handleUpdateProject}
@@ -702,18 +697,18 @@ export default function App() {
       </main>
 
       {isProjectsModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50" id="projects-modal-container">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xl flex items-center justify-center p-4 z-50" id="projects-modal-container">
+          <div className="glass-card p-6 w-full max-w-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-indigo-400 animate-pulse" />
                 <h3 className="text-base font-bold text-white uppercase tracking-wider">All Projects</h3>
               </div>
-              <button onClick={() => setIsProjectsModalOpen(false)} className="text-slate-500 hover:text-white text-xs font-mono cursor-pointer">Close</button>
+              <button onClick={() => setIsProjectsModalOpen(false)} className="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Close</button>
             </div>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
               {allProjects.map((proj) => (
-                <div key={proj.id} onClick={() => handleSelectProject(proj)} className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${proj.id === project.id ? "bg-indigo-600/15 border-indigo-500/50 text-white" : "bg-slate-950/50 border-slate-800 hover:bg-slate-950 hover:border-slate-700 text-slate-400"}`}>
+                <div key={proj.id} onClick={() => handleSelectProject(proj)} className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${proj.id === project.id ? "bg-indigo-600/15 border-indigo-500/50 text-white" : "bg-white/[0.03] border-white/10 hover:bg-white/[0.06] hover:border-white/20 text-slate-400"}`}>
                   <div className="min-w-0 flex-1 pr-4">
                     <p className={`font-bold text-xs truncate ${proj.id === project.id ? "text-indigo-300" : "text-slate-200"}`}>{proj.name}</p>
                     <p className="text-[10px] text-slate-500 truncate mt-0.5">{proj.description}</p>
@@ -740,10 +735,6 @@ export default function App() {
         </div>
       )}
 
-      {backupDialogOpen && project.driveFolderId && (
-        <BackupDialog driveFolderId={project.driveFolderId} onClose={() => setBackupDialogOpen(false)} />
-      )}
-
       {isSettingsOpen && (
         <SettingsDialog
           project={project}
@@ -755,6 +746,7 @@ export default function App() {
           onOpenTutorial={() => setShowTutorial(true)}
           onExportFolder={handleExportFolderJSON}
           onLoadFromDrive={handleLoadFromDrive}
+          syncNow={syncNow}
         />
       )}
 
@@ -774,5 +766,6 @@ export default function App() {
         />
       )}
     </div>
+    </ErrorBoundary>
   );
 }

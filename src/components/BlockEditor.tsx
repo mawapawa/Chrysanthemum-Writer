@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { VNProject, SceneBlock } from "../types";
 import { Plus } from "lucide-react";
 import { InlineCommandNode } from "../extensions/InlineCommand";
+import { handleSlashCommand } from "../utils/inlineCommandUtils";
 
 interface BlockEditorProps {
   project: VNProject;
@@ -22,7 +23,7 @@ function blockHasContent(b: SceneBlock): boolean {
     case "statDisplay": return b.variableName.trim().length > 0;
     case "choice": return b.text.trim().length > 0 && b.targetNodeId.length > 0;
     case "entity": return b.entityId.length > 0;
-    case "condition": return b.condition.targetId.length > 0;
+    case "condition": return b.targetId.length > 0;
     case "continue": return b.targetNodeId.length > 0;
     case "ending": return true; // always render
     case "flag": return b.flagName.trim().length > 0;
@@ -101,7 +102,7 @@ function badgeLabel(b: SceneBlock, project: VNProject): string {
     case "statDisplay": return `📈 ${b.variableName}: ?`;
     case "choice": return `🔗 ${b.text}`;
     case "entity": { const e = project.entities.find(en => en.id === b.entityId); return `👤 ${e?.name || "?"}`; }
-    case "condition": return `👁️ ${b.condition?.source || "?"}`;
+    case "condition": return `👁️ ${b.source || "?"}`;
     case "continue": { const t = project.nodes[b.targetNodeId]; return `🔀 ${t?.title || "?"}`; }
     case "ending": return `🏁 ${b.endingType}${b.endingName ? `: ${b.endingName}` : ""}`;
     case "flag": return `🚩 ${b.flagName} = ${b.flagValue}`;
@@ -136,7 +137,7 @@ function createDefaultBlock(type: string, project: VNProject): SceneBlock {
     case "statDisplay": return { type: "statDisplay", variableName: "" };
     case "choice": return { type: "choice", text: "", targetNodeId: "" };
     case "entity": return { type: "entity", entityId: "" };
-    case "condition": return { type: "condition", condition: { source: "tracker", targetId: "" } };
+    case "condition": return { type: "condition", source: "tracker", targetId: "" };
     case "continue": return { type: "continue", targetNodeId: "" };
     case "ending": return { type: "ending", endingType: "NORMAL" };
     case "flag": return { type: "flag", flagName: "", flagValue: true };
@@ -150,25 +151,10 @@ function createDefaultBlock(type: string, project: VNProject): SceneBlock {
 }
 
 export default function BlockEditor({ project, blocks, onChange, onCreateNode }: BlockEditorProps) {
-  const [initialHTML] = useState(() => blocksToHTML(blocks, project));
+  const htmlContent = useMemo(() => blocksToHTML(blocks, project), [blocks, project]);
 
   const handleSlash = useCallback((view: any, event: KeyboardEvent) => {
-    if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-      const { state } = view;
-      const { $from } = state.selection;
-      const before = $from.parent.textContent.slice(0, $from.parentOffset);
-      if (before === "" || before.endsWith(" ")) {
-        event.preventDefault();
-        const tr = state.tr.delete(state.selection.from - 1, state.selection.from);
-        const node = view.state.schema.nodes.inlineCommand?.create();
-        if (node) {
-          tr.insert(state.selection.from - 1, node);
-          view.dispatch(tr);
-        }
-        return true;
-      }
-    }
-    return false;
+    return handleSlashCommand(view, event);
   }, []);
 
   const editor = useEditor({
@@ -177,7 +163,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
       InlineCommandNode,
       Placeholder.configure({ placeholder: "Type your story here... Use / or + to add badges..." }),
     ],
-    content: initialHTML,
+    content: htmlContent,
     editorProps: {
       attributes: { class: "cm-editor w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-lg p-3 focus:outline-none focus:border-indigo-500 overflow-y-auto" },
       handleKeyDown: handleSlash,
@@ -192,10 +178,10 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode }:
   });
 
   useEffect(() => {
-    if (editor && initialHTML && editor.getHTML() !== initialHTML) {
-      editor.commands.setContent(initialHTML);
+    if (editor && editor.getHTML() !== htmlContent) {
+      editor.commands.setContent(htmlContent);
     }
-  }, [editor, initialHTML]);
+  }, [editor, htmlContent]);
 
   const handleAddBadge = useCallback(() => {
     if (!editor) return;

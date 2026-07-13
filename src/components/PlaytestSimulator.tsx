@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { VNProject, StoryNode, StoryChoice, StatChange, InlineEffect } from "../types";
+import { VNProject, StoryNode, StoryChoice, SceneBlock, StatChange, InlineEffect } from "../types";
 import { 
   RefreshCw, ChevronRight, ChevronLeft, 
   Flag, AlertTriangle, Eye, EyeOff, Sliders
@@ -384,8 +384,8 @@ export default function PlaytestSimulator({
     <div className="h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 divide-y md:divide-y-0 md:divide-x divide-slate-800" id="vn-player-screen">
       
       {/* Left variables registry bar */}
-      <div className="md:w-72 bg-slate-900 p-5 flex flex-col overflow-y-auto" id="vn-player-sidebar">
-        <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+      <div className="md:w-72 glass-card p-5 flex flex-col overflow-y-auto" id="vn-player-sidebar">
+        <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <Sliders className="w-4 h-4 text-emerald-400 animate-pulse" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Live Memory Registry</h3>
@@ -515,7 +515,7 @@ export default function PlaytestSimulator({
         <div className="flex-1 flex flex-col justify-start py-4" id="vn-player-expressive-stage">
           {/* If ending node is active (sequential), show giant beautiful ending splashes */}
            {showEndingNow ? (
-            <div className="text-center p-8 max-w-md bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden" id="ending-splash-card">
+            <div className="text-center p-8 max-w-md glass-card" id="ending-splash-card">
               <div className="absolute top-0 left-0 w-full h-1 bg-rose-500" />
               <Flag className="w-14 h-14 text-rose-400 mx-auto mb-4 animate-bounce" />
               <span className={`text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded-full ${
@@ -544,7 +544,7 @@ export default function PlaytestSimulator({
             </div>
           ) : node.nodeType === "location" && node.locationData ? (
             <div className="w-full">
-              <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
+              <div className="glass-card p-6 border-amber-500/30">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">🏪</span>
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
@@ -604,7 +604,7 @@ export default function PlaytestSimulator({
             </div>
           ) : node.nodeType === "encounter" && node.encounterData ? (
             <div className="w-full">
-              <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-6 shadow-2xl">
+              <div className="glass-card p-6 border-rose-500/30">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">⚔️</span>
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
@@ -665,7 +665,7 @@ export default function PlaytestSimulator({
           ) : (
             <div className="w-full" id="playtest-story-stage">
               {/* Standard dialogue box player */}
-              <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl relative" style={{ minHeight: "160px" }}>
+              <div className="glass-card p-6" style={{ minHeight: "160px" }}>
                 
                 {/* Scene Outline Indicator */}
                 <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase">

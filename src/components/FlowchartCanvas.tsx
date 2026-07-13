@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useReducer } from "react";
 import { VNProject, StoryNode, StoryChoice, SceneBlock } from "../types";
 import { generateDisplayId } from "../utils/displayIds";
-import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star, X } from "lucide-react";
+import { Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Compass, Play, Flag, Star } from "lucide-react";
 import { useConfirmDelete } from "../hooks/useConfirmDelete";
 import BlockEditor from "./BlockEditor";
 import { blocksToNode, nodeToBlocks } from "../utils/blockSerializer";
@@ -73,7 +73,8 @@ export default function FlowchartCanvas({
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Single block editor state — tracks which node the blocks belong to
+  // Focus editing state and single block editor state
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editorBlocks, setEditorBlocks] = useState<SceneBlock[]>([]);
   const [editorNodeId, setEditorNodeId] = useState<string | null>(null);
 
@@ -168,9 +169,8 @@ export default function FlowchartCanvas({
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Trigger state update to force line redraws when elements render or move
-  const [, forceUpdate] = useState({});
+  const [, forceUpdate] = useReducer(x => x + 1, 0);
 
-  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
 
   // Close focus mode on Escape
@@ -187,7 +187,7 @@ export default function FlowchartCanvas({
 
   useEffect(() => {
     // Redraw connections when project updates
-    forceUpdate({});
+    forceUpdate();
   }, [project, pan, zoom, hiddenFolderIds]);
 
   // Handle camera centering trigger
@@ -280,7 +280,7 @@ export default function FlowchartCanvas({
         x: (e.clientX - dragStart.current.x) / zoom,
         y: (e.clientY - dragStart.current.y) / zoom,
       };
-      forceUpdate({});
+      forceUpdate();
     }
   };
 
@@ -791,124 +791,83 @@ export default function FlowchartCanvas({
                 }}
                 onMouseDown={(e) => { if (!isEditing) handleNodeMouseDown(node.id, e); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
-                className={`node-card pointer-events-auto glass-card ${isEditing ? "" : "absolute"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
+                className={`node-card pointer-events-auto glass-card ${isEditing ? "" : "absolute w-52"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
                   isEditing
-                    ? "fixed overflow-hidden flex flex-col"
+                    ? "absolute overflow-hidden flex flex-col"
                     : (draggedNodeId !== node.id ? "transition-all duration-150" : "") + (isSelected ? "" : " overflow-hidden") + " cursor-grab active:cursor-grabbing"
                 } ${
                   isEditing
                     ? "ring-4 ring-indigo-500/20"
                     : isSelected
-                      ? "selected scale-105"
+                      ? "selected"
                       : ""
                 }`}
                 style={isEditing ? {
+                  top: 16,
                   left: "50%",
-                  top: 48,
-                  bottom: 72,
                   transform: "translateX(-50%)",
                   width: "100%",
                   maxWidth: "650px",
-                  height: "auto",
+                  height: "calc(100% - 32px)",
                 } : {
                   transform: `translate(${node.position.x * zoom + pan.x + (dragGroupRef.current.some(g => g.id === node.id) ? dragDelta.current.x * zoom : 0)}px, ${
                     node.position.y * zoom + pan.y + (dragGroupRef.current.some(g => g.id === node.id) ? dragDelta.current.y * zoom : 0)
-                  }px) scale(${zoom})`,
+                  }px) scale(${zoom * (isSelected ? 1.08 : 1)})`,
                   transformOrigin: "top left",
                 }}
                 id={`canvas-node-${node.id}`}
               >
-                {/* Ribbon details */}
-                {isStart && (
-                  <div className="bg-emerald-500 text-slate-950 text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono">
-                    <Star className="w-2.5 h-2.5 fill-slate-950 text-slate-950" />
-                    Story Entrypoint
-                  </div>
-                )}
-                {node.nodeType && node.nodeType !== "story" && (
-                  <div className={`text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono ${
-                    node.nodeType === "location" ? "bg-amber-500/20 text-amber-300" : "bg-rose-500/20 text-rose-300"
-                  }`}>
-                    {node.nodeType === "location" ? "🏪 Location Card" : "⚔️ Encounter"}
-                  </div>
-                )}
-                {node.isEnding && (
-                  <div
-                    className={`text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono ${
-                      node.endingType === "GOOD"
-                        ? "bg-amber-400 text-amber-950"
-                        : node.endingType === "BAD"
-                        ? "bg-rose-500 text-rose-950"
-                        : "bg-cyan-500 text-cyan-950"
-                    }`}
-                  >
-                    <Flag className="w-2.5 h-2.5 fill-current" />
-                    {node.endingName || "STORY ENDING"}
-                  </div>
-                )}
-
-                {(project.locks || []).find(l => l.nodeId === node.id) && (
-                  <div className="bg-amber-500/20 text-amber-400 text-[8px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono border-b border-amber-500/20">
-                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    Locked by {(project.locks || []).find(l => l.nodeId === node.id)?.userName}
-                  </div>
-                )}
-
-                <div className="p-3">
-                  <div className="flex items-start justify-between gap-1 mb-1.5">
-                    {editingTitleNodeId === node.id || isEditing ? (
-                      <input
-                        type="text"
-                        value={node.title}
-                        onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [node.id]: { ...node, title: e.target.value } }, lastModified: Date.now() })}
-                        onBlur={() => setEditingTitleNodeId(null)}
-                        onKeyDown={(e) => { if (e.key === "Enter") setEditingTitleNodeId(null); if (e.key === "Escape") { setEditingTitleNodeId(null); if (isEditing) setEditingNodeId(null); } }}
-                        className={`bg-slate-700 text-xs font-semibold text-white rounded px-1 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isEditing ? "max-w-[300px]" : "max-w-[150px]"}`}
-                        autoFocus={!isEditing}
+                <div className="glass-titlebar">
+                  {editingTitleNodeId === node.id || isEditing ? (
+                    <input
+                      type="text"
+                      value={node.title}
+                      onChange={(e) => onUpdateProject({ ...project, nodes: { ...project.nodes, [node.id]: { ...node, title: e.target.value } }, lastModified: Date.now() })}
+                      onBlur={() => setEditingTitleNodeId(null)}
+                      onKeyDown={(e) => { if (e.key === "Enter") setEditingTitleNodeId(null); if (e.key === "Escape") { setEditingTitleNodeId(null); if (isEditing) setEditingNodeId(null); } }}
+                      className="bg-transparent text-xs font-semibold text-white/90 w-full focus:outline-none"
+                      autoFocus={!isEditing}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <h3
+                      className="text-xs font-semibold text-white/90 truncate font-sans cursor-text flex-1"
+                      title={node.title}
+                      onDoubleClick={() => setEditingTitleNodeId(node.id)}
+                    >
+                      {node.title}
+                    </h3>
+                  )}
+                  <div className="window-controls-group">
+                    {!isStart && (
+                      <button
                         onMouseDown={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <h3
-                        className="text-xs font-semibold text-white truncate max-w-[150px] font-sans cursor-text"
-                        title={node.title}
-                        onDoubleClick={() => setEditingTitleNodeId(node.id)}
+                        onClick={(e) => handleSetStartNode(node.id, e)}
+                        className="ctrl-btn star"
+                        title="Set as Story Entrypoint"
                       >
-                        {node.title}
-                      </h3>
+                        <Star />
+                      </button>
                     )}
-                    <div className="flex items-center gap-1 opacity-70 hover:opacity-100 shrink-0">
-                      {!isStart && (
-                        <button
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => handleSetStartNode(node.id, e)}
-                          className="p-1 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-slate-700 cursor-pointer transition-colors"
-                          title="Set as Story Entrypoint"
-                        >
-                          <Star className="w-3 h-3" />
-                        </button>
-                      )}
-                      <div ref={nodeConfirmRef}>
-                        <button
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => handleDeleteNode(node.id, e)}
-                          className={`p-1 rounded-md cursor-pointer transition-all flex items-center justify-center ${
-                            nodeConfirmId === node.id
-                              ? "bg-rose-600 text-white px-2 animate-pulse"
-                              : "text-slate-400 hover:text-rose-400 hover:bg-slate-700"
-                          }`}
-                          title={nodeConfirmId === node.id ? "Click again to confirm deletion" : "Delete scene node"}
-                        >
-                          {nodeConfirmId === node.id ? (
-                            <span className="text-[9px] font-bold">Confirm?</span>
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
+                    {!isStart && <div className="window-controls-divider" />}
+                    <div ref={nodeConfirmRef}>
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => handleDeleteNode(node.id, e)}
+                        className={`ctrl-btn trash ${nodeConfirmId === node.id ? "!bg-[rgba(232,17,35,0.7)] !text-white !w-auto !px-2" : ""}`}
+                        title={nodeConfirmId === node.id ? "Click again to confirm deletion" : "Delete scene node"}
+                      >
+                        {nodeConfirmId === node.id ? (
+                          <span className="text-[9px] font-bold">Confirm?</span>
+                        ) : (
+                          <Trash2 />
+                        )}
+                      </button>
                     </div>
                   </div>
+                </div>
+
+                <div className="card-body p-3">
 
                   {isSelected ? (
                     <textarea
@@ -977,25 +936,52 @@ export default function FlowchartCanvas({
                     </div>
                   )}
                 </div>
+
+                {/* Ribbon badges — bottom of card */}
+                {isStart && (
+                  <div className="bg-emerald-500 text-slate-950 text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono">
+                    <Star className="w-2.5 h-2.5 fill-slate-950 text-slate-950" />
+                    Story Entrypoint
+                  </div>
+                )}
+                {node.nodeType && node.nodeType !== "story" && (
+                  <div className={`text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono ${
+                    node.nodeType === "location" ? "bg-amber-500/20 text-amber-300" : "bg-rose-500/20 text-rose-300"
+                  }`}>
+                    {node.nodeType === "location" ? "🏪 Location Card" : "⚔️ Encounter"}
+                  </div>
+                )}
+                {node.isEnding && (
+                  <div
+                    className={`text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono ${
+                      node.endingType === "GOOD"
+                        ? "bg-amber-400 text-amber-950"
+                        : node.endingType === "BAD"
+                        ? "bg-rose-500 text-rose-950"
+                        : "bg-cyan-500 text-cyan-950"
+                    }`}
+                  >
+                    <Flag className="w-2.5 h-2.5 fill-current" />
+                    {node.endingName || "STORY ENDING"}
+                  </div>
+                )}
+
+                {(project.locks || []).find(l => l.nodeId === node.id) && (
+                  <div className="bg-amber-500/20 text-amber-400 text-[8px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono border-b border-amber-500/20">
+                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Locked by {(project.locks || []).find(l => l.nodeId === node.id)?.userName}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Floating Instructions Banner */}
-      <div className="absolute top-4 left-4 z-20 bg-slate-950/80 backdrop-blur-md border border-slate-800 rounded-xl p-3.5 max-w-xs shadow-2xl pointer-events-none">
-        <h3 className="text-xs font-bold text-white mb-1 tracking-wider uppercase">Visual VN Navigator</h3>
-        <p className="text-[11px] text-slate-400 leading-relaxed">
-          • Drag the background canvas to pan.<br />
-          • Double-click background to create scenes.<br />
-          • Click and drag cards to move them.<br />
-          • Click <strong>&quot;Branch Out&quot;</strong> to link a new choice Scene path.
-        </p>
-      </div>
-
       {/* Toolbar controls */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 p-2 rounded-xl shadow-2xl">
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 glass-card p-2 rounded-xl">
         <button
           onClick={() => setZoom(Math.max(minZoom, zoom - 0.1))}
           className="canvas-btn p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"

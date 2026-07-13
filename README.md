@@ -39,10 +39,8 @@
 - Collapsible section panels
 
 ### Managers (Tab Bar)
-- **Trackers** — numeric stats (gold, courage, affection) with starting values
-- **Flags** — boolean statuses for story branching triggers
 - **Items** — inventory items with tags and autocomplete
-- **Entities** — characters/NPCs with color badges, tags, stat overrides
+- **Entities** — characters/NPCs with color badges, tags, stat overrides (includes owned trackers & flags)
 - **Calendar** — user-defined time periods with tracker conditions
 
 ### Playtest Simulator

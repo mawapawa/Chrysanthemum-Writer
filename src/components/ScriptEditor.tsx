@@ -5,6 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Mark } from "@tiptap/core";
 import ContextMenu from "./ContextMenu";
 import { InlineCommandNode } from "../extensions/InlineCommand";
+import { handleSlashCommand } from "../utils/inlineCommandUtils";
 
 const STYLE_CLASS_MAP: Record<string, string> = {
   shake: "animate-shake",
@@ -45,33 +46,13 @@ const TextColorMark = Mark.create({
 export default function ScriptEditor({ initialContent, onChange, placeholder }: ScriptEditorProps) {
   const [menuState, setMenuState] = React.useState<{ x: number; y: number; selectedText: string } | null>(null);
 
-  const handleSlashCommand = useCallback((view: any, event: KeyboardEvent) => {
-    if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-      const { state } = view;
-      const { selection } = state;
-      const { $from } = selection;
-      const before = $from.parent.textContent.slice(0, $from.parentOffset);
-      // Only trigger at start of paragraph or after a space
-      if (before === "" || before.endsWith(" ")) {
-        event.preventDefault();
-        // Delete the / character
-        const tr = state.tr.delete(selection.from - 1, selection.from);
-        // Insert the inline command node
-        const node = view.state.schema.nodes.inlineCommand?.create();
-        if (node) {
-          tr.insert(selection.from - 1, node);
-          tr.scrollIntoView();
-          view.dispatch(tr);
-        }
-        return true;
-      }
-    }
-    return false;
+  const handleSlashKey = useCallback((view: any, event: KeyboardEvent) => {
+    return handleSlashCommand(view, event);
   }, []);
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ heading: false, code: false, blockquote: false, horizontalRule: false, codeBlock: false }),
       TextStyleMark,
       TextColorMark,
       InlineCommandNode,
@@ -79,7 +60,7 @@ export default function ScriptEditor({ initialContent, onChange, placeholder }: 
     ],
     editorProps: {
       attributes: { class: "max-w-none focus:outline-none min-h-[60px] p-2 text-sm leading-relaxed" },
-      handleKeyDown: handleSlashCommand,
+      handleKeyDown: handleSlashKey,
       handleDOMEvents: {
         contextmenu: (view, event) => {
           event.preventDefault();

@@ -22,8 +22,8 @@ function Section({ title, defaultOpen, children }: { title: string; defaultOpen?
 
 export default function TutorialDialog({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xl">
+      <div className="glass-card p-6 w-full max-w-2xl max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between mb-4 shrink-0">
           <h2 className="text-sm font-bold text-slate-200">Chrysanthemum — Feature Reference</h2>
           <button onClick={onClose} className="p-1 text-slate-500 hover:text-slate-300 cursor-pointer">
@@ -48,10 +48,9 @@ export default function TutorialDialog({ onClose }: { onClose: () => void }) {
               <thead><tr className="text-slate-500 font-mono text-[10px]"><th className="text-left pr-4 pb-1">Tab</th><th className="text-left pb-1">What it manages</th></tr></thead>
               <tbody className="text-slate-300">
                 <tr><td className="pr-4 py-1 font-semibold">Storyboard</td><td>The visual canvas + node editor</td></tr>
-                <tr><td className="pr-4 py-1 font-semibold">Trackers</td><td>Numeric values (gold, courage, affection) — create, delete</td></tr>
-                <tr><td className="pr-4 py-1 font-semibold">Flags</td><td>True/false statuses for story branching triggers</td></tr>
                 <tr><td className="pr-4 py-1 font-semibold">Items</td><td>Inventory items players can collect and use</td></tr>
                 <tr><td className="pr-4 py-1 font-semibold">Entities</td><td>Characters, monsters, NPCs with name + color badge</td></tr>
+                <tr><td className="pr-4 py-1 font-semibold">Calendar</td><td>Time periods with tracker conditions for location open/closed logic</td></tr>
               </tbody>
             </table>
           </Section>

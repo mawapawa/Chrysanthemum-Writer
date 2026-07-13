@@ -321,17 +321,11 @@ export default function SceneDirectory({
     if (activeStr.startsWith("node-")) {
       const nodeId = activeStr.replace("node-", "");
 
-      // Dropped on a folder header → reparent
+      // Dropped on a folder header → reparent (preserve connections)
       if (overStr.startsWith("folder-")) {
         const targetSceneId = overStr.replace("folder-", "");
         const node = project.nodes[nodeId];
         if (!node || node.sceneId === targetSceneId) return;
-
-        // Clear outgoing connections, keep options
-        const updatedChoices = node.choices.map(c => ({
-          ...c,
-          targetNodeId: "",
-        }));
 
         const folderNodes = Object.values(project.nodes).filter(
           n => n.sceneId === targetSceneId && n.id !== nodeId
@@ -345,7 +339,6 @@ export default function SceneDirectory({
               ...node,
               sceneId: targetSceneId,
               order: folderNodes.length,
-              choices: updatedChoices,
             },
           },
           lastModified: Date.now(),
@@ -363,12 +356,8 @@ export default function SceneDirectory({
         const folderId = node.sceneId || "unassigned";
         const overFolderId = overNode.sceneId || "unassigned";
 
-        // Cross-folder reparent via node drop
+        // Cross-folder reparent via node drop (preserve connections)
         if (folderId !== overFolderId) {
-          const updatedChoices = node.choices.map(c => ({
-            ...c,
-            targetNodeId: "",
-          }));
           const folderNodes = Object.values(project.nodes).filter(
             n => n.sceneId === overFolderId && n.id !== nodeId
           );
@@ -381,7 +370,6 @@ export default function SceneDirectory({
                 ...node,
                 sceneId: overFolderId === "unassigned" ? undefined : overFolderId,
                 order: folderNodes.length,
-                choices: updatedChoices,
               },
             },
             lastModified: Date.now(),
@@ -487,10 +475,10 @@ export default function SceneDirectory({
 
   if (!isSidebarExpanded) {
     return (
-      <div className="w-12 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 gap-4 shrink-0" id="collapsed-directory">
+      <div className="w-12 h-full glass-panel border-r border-white/10 flex flex-col items-center py-4 gap-4 shrink-0" id="collapsed-directory">
         <button
           onClick={() => setIsSidebarExpanded(true)}
-          className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+          className="p-1.5 glass-button text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
           title="Expand Scene Folders Sidebar"
         >
           <FolderOpen className="w-4 h-4" />
@@ -673,8 +661,8 @@ export default function SceneDirectory({
   };
 
   return (
-    <div className="w-[280px] h-full bg-slate-950 border-r border-slate-800 flex flex-col shrink-0 select-none" id="expanded-directory">
-      <div className="p-4 border-b border-slate-800 space-y-3 shrink-0">
+    <div className="w-[280px] h-full glass-panel border-r border-white/10 flex flex-col shrink-0 select-none" id="expanded-directory">
+      <div className="p-4 border-b border-white/10 space-y-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Folder className="w-4 h-4 text-indigo-400" />
@@ -690,7 +678,7 @@ export default function SceneDirectory({
             </button>
             <button
               onClick={() => setIsSidebarExpanded(false)}
-              className="p-1 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded border border-slate-800 transition-all cursor-pointer text-[10px] font-mono"
+              className="p-1 glass-button text-slate-400 hover:text-white rounded transition-all cursor-pointer text-[10px] font-mono"
               title="Minimize Sidebar"
             >
               Collapse
@@ -705,7 +693,7 @@ export default function SceneDirectory({
             placeholder="Search scene nodes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 text-xs pl-8 pr-3 py-1.5 rounded-lg text-slate-300 focus:outline-none focus:border-indigo-500 font-sans"
+            className="w-full glass-input text-xs pl-8 pr-3 py-1.5 rounded-lg font-sans"
           />
         </div>
       </div>
@@ -714,14 +702,14 @@ export default function SceneDirectory({
         {renderFolderContent()}
       </div>
 
-      <div className="p-3 border-t border-slate-800 bg-slate-900/40 space-y-2 shrink-0">
+      <div className="p-3 border-t border-white/10 bg-black/20 space-y-2 shrink-0">
         {!isEditMode ? (
           <button
             onClick={() => {
               setIsEditMode(true);
               setSelectedNodeIds({});
             }}
-            className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            className="w-full py-2 px-3 glass-button text-slate-300 hover:text-white font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Move className="w-3.5 h-3.5 text-indigo-400" />
             Bulk Move & Delete
@@ -753,7 +741,7 @@ export default function SceneDirectory({
                     }
                   }}
                   defaultValue=""
-                  className="flex-1 bg-slate-950 border border-slate-800 text-xs rounded-lg p-1.5 text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer text-ellipsis overflow-hidden"
+                  className="flex-1 glass-input text-xs rounded-lg p-1.5 cursor-pointer text-ellipsis overflow-hidden"
                 >
                   <option value="" disabled>Select destination folder...</option>
                   <option value="unassigned">Root Directory</option>
@@ -793,8 +781,8 @@ export default function SceneDirectory({
         )}
 
         {showCreateFolder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm" onClick={() => setShowCreateFolder(false)}>
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xl" onClick={() => setShowCreateFolder(false)}>
+            <div className="glass-card p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-sm font-bold text-slate-200 mb-4">Create Folder</h3>
               <label className="block text-xs font-medium text-slate-400 mb-1.5">Folder Name</label>
               <input
@@ -805,13 +793,13 @@ export default function SceneDirectory({
                   if (e.key === "Enter") handleCreateScene();
                   if (e.key === "Escape") setShowCreateFolder(false);
                 }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 mb-4"
+                className="w-full glass-input rounded-xl px-3 py-2 text-sm mb-4"
                 placeholder="Enter folder name..."
               />
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setShowCreateFolder(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-2 glass-button text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

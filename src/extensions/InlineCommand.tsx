@@ -73,13 +73,13 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
     return {
       insertInlineCommand:
         (attrs: Record<string, any>) =>
-        ({ commands }) => {
+        ({ commands }: { commands: any }) => {
           return commands.insertContent({
             type: this.name,
             attrs: { ...attrs, isFinalized: false },
           });
         },
-    };
+    } as any;
   },
 
   addKeyboardShortcuts() {
@@ -309,6 +309,14 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
         value={currentInput}
         onChange={e => setCurrentInput(e.target.value)}
         onKeyDown={handleKeyDown}
+        onBlur={() => {
+          if (!attrs.isFinalized) {
+            const pos = getPos();
+            if (typeof pos === "number") {
+              editor.commands.deleteRange({ from: pos, to: pos + node.nodeSize });
+            }
+          }
+        }}
         placeholder={prompt}
         className="bg-slate-800 border border-indigo-500/50 text-white text-xs rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
         style={{ width, minWidth: 80, maxWidth: 300 }}

@@ -104,14 +104,14 @@ export default function CalendarManager({ project, onUpdateProject }: CalendarMa
           {editingId && (
             <>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Period Name</label>
-                <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <label className="block text-xs font-medium text-slate-400 mb-1">Period Name</label>
+                <input type="text" placeholder="e.g. Daytime, Night, Rainy Week" value={editName} onChange={e => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-600" />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-gray-700">Conditions</label>
-                  <button onClick={addCondition} className="text-[10px] text-indigo-500 hover:text-indigo-700 font-bold cursor-pointer">+ Add Condition</button>
+                  <label className="text-xs font-medium text-slate-400">Conditions</label>
+                  <button onClick={addCondition} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer">+ Add Condition</button>
                 </div>
                 <div className="space-y-1">
                   {editConditions.map((c, i) => (
@@ -119,14 +119,14 @@ export default function CalendarManager({ project, onUpdateProject }: CalendarMa
                       onChange={nc => updateCondition(i, nc)} onRemove={() => removeCondition(i)} />
                   ))}
                 </div>
-                {editConditions.length === 0 && <p className="text-[11px] text-gray-400 italic">Add at least one condition.</p>}
+                {editConditions.length === 0 && <p className="text-[11px] text-slate-500 italic">Add at least one condition.</p>}
               </div>
               <div className="flex gap-2">
                 <button onClick={save} disabled={!editName.trim() || editConditions.length === 0}
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-xl cursor-pointer disabled:cursor-not-allowed">
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-bold rounded-xl cursor-pointer disabled:cursor-not-allowed">
                   Save Period
                 </button>
-                <button onClick={resetForm} className="py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-xl cursor-pointer">
+                <button onClick={resetForm} className="py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer">
                   Cancel
                 </button>
               </div>
@@ -143,7 +143,7 @@ export default function CalendarManager({ project, onUpdateProject }: CalendarMa
       {calendar.length === 0 ? (
         <EmptyState icon={Clock} text="No periods defined yet" subtext="Define time periods to control when locations are open or closed." />
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-slate-800">
           {calendar.map(p => {
             const condText = p.conditions.map(c => {
               const t = trackers.find(tr => tr.id === c.trackerId);
@@ -154,15 +154,15 @@ export default function CalendarManager({ project, onUpdateProject }: CalendarMa
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-semibold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg border border-gray-100">{p.name}</span>
+                      <span className="font-mono text-sm font-semibold text-slate-200 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">{p.name}</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 font-mono">{condText}</p>
+                    <p className="text-xs text-slate-400 mt-1 font-mono">{condText}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => startEdit(p)} className="p-1 text-gray-400 hover:text-indigo-600 cursor-pointer text-xs">✏️</button>
+                    <button onClick={() => startEdit(p)} className="p-1 text-slate-400 hover:text-indigo-400 cursor-pointer text-xs">✏️</button>
                     <div ref={ref}>
                       <button onClick={() => handleDelete(p.id)}
-                        className={`text-xs px-2 py-1 rounded-lg border font-bold cursor-pointer ${confirmId === p.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-gray-400 hover:text-red-500 border-transparent"}`}>
+                        className={`text-xs px-2 py-1 rounded-lg border font-bold cursor-pointer ${confirmId === p.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-slate-400 hover:text-red-400 border-transparent"}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                         {confirmId === p.id && <span>Confirm?</span>}
                       </button>

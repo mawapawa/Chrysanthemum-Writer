@@ -15,12 +15,14 @@ interface SettingsDialogProps {
   onOpenTutorial?: () => void;
   onExportFolder?: (sceneId?: string) => void;
   onLoadFromDrive?: () => Promise<void>;
+  syncNow?: () => Promise<string | null>;
 }
 
 type PickerMode = null | "browse" | "paste";
 
-export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportFolder, onLoadFromDrive }: SettingsDialogProps) {
-  const { status, syncNow } = useDriveSync(project);
+export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onExportFolder, onLoadFromDrive, syncNow: propSyncNow }: SettingsDialogProps) {
+  const { status, syncNow: hookSyncNow } = useDriveSync(project);
+  const syncNow = propSyncNow || hookSyncNow;
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
@@ -58,8 +60,8 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xl">
+      <div className="glass-card p-6 w-full max-w-md space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-200">Settings</h2>
           <button onClick={onClose} className="p-1 text-slate-500 hover:text-slate-300 cursor-pointer">
