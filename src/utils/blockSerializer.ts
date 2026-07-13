@@ -1,4 +1,4 @@
-import { StoryNode, SceneBlock, StoryChoice, DialogueLine, StatChange } from "../types";
+import { StoryNode, SceneBlock, StoryChoice, DialogueLine, StatChange, InlineEffect } from "../types";
 
 export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial<StoryNode> {
   const dialogueLines: DialogueLine[] = [];
@@ -8,8 +8,12 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
   let endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL" | undefined;
   let endingName: string | undefined;
   let continueToNodeId: string | undefined;
+  const skipIdx = new Set<number>();
 
-  for (const block of blocks) {
+  for (let i = 0; i < blocks.length; i++) {
+    if (skipIdx.has(i)) continue;
+    const block = blocks[i];
+
     switch (block.type) {
       case "dialogue":
         dialogueLines.push({
@@ -29,21 +33,43 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
         });
         break;
       case "effect":
+        // If preceded by a choice, it's already attached as choice effect — skip
+        if (i > 0 && blocks[i - 1].type === "choice") break;
         statChanges.push({
           variableName: block.variableName,
           operation: block.operation,
           value: block.value,
         });
         break;
-      case "choice":
+      case "choice": {
+        const choiceEffects: InlineEffect[] = [...(block.effects || [])];
+        const next = blocks[i + 1];
+        if (next?.type === "effect") {
+          choiceEffects.push({
+            id: crypto.randomUUID(),
+            type: "adjust_tracker",
+            targetId: next.variableName,
+            operation: next.operation === "+" ? "add" : next.operation === "-" ? "subtract" : "set",
+            value: next.value,
+          });
+          skipIdx.add(i + 1);
+        } else if (next?.type === "flag") {
+          choiceEffects.push({
+            id: crypto.randomUUID(),
+            type: next.flagValue ? "set_flag" : "clear_flag",
+            targetId: next.flagName,
+          });
+          skipIdx.add(i + 1);
+        }
         choices.push({
           id: crypto.randomUUID(),
           text: block.text,
           targetNodeId: block.targetNodeId,
-          effects: block.effects,
+          effects: choiceEffects,
           requirement: block.requirement,
         });
         break;
+      }
       case "continue":
         continueToNodeId = block.targetNodeId;
         break;
@@ -52,7 +78,6 @@ export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial
         endingType = block.endingType;
         endingName = block.endingName;
         break;
-      // New block types — preserved in the blocks array, not mapped to legacy fields
       case "flag":
       case "conditional":
       case "bgm":
@@ -97,7 +122,7 @@ export function nodeToBlocks(node: StoryNode): SceneBlock[] {
     blocks.push({ type: "effect", variableName: sc.variableName, operation: sc.operation, value: Number(sc.value) || 0 });
   }
 
-  // Add choices
+  // Add choices with their effects expanded into following blocks
   for (const choice of node.choices || []) {
     blocks.push({
       type: "choice",
@@ -106,6 +131,22 @@ export function nodeToBlocks(node: StoryNode): SceneBlock[] {
       effects: choice.effects,
       requirement: choice.requirement,
     });
+    for (const ef of choice.effects || []) {
+      if (ef.type === "adjust_tracker") {
+        blocks.push({
+          type: "effect" as const,
+          variableName: ef.targetId,
+          operation: ef.operation === "add" ? "+" : ef.operation === "subtract" ? "-" : "=",
+          value: ef.value || 0,
+        });
+      } else if (ef.type === "set_flag" || ef.type === "clear_flag") {
+        blocks.push({
+          type: "flag" as const,
+          flagName: ef.targetId,
+          flagValue: ef.type === "set_flag",
+        });
+      }
+    }
   }
 
   // Add continue-to if applicable

@@ -242,7 +242,7 @@ export default function App() {
 
   const [allProjects, setAllProjects] = useState<VNProject[]>([]);
 
-  const handleUpdateProject = (updatedProject: VNProject) => {
+  const handleUpdateProject = (updatedProject: VNProject | ((prev: VNProject) => VNProject)) => {
     setProject(updatedProject);
   };
 

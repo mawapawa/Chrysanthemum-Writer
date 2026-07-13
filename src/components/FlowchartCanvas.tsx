@@ -13,7 +13,7 @@ import { blocksToNode, nodeToBlocks } from "../utils/blockSerializer";
 
 interface FlowchartCanvasProps {
   project: VNProject;
-  onUpdateProject: (project: VNProject) => void;
+  onUpdateProject: (project: VNProject | ((prev: VNProject) => VNProject)) => void;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onEnterPlaytest: (startId: string) => void;
@@ -77,28 +77,33 @@ export default function FlowchartCanvas({
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editorBlocks, setEditorBlocks] = useState<SceneBlock[]>([]);
   const [editorNodeId, setEditorNodeId] = useState<string | null>(null);
+  const editingTargetRef = useRef<string | null>(null);
 
   const activeEditNodeId = editingNodeId || selectedNodeId;
   const activeEditNode = activeEditNodeId ? project.nodes[activeEditNodeId] : null;
 
+  // Keep ref in sync so handleEditorBlocksChange always sees the latest target
+  editingTargetRef.current = activeEditNodeId;
+
   // Load blocks when the active node changes
+  const prevActiveIdRef = useRef<string | null>(null);
   useEffect(() => {
+    if (prevActiveIdRef.current === activeEditNodeId) return;
+    prevActiveIdRef.current = activeEditNodeId;
     if (activeEditNode) {
       const blocks = activeEditNode.blocks || nodeToBlocks(activeEditNode);
-      if (editorNodeId !== activeEditNodeId) {
-        setEditorBlocks(blocks);
-        setEditorNodeId(activeEditNodeId);
-      }
+      setEditorBlocks(blocks);
+      setEditorNodeId(activeEditNodeId);
     } else {
       setEditorBlocks([]);
       setEditorNodeId(null);
     }
   }, [activeEditNodeId, project.nodes[activeEditNodeId || ""]?.blocks]);
 
-  // Single handler for saving blocks — uses activeEditNodeId (NOT selectedNodeId)
+  // Single handler for saving blocks
   const handleEditorBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
     setEditorBlocks(newBlocks);
-    const targetId = editingNodeId || selectedNodeId;
+    const targetId = editingTargetRef.current;
     if (targetId && project.nodes[targetId]) {
       const node = project.nodes[targetId];
       const legacy = blocksToNode(newBlocks, node);
@@ -111,7 +116,7 @@ export default function FlowchartCanvas({
         lastModified: Date.now(),
       });
     }
-  }, [editingNodeId, selectedNodeId, project]);
+  }, [project]);
 
   const handleCreateNodeFromBlock = useCallback((): string => {
     const childId = crypto.randomUUID();
@@ -137,6 +142,36 @@ export default function FlowchartCanvas({
       nodes: { ...project.nodes, [childId]: childNode },
       lastModified: Date.now(),
     });
+    return childId;
+  }, [activeEditNodeId, project]);
+
+  const handleCreateNodeWithTitle = useCallback((title: string): string => {
+    const childId = crypto.randomUUID();
+    const parentId = activeEditNodeId;
+    const parent = parentId ? project.nodes[parentId] : null;
+    const childNode: StoryNode = {
+      id: childId,
+      displayId: generateDisplayId("SCN"),
+      title: title || "New Scene",
+      description: "",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: parent
+        ? { x: parent.position.x + 320, y: parent.position.y + 500 }
+        : { x: 400, y: 300 },
+      isEnding: false,
+      nodeType: "story",
+    };
+    // Deferred to avoid batched state conflict with handleEditorBlocksChange
+    setTimeout(() => {
+      onUpdateProject((prev: VNProject) => ({
+        ...prev,
+        nodes: { ...prev.nodes, [childId]: childNode },
+        lastModified: Date.now(),
+      }));
+    }, 0);
     return childId;
   }, [activeEditNodeId, project]);
 
@@ -793,7 +828,7 @@ export default function FlowchartCanvas({
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
                 className={`node-card pointer-events-auto glass-card ${isEditing ? "" : "absolute w-52"} ${isEditing ? "z-50" : (isSelected ? "z-40" : "z-10")} ${
                   isEditing
-                    ? "absolute overflow-hidden flex flex-col"
+                    ? "absolute overflow-y-auto flex flex-col"
                     : (draggedNodeId !== node.id ? "transition-all duration-150" : "") + (isSelected ? "" : " overflow-hidden") + " cursor-grab active:cursor-grabbing"
                 } ${
                   isEditing
@@ -926,17 +961,24 @@ export default function FlowchartCanvas({
 
                   {/* Editor — shows in focus mode (inline expansion removed) */}
                   {isEditing && (
-                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-hidden">
+                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-y-auto">
                       <BlockEditor
                         project={project}
                         blocks={editorBlocks}
                         onChange={handleEditorBlocksChange}
                         onCreateNode={handleCreateNodeFromBlock}
+                        onCreateNodeWithTitle={handleCreateNodeWithTitle}
                       />
                     </div>
                   )}
                 </div>
 
+                {/* Choice count ribbon */}
+                {node.choices.length > 0 && (
+                  <div className="bg-indigo-500/15 text-indigo-300 text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider font-mono border-t border-indigo-500/10">
+                    {node.choices.length} Choice{node.choices.length > 1 ? "s" : ""} →
+                  </div>
+                )}
                 {/* Ribbon badges — bottom of card */}
                 {isStart && (
                   <div className="bg-emerald-500 text-slate-950 text-[9px] font-bold py-0.5 px-3 uppercase text-center tracking-wider flex items-center justify-center gap-1 font-mono">

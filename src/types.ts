@@ -214,6 +214,7 @@ export interface VNScene {
   description?: string;
   color?: string;
   order?: number;
+  parentId?: string;
 }
 
 export interface VNProject {
