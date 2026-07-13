@@ -8,15 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Get version
-        id: version
-        run: echo "tag=v$(node -p "require('./package.json').version")-linux" >> $GITHUB_OUTPUT
 
       - name: Install Tauri Linux dependencies
         run: |
@@ -39,23 +33,3 @@ jobs:
         with:
           name: Chrysanthemum-AppImage
           path: src-tauri/target/release/bundle/appimage/*.AppImage
-
-      - name: Create Linux Release
-        run: |
-          cat > release-notes.md << 'EOF'
-          Linux AppImage build of Chrysanthemum ${{ steps.version.outputs.tag }}.
-
-          ### Usage
-          ```bash
-          chmod +x Chrysanthemum_*.AppImage
-          ./Chrysanthemum_*.AppImage
-          ```
-
-          Requires FUSE to run, or extract with `--appimage-extract`.
-          EOF
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "Chrysanthemum ${{ steps.version.outputs.tag }}" \
-            --notes-file release-notes.md \
-            src-tauri/target/release/bundle/appimage/*.AppImage
-        env:
-          GH_TOKEN: ${{ github.token }}
