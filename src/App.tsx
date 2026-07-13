@@ -2,14 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { VNProject, StoryNode } from "./types";
 import { generateDisplayId } from "./utils/displayIds";
 import FlowchartCanvas from "./components/FlowchartCanvas";
-import NodeEditor from "./components/NodeEditor";
 import PlaytestSimulator from "./components/PlaytestSimulator";
 import SyncIndicator from "./components/SyncIndicator";
 import TutorialDialog from "./components/TutorialDialog";
 import SettingsDialog from "./components/SettingsDialog";
 import SceneDirectory from "./components/SceneDirectory";
-import TrackersManager from "./components/TrackersManager";
-import FlagsManager from "./components/FlagsManager";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
 import CalendarManager from "./components/CalendarManager";
@@ -17,8 +14,8 @@ import { migrateProject } from "./utils/schemaMigration";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
 import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
-  Sliders, Flag, Package, Users, Clock,
-  Layers, Plus, BookOpen, Settings, Pencil, ChevronLeft, ChevronRight
+  Package, Users, Clock,
+  Layers, BookOpen, Settings, Pencil
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -117,13 +114,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"storyboard" | "stats" | "flags" | "items" | "entities" | "calendar">("storyboard");
+  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities" | "calendar">("storyboard");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("node-start");
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
   const [centerNodeTrigger, setCenterNodeTrigger] = useState<{ id: string; timestamp: number } | null>(null);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
-  const [editorWidth, setEditorWidth] = useState(420);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -448,8 +443,6 @@ export default function App() {
     );
   }
 
-  const trackerCount = project.trackers.length;
-  const flagCount = project.flags.length;
   const itemCount = project.inventory.length;
   const entityCount = project.entities.length;
   const calendarCount = (project.calendar || []).length;
@@ -527,12 +520,6 @@ export default function App() {
           <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
             <Layers className="w-4 h-4 text-indigo-500" /> Storyboard
           </button>
-          <button onClick={() => setActiveTab("stats")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "stats" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Sliders className="w-4 h-4 text-emerald-500" /> Stats ({trackerCount})
-          </button>
-          <button onClick={() => setActiveTab("flags")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "flags" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Flag className="w-4 h-4 text-amber-500" /> Flags ({flagCount})
-          </button>
           <button onClick={() => setActiveTab("items")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "items" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
             <Package className="w-4 h-4 text-purple-500" /> Items ({itemCount})
           </button>
@@ -552,7 +539,7 @@ export default function App() {
               project={project}
               onUpdateProject={handleUpdateProject}
               selectedNodeId={selectedNodeId}
-              onSelectNode={(id) => { setSelectedNodeId(id); if (id) setRightSidebarOpen(true); }}
+              onSelectNode={(id) => { setSelectedNodeId(id); }}
               hiddenFolderIds={hiddenFolderIds}
               onToggleFolderVisibility={(sceneId: string) => {
                 setHiddenFolderIds(prev => prev.includes(sceneId) ? prev.filter(id => id !== sceneId) : [...prev, sceneId]);
@@ -564,40 +551,17 @@ export default function App() {
                 project={project}
                 onUpdateProject={handleUpdateProject}
                 selectedNodeId={selectedNodeId}
-                onSelectNode={(id) => { setSelectedNodeId(id); if (id) setRightSidebarOpen(true); }}
+                onSelectNode={(id) => { setSelectedNodeId(id); }}
                 onEnterPlaytest={(id) => setPlaytestStartId(id)}
                 hiddenFolderIds={hiddenFolderIds}
                 centerNodeTrigger={centerNodeTrigger}
-                onCanvasBackgroundClick={() => setRightSidebarOpen(false)}
                 onAddBlankNode={handleAddBlankNode}
                 onAddLocation={handleAddLocation}
                 onAddEncounter={handleAddEncounter}
               />
             </div>
-            {rightSidebarOpen ? (
-              <div className="h-full shrink-0 bg-slate-900" style={{ width: editorWidth }}>
-                <NodeEditor
-                  project={project}
-                  selectedNodeId={selectedNodeId || ""}
-                  onUpdateProject={handleUpdateProject}
-                  onSelectNode={setSelectedNodeId}
-                  editorWidth={editorWidth}
-                  onResizeEditor={setEditorWidth}
-                />
-              </div>
-            ) : (
-              <button
-                onClick={() => setRightSidebarOpen(true)}
-                className="w-8 h-full bg-slate-900 border-l border-slate-800 flex items-center justify-center hover:bg-slate-800 cursor-pointer shrink-0"
-                title="Open Node Editor"
-              >
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-              </button>
-            )}
           </div>
         )}
-        {activeTab === "stats" && <TrackersManager project={project} onUpdateProject={handleUpdateProject} />}
-        {activeTab === "flags" && <FlagsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "items" && <ItemsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "entities" && <EntitiesManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "calendar" && <CalendarManager project={project} onUpdateProject={handleUpdateProject} />}
@@ -666,9 +630,8 @@ export default function App() {
           onSelectNode={(id) => {
             setSelectedNodeId(id);
             setCenterNodeTrigger({ id, timestamp: Date.now() });
-            setRightSidebarOpen(true);
           }}
-          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "stats" | "flags" | "items" | "entities" | "calendar")}
+          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "items" | "entities" | "calendar")}
           onClose={() => setSearchOpen(false)}
         />
       )}
