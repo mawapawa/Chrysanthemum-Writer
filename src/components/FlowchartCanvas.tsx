@@ -21,8 +21,6 @@ interface FlowchartCanvasProps {
   centerNodeTrigger?: { id: string; timestamp: number } | null;
   onCanvasBackgroundClick?: () => void;
   onAddBlankNode?: () => void;
-  onAddLocation?: () => void;
-  onAddEncounter?: () => void;
 }
 
 export default function FlowchartCanvas({
@@ -35,8 +33,6 @@ export default function FlowchartCanvas({
   centerNodeTrigger = null,
   onCanvasBackgroundClick,
   onAddBlankNode,
-  onAddLocation,
-  onAddEncounter,
 }: FlowchartCanvasProps) {
   // Canvas viewing transformations
   const [pan, setPan] = useState({ x: 100, y: 100 });
@@ -413,9 +409,9 @@ export default function FlowchartCanvas({
     const isVert = flowDirection === "vertical";
     const CARD_W = 240;
     const CARD_H = 140;
-    const GAP_X = 80;
-    const GAP_Y = 60;
-    const PADDING = 30;
+    const GAP_X = 100;
+    const GAP_Y = 80;
+    const PADDING = 40;
 
     // 1. Assign integer layer depths via BFS from the start node
     const layers: Record<string, number> = {};
@@ -470,8 +466,9 @@ export default function FlowchartCanvas({
         return subtreeHeight[nodeId];
       }
       let totalHeight = 0;
-      for (const childId of children) {
-        totalHeight += calcSubtreeHeight(childId);
+      for (let ci = 0; ci < children.length; ci++) {
+        totalHeight += calcSubtreeHeight(children[ci]);
+        if (ci < children.length - 1) totalHeight += GAP_Y;
       }
       subtreeHeight[nodeId] = Math.max(CARD_H + PADDING, totalHeight);
       return subtreeHeight[nodeId];
@@ -527,6 +524,7 @@ export default function FlowchartCanvas({
           let totalSubH = 0;
           for (let si = 0; si < siblingIdx; si++) {
             totalSubH += calcSubtreeHeight(siblings[si]);
+            totalSubH += GAP_Y;
           }
           const yPos = positions[parentId].y + (CARD_H / 2) + totalSubH - calcSubtreeHeight(id) / 2;
           positions[id] = { x: xPos, y: yPos };
@@ -1026,7 +1024,7 @@ export default function FlowchartCanvas({
       <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 glass-card p-2 rounded-xl">
         <button
           onClick={() => setZoom(Math.max(minZoom, zoom - 0.1))}
-          className="canvas-btn p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+          className="canvas-btn p-2 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
@@ -1034,7 +1032,7 @@ export default function FlowchartCanvas({
         <select
           value={String(Math.round(zoom * 100))}
           onChange={(e) => setZoom(parseInt(e.target.value) / 100)}
-          className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded px-1 py-0.5 min-w-[60px] text-center cursor-pointer"
+          className="bg-slate-900/50 border border-white/10 text-xs text-slate-300 rounded px-1 py-0.5 min-w-[60px] text-center cursor-pointer backdrop-blur-md"
         >
           <option value="100">100%</option>
           <option value="75">75%</option>
@@ -1043,55 +1041,37 @@ export default function FlowchartCanvas({
         </select>
         <button
           onClick={() => setZoom(Math.min(maxZoom, zoom + 0.1))}
-          className="canvas-btn p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+          className="canvas-btn p-2 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
           onClick={() => setZoom(1)}
-          className="canvas-btn p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+          className="canvas-btn p-2 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
           title="Reset Zoom"
         >
           <Compass className="w-4 h-4" />
         </button>
-        <div className="w-[1px] h-5 bg-slate-800 mx-1" />
+        <div className="w-[1px] h-5 bg-white/10 mx-1" />
         <button
           onClick={centerOnStartNode}
-          className="canvas-btn p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+          className="canvas-btn p-2 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
           title="Center on Entrance Node"
         >
           <Crosshair className="w-4 h-4" />
         </button>
         {onAddBlankNode && (
-          <>
-            <div className="w-[1px] h-5 bg-slate-800 mx-1" />
-            <button
-              onClick={onAddBlankNode}
-              className="canvas-btn p-2 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-              title="Add Scene Point"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-            {onAddLocation && (
-              <button
-                onClick={onAddLocation}
-                className="canvas-btn p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                title="Add Location Card"
-              >
-                🏪
-              </button>
-            )}
-            {onAddEncounter && (
-              <button
-                onClick={onAddEncounter}
-                className="canvas-btn p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                title="Add Encounter Card"
-              >
-                ⚔️
-              </button>
-            )}
-          </>
+          <div className="w-[1px] h-5 bg-white/10 mx-1" />
+        )}
+        {onAddBlankNode && (
+          <button
+            onClick={onAddBlankNode}
+            className="canvas-btn p-2 text-slate-400 hover:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+            title="Add Scene Point"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
         )}
         <button
           onClick={() => {
@@ -1102,14 +1082,14 @@ export default function FlowchartCanvas({
               lastModified: Date.now(),
             });
           }}
-          className="canvas-btn p-2 text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold px-2.5 font-mono"
+          className="canvas-btn p-2 text-emerald-400 hover:text-emerald-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold px-2.5 font-mono"
           title="Toggle Flow Layout orientation (Horizontal vs. Top-Down Org-Chart)"
         >
           Flow: <span className="uppercase text-white text-[10px]">{flowDirection}</span>
         </button>
         <button
           onClick={autoArrangeNodes}
-          className="canvas-btn p-2 text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold px-2.5 font-mono"
+          className="canvas-btn p-2 text-indigo-400 hover:text-indigo-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold px-2.5 font-mono"
           title="Auto-tidy node layout"
         >
           Tidy Layout
@@ -1120,7 +1100,7 @@ export default function FlowchartCanvas({
       {project.startNodeId && (
         <button
           onClick={() => onEnterPlaytest(selectedNodeId ?? project.startNodeId)}
-          className="absolute bottom-4 right-4 z-20 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl transition-all shadow-xl hover:shadow-2xl flex items-center gap-2 text-xs font-sans uppercase tracking-wider cursor-pointer"
+          className="absolute bottom-4 right-4 z-20 glass-button text-emerald-300 hover:text-emerald-200 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-sans uppercase tracking-wider cursor-pointer"
         >
           <Play className="w-4 h-4 fill-current" />
           Test Walkthrough

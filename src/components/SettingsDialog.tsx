@@ -56,7 +56,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5">
+      <div className="glass-card p-6 w-full max-w-md space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-200">Settings</h2>
           <button onClick={onClose} className="p-1 text-slate-500 hover:text-slate-300 cursor-pointer">
@@ -67,7 +67,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
         {/* Google Account */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Google Account</h3>
-          <div className="bg-slate-800/50 rounded-xl p-3 space-y-2">
+          <div className="bg-white/5 rounded-xl p-3 space-y-2">
             {user ? (
               <>
                 <p className="text-xs text-slate-400">Signed in as:</p>
@@ -104,7 +104,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
         {/* Google Drive */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Google Drive</h3>
-          <div className="bg-slate-800/50 rounded-xl p-3 space-y-2">
+          <div className="bg-white/5 rounded-xl p-3 space-y-2">
             {project?.driveFolderId ? (
               <>
                 <div className="flex items-center justify-between">
@@ -170,7 +170,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
                         Link Folder
                       </button>
                       <button onClick={() => setPickerMode(null)}
-                        className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                        className="py-1.5 px-3 glass-button text-slate-300 text-xs font-bold rounded-lg cursor-pointer">
                         Cancel
                       </button>
                     </div>
@@ -195,7 +195,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
                   </button>
                   <button onClick={() => setPickerMode("paste")}
                     disabled={!user}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 disabled:text-slate-600 text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 glass-button disabled:opacity-50 text-slate-300 disabled:text-slate-600 text-xs font-bold rounded-lg cursor-pointer disabled:cursor-not-allowed">
                     <Link className="w-3.5 h-3.5" />
                     Paste Link
                   </button>
@@ -208,7 +208,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
         {/* Export */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Export</h3>
-          <div className="bg-slate-800/50 rounded-xl p-3 flex items-center justify-between">
+          <div className="bg-white/5 rounded-xl p-3 flex items-center justify-between">
             <p className="text-xs text-slate-300">Download project as JSON file</p>
             <button onClick={() => { onExportProject?.(); onClose(); }}
               className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer">
@@ -220,7 +220,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
         {/* Help */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Help</h3>
-          <div className="bg-slate-800/50 rounded-xl p-3">
+          <div className="bg-white/5 rounded-xl p-3">
             <button onClick={() => { onClose(); onOpenTutorial?.(); }}
               className="w-full py-2 px-3 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-xl cursor-pointer">
               📚 View Tutorial
@@ -235,7 +235,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
         {/* About */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">About</h3>
-          <div className="bg-slate-800/50 rounded-xl p-3">
+          <div className="bg-white/5 rounded-xl p-3">
             <p className="text-sm font-bold text-slate-200">Chrysanthemum</p>
             <p className="text-xs text-slate-500 font-mono mt-0.5">Version 1.0.2</p>
             <p className="text-xs text-slate-500 font-mono">Built with Tauri + React</p>

@@ -126,7 +126,7 @@ export default function CalendarManager({ project, onUpdateProject }: CalendarMa
                   className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-bold rounded-xl cursor-pointer disabled:cursor-not-allowed">
                   Save Period
                 </button>
-                <button onClick={resetForm} className="py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer">
+                <button onClick={resetForm} className="py-2 px-4 glass-button text-slate-300 text-xs font-bold rounded-xl cursor-pointer">
                   Cancel
                 </button>
               </div>

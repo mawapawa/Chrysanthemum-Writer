@@ -349,13 +349,13 @@ export default function PlaytestSimulator({
 
   if (!node) {
     return (
-      <div className="p-8 text-center text-gray-300 max-w-lg mx-auto bg-slate-900 rounded-3xl border border-slate-800 mt-12" id="playtest-error">
+      <div className="p-8 text-center text-slate-300 max-w-lg mx-auto glass-card mt-12" id="playtest-error">
         <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
         <h2 className="text-lg font-bold">Simulator Startup Error</h2>
         <p className="text-xs text-slate-400 mt-2 leading-relaxed">
           The starting node for this playtest could not be loaded or was deleted. Return to visual storyboard canvas, click any scene node, and click &quot;Test Walkthrough&quot; to set a correct entry scene.
         </p>
-        <button onClick={onExit} className="mt-5 px-5 py-2 bg-slate-800 rounded-xl font-bold text-xs hover:bg-slate-700">
+        <button onClick={onExit} className="mt-5 px-5 py-2 glass-button rounded-xl font-bold text-xs">
           Back to Canvas
         </button>
       </div>
@@ -409,7 +409,7 @@ export default function PlaytestSimulator({
               const hasChanged = currentVal !== v.defaultValue;
 
               return (
-                <div key={v.name} className="flex flex-col gap-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                    <div key={v.name} className="flex flex-col gap-1 glass-card p-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold text-slate-200">
                       {v.name}
@@ -439,7 +439,7 @@ export default function PlaytestSimulator({
               playerInventory.map((itemId) => {
                 const item = project.inventory.find(i => i.id === itemId);
                 return (
-                  <div key={itemId} className="flex items-center gap-1.5 bg-slate-950/60 p-1.5 rounded-lg border border-slate-800">
+                  <div key={itemId} className="flex items-center gap-1.5 glass-card p-1.5">
                     <span className="text-[10px] font-mono text-indigo-400 font-bold">{item?.name || itemId}</span>
                   </div>
                 );
@@ -451,7 +451,7 @@ export default function PlaytestSimulator({
         {/* Dynamic Action Audit Trail Log */}
         <div className="mt-4 border-t border-slate-800 pt-4" id="vn-player-logs">
           <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Live Operation Feed</h4>
-          <div className="space-y-1.5 max-h-40 overflow-y-auto bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+          <div className="space-y-1.5 max-h-40 overflow-y-auto glass-card p-2.5">
             {logs.length === 0 ? (
               <p className="text-[10px] text-slate-600 italic">Logs are empty. Feed will record stat updates live as you navigate choice branches.</p>
             ) : (
@@ -497,7 +497,7 @@ export default function PlaytestSimulator({
             <button
               onClick={handleBack}
               disabled={history.length === 0}
-              className="py-1.5 px-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-slate-300 text-xs font-bold rounded-xl border border-slate-800 flex items-center gap-1 transition-colors cursor-pointer"
+              className="py-1.5 px-3 glass-button disabled:opacity-40 text-slate-300 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
             >
               <ChevronLeft className="w-4 h-4" /> Undo Branch
             </button>

@@ -9,9 +9,9 @@ interface Section {
 function Section({ title, defaultOpen, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   return (
-    <div className="border border-slate-800 rounded-xl overflow-hidden">
+    <div className="border border-white/10 rounded-xl overflow-hidden">
       <button onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-slate-800/50 hover:bg-slate-800 text-left cursor-pointer transition-colors">
+        className="w-full flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 text-left cursor-pointer transition-colors">
         {open ? <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-indigo-400 shrink-0" />}
         <span className="text-xs font-bold text-slate-200">{title}</span>
       </button>
@@ -195,7 +195,7 @@ export default function TutorialDialog({ onClose }: { onClose: () => void }) {
 
         <div className="mt-4 pt-3 border-t border-slate-800 text-center shrink-0">
           <button onClick={onClose}
-            className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer">
+            className="px-6 py-2 glass-button text-slate-300 text-xs font-bold rounded-xl cursor-pointer">
             Close
           </button>
         </div>

@@ -496,7 +496,7 @@ export default function SceneDirectory({
 
   if (!isSidebarExpanded) {
     return (
-      <div className="w-12 h-full glass-panel border-r border-white/10 flex flex-col items-center py-4 gap-4 shrink-0" id="collapsed-directory">
+      <div className="w-12 h-full glass-card border-r border-white/10 flex flex-col items-center py-4 gap-4 shrink-0" id="collapsed-directory">
         <button onClick={() => setIsSidebarExpanded(true)} className="p-1.5 glass-button text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer" title="Expand Sidebar">
           <FolderOpen className="w-4 h-4" />
         </button>
@@ -561,7 +561,7 @@ export default function SceneDirectory({
 
   return (
     <div className="h-full flex flex-row shrink-0 select-none" id="expanded-directory" style={{ width: sidebarWidth }}>
-      <div className="flex-1 h-full glass-panel border-r border-white/10 flex flex-col overflow-hidden">
+      <div className="flex-1 h-full glass-card border-r border-white/10 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-white/10 space-y-3 shrink-0">
         <div className="flex items-center justify-between">
@@ -570,10 +570,10 @@ export default function SceneDirectory({
             <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Scene Directory</h3>
           </div>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => handleOpenCreateFolder()} className="p-1 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded border border-indigo-500/20 transition-all cursor-pointer" title="Add New Folder">
+            <button onClick={() => handleOpenCreateFolder()} className="p-1 glass-button text-indigo-400 hover:text-indigo-200 rounded cursor-pointer" title="Add New Folder">
               <FolderPlus className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setIsSidebarExpanded(false)} className="p-1 glass-button text-slate-400 hover:text-white rounded transition-all cursor-pointer text-[10px] font-mono" title="Minimize Sidebar">Collapse</button>
+            <button onClick={() => setIsSidebarExpanded(false)} className="p-1 glass-button text-slate-400 hover:text-white rounded transition-all cursor-pointer text-xs font-bold" title="Minimize Sidebar">Collapse</button>
           </div>
         </div>
         <div className="relative">

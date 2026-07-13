@@ -149,7 +149,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-full overflow-y-auto" id="entities-manager-container">
-      <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xs h-fit" id="entity-creator-card">
+      <div className="lg:col-span-1 glass-card p-6 h-fit" id="entity-creator-card">
         <div className="flex items-center gap-2 mb-4">
           <Users className="w-5 h-5 text-indigo-400" />
           <h2 className="text-lg font-semibold text-slate-200">{editingEntity ? "Edit Entity" : "Define Entities"}</h2>
@@ -272,13 +272,13 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
 
           <div className="flex gap-2">
             <button type="submit"
-              className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer">
+              className="flex-1 py-2.5 px-4 glass-button text-white font-medium text-sm rounded-xl flex items-center justify-center gap-2 cursor-pointer">
               {editingEntity ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {editingEntity ? "Update Entity" : "Add Entity"}
             </button>
             {editingEntity && (
               <button type="button" onClick={resetForm}
-                className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm rounded-xl cursor-pointer">
+                className="py-2.5 px-4 glass-button text-slate-300 font-medium text-sm rounded-xl cursor-pointer">
                 Cancel
               </button>
             )}
@@ -287,7 +287,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
       </div>
 
       <div className="lg:col-span-2 space-y-6" id="entity-list-panel">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xs" id="entity-list-card">
+        <div className="glass-card p-6" id="entity-list-card">
           <h2 className="text-lg font-semibold text-slate-200 mb-4">Entity Registry</h2>
           {project.entities.length === 0 ? (
             <EmptyState icon={Users} text="No entities defined yet" subtext="Create characters, monsters, and NPCs." />
@@ -298,7 +298,7 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
                 const flags = entity.ownedFlags || [];
                 const expressions = entity.expressions || [];
                 return (
-                  <div key={entity.id} className="p-4 border border-slate-800 rounded-2xl bg-slate-800/30 flex flex-col justify-between" id={`entity-card-${entity.id}`}>
+                  <div key={entity.id} className="glass-card p-4 flex flex-col justify-between" id={`entity-card-${entity.id}`}>
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${textColorForHex(entity.color)}`} style={{ backgroundColor: entity.color }}>
@@ -310,8 +310,8 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <div ref={ref}>
-                            <button onClick={() => handleDeleteEntity(entity.id)}
-                              className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${confirmId === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-slate-400 hover:text-red-400 hover:bg-red-950/20 border-transparent"}`}
+                <button onClick={() => handleDeleteEntity(entity.id)}
+                  className={`text-xs px-2 py-1 rounded-lg transition-all cursor-pointer border flex items-center gap-1 font-bold ${confirmId === entity.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-slate-400 hover:text-red-400 border-transparent"}`}
                               title={confirmId === entity.id ? "Click again to confirm" : "Delete entity"}>
                               <Trash2 className="w-3.5 h-3.5" />
                               {confirmId === entity.id && <span className="text-[9px]">Confirm?</span>}

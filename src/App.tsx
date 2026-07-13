@@ -9,13 +9,11 @@ import SettingsDialog from "./components/SettingsDialog";
 import SceneDirectory from "./components/SceneDirectory";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
-import CalendarManager from "./components/CalendarManager";
 import { migrateProject } from "./utils/schemaMigration";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
 import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
-  Package, Users, Clock,
-  Layers, BookOpen, Settings, Pencil
+  Package, Users, Layers, BookOpen, Settings, Pencil
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -114,7 +112,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities" | "calendar">("storyboard");
+  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities">("storyboard");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("node-start");
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
@@ -372,52 +370,6 @@ export default function App() {
     setSelectedNodeId("node-start");
   };
 
-  const handleAddLocation = () => {
-    const newId = crypto.randomUUID();
-    const newNode: StoryNode = {
-      id: newId,
-      title: "New Location",
-      description: "A location in your world.",
-      speaker: "Narrator",
-      dialogueLines: [],
-      choices: [],
-      statChanges: [],
-      position: { x: 100, y: 500 },
-      isEnding: false,
-      nodeType: "location",
-      locationData: { openTime: "any", inventory: [], tags: [] },
-    };
-    setProject({
-      ...project,
-      nodes: { ...project.nodes, [newId]: newNode },
-      lastModified: Date.now(),
-    });
-    setSelectedNodeId(newId);
-  };
-
-  const handleAddEncounter = () => {
-    const newId = crypto.randomUUID();
-    const newNode: StoryNode = {
-      id: newId,
-      title: "New Encounter",
-      description: "An enemy encounter.",
-      speaker: "Narrator",
-      dialogueLines: [],
-      choices: [],
-      statChanges: [],
-      position: { x: 100, y: 700 },
-      isEnding: false,
-      nodeType: "encounter",
-      encounterData: { enemyName: "Enemy", hp: 10, attack: 5, defense: 2, drops: [], tags: [] },
-    };
-    setProject({
-      ...project,
-      nodes: { ...project.nodes, [newId]: newNode },
-      lastModified: Date.now(),
-    });
-    setSelectedNodeId(newId);
-  };
-
   const handleAddBlankNode = () => {
     const newId = crypto.randomUUID();
     const newNode: StoryNode = {
@@ -455,19 +407,18 @@ export default function App() {
 
   const itemCount = project.inventory.length;
   const entityCount = project.entities.length;
-  const calendarCount = (project.calendar || []).length;
 
   if (loading) {
     return (
       <div className="h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-slate-400 text-sm font-mono animate-pulse">Loading...</div>
+        <div className="text-slate-400 text-sm font-mono animate-pulse">Loading<span className="animate-pulse">...</span></div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden font-sans text-slate-800" id="app-root-container">
-      <header className="bg-slate-900 text-white shrink-0 border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl z-20">
+    <div className="h-screen flex flex-col bg-slate-950 overflow-hidden font-sans text-slate-200" id="app-root-container">
+      <header className="glass-header shrink-0 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-20">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => setIsProjectsModalOpen(true)}
@@ -496,7 +447,7 @@ export default function App() {
                   <Pencil className="w-3 h-3 text-slate-600 group-hover:text-indigo-400 shrink-0 transition-colors" />
                 </button>
               )}
-              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded border border-indigo-500/25 uppercase cursor-pointer" onClick={() => setIsProjectsModalOpen(true)}>VN Project</span>
+              <span className="text-[10px] bg-indigo-500/15 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded border border-indigo-500/25 uppercase cursor-pointer" onClick={() => setIsProjectsModalOpen(true)}>VN Project</span>
             </div>
             {editingDescription ? (
               <input
@@ -519,30 +470,27 @@ export default function App() {
         </div>
         <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
           <SyncIndicator status={syncStatus} errorMsg={syncError} onSyncNow={syncNow} />
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition-all border border-slate-700 cursor-pointer">
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 glass-button text-slate-400 hover:text-indigo-400 rounded-xl cursor-pointer">
             <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
 
-      <div className="bg-white border-b border-gray-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs z-10">
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-          <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Layers className="w-4 h-4 text-indigo-500" /> Storyboard
+      <div className="glass-tabbar px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0 z-10">
+        <div className="flex items-center gap-1 bg-black/20 p-1 rounded-xl">
+          <button onClick={() => setActiveTab("storyboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "storyboard" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Layers className="w-4 h-4 text-indigo-400" /> Storyboard
           </button>
-          <button onClick={() => setActiveTab("items")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "items" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Package className="w-4 h-4 text-purple-500" /> Items ({itemCount})
+          <button onClick={() => setActiveTab("items")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "items" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Package className="w-4 h-4 text-purple-400" /> Items ({itemCount})
           </button>
-          <button onClick={() => setActiveTab("entities")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "entities" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Users className="w-4 h-4 text-indigo-500" /> Entities ({entityCount})
-          </button>
-          <button onClick={() => setActiveTab("calendar")} className={`flex items-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === "calendar" ? "bg-white text-slate-900 shadow-xs" : "text-gray-500 hover:text-gray-900"}`}>
-            <Clock className="w-4 h-4 text-cyan-500" /> Calendar ({calendarCount})
+          <button onClick={() => setActiveTab("entities")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "entities" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Users className="w-4 h-4 text-indigo-400" /> Entities ({project.entities.length})
           </button>
         </div>
       </div>
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden bg-slate-950">
         {activeTab === "storyboard" && (
           <div className="h-full flex flex-row overflow-hidden">
             <SceneDirectory
@@ -556,7 +504,7 @@ export default function App() {
               }}
               onTriggerCenterNode={(nodeId) => setCenterNodeTrigger({ id: nodeId, timestamp: Date.now() })}
             />
-            <div className="flex-1 h-full relative border-r border-slate-200">
+            <div className="flex-1 h-full relative border-r border-white/5">
               <FlowchartCanvas
                 project={project}
                 onUpdateProject={handleUpdateProject}
@@ -566,21 +514,18 @@ export default function App() {
                 hiddenFolderIds={hiddenFolderIds}
                 centerNodeTrigger={centerNodeTrigger}
                 onAddBlankNode={handleAddBlankNode}
-                onAddLocation={handleAddLocation}
-                onAddEncounter={handleAddEncounter}
               />
             </div>
           </div>
         )}
         {activeTab === "items" && <ItemsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "entities" && <EntitiesManager project={project} onUpdateProject={handleUpdateProject} />}
-        {activeTab === "calendar" && <CalendarManager project={project} onUpdateProject={handleUpdateProject} />}
       </main>
 
       {isProjectsModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50" id="projects-modal-container">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="glass-card p-6 w-full max-w-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-indigo-400 animate-pulse" />
                 <h3 className="text-base font-bold text-white uppercase tracking-wider">All Projects</h3>
@@ -641,7 +586,7 @@ export default function App() {
             setSelectedNodeId(id);
             setCenterNodeTrigger({ id, timestamp: Date.now() });
           }}
-          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "items" | "entities" | "calendar")}
+          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "items" | "entities")}
           onClose={() => setSearchOpen(false)}
         />
       )}
