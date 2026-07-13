@@ -12,6 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get version
+        id: version
+        run: echo "tag=v$(node -p "require('./package.json').version")-linux" >> $GITHUB_OUTPUT
+
       - name: Install Tauri Linux dependencies
         run: |
           sudo apt update
@@ -29,8 +33,21 @@ jobs:
       - name: Build AppImage
         run: npm run tauri build
 
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
+      - name: Create Linux Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Chrysanthemum-Linux-AppImage
-          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Chrysanthemum ${{ steps.version.outputs.tag }}
+          body: |
+            Linux AppImage build of Chrysanthemum v${{ steps.version.outputs.tag }}.
+
+            ### Usage
+            ```bash
+            chmod +x Chrysanthemum_*.AppImage
+            ./Chrysanthemum_*.AppImage
+            ```
+
+            Requires FUSE to run, or extract with `--appimage-extract`.
+          files: src-tauri/target/release/bundle/appimage/*.AppImage
+          draft: false
+          prerelease: false
