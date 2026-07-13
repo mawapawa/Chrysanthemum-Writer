@@ -235,7 +235,7 @@ async function signInWeb(): Promise<AuthUser> {
 async function signInTauri(): Promise<AuthUser> {
   log("signInTauri()");
   const { listen } = await import("@tauri-apps/api/event");
-  const { openUrl } = await import("@tauri-apps/plugin-opener");
+  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
 
   const port = await invoke<number>("start_oauth_server");
   log("signInTauri() — server started on port", port);
@@ -251,17 +251,19 @@ async function signInTauri(): Promise<AuthUser> {
     const TIMEOUT_MS = 5 * 60 * 1000;
     let settled = false;
     let unlisten: (() => void) | null = null;
+    let oauthWindow: WebviewWindow | null = null;
+
+    const closeWindow = () => {
+      try { oauthWindow?.close(); } catch { }
+    };
 
     const timeout = setTimeout(async () => {
       if (settled) return;
       settled = true;
       log("signInTauri() — timeout reached, cleaning up");
       unlisten?.();
-      try {
-        await invoke("cancel_oauth_server", { port });
-      } catch {
-        // server may have already shut down
-      }
+      closeWindow();
+      try { await invoke("cancel_oauth_server", { port }); } catch { }
       reject(new Error("OAuth sign-in timed out"));
     }, TIMEOUT_MS);
 
@@ -273,6 +275,7 @@ async function signInTauri(): Promise<AuthUser> {
         const code = url.searchParams.get("code");
         if (!code) {
           settled = true;
+          closeWindow();
           reject(new Error("No authorization code in redirect"));
           return;
         }
@@ -282,19 +285,30 @@ async function signInTauri(): Promise<AuthUser> {
         const user = await fetchUserInfo(tokens.accessToken);
         notifyListeners(user);
         settled = true;
+        closeWindow();
         resolve(user);
       } catch (err) {
         settled = true;
+        closeWindow();
         reject(err);
       }
     }).then((fn) => {
       unlisten = fn;
-      log("signInTauri() — listener registered, opening browser");
-      openUrl(authUrl).catch((err: unknown) => {
+      log("signInTauri() — listener registered, opening webview");
+      oauthWindow = new WebviewWindow("google-oauth", {
+        url: authUrl,
+        width: 600,
+        height: 700,
+        title: "Sign in with Google",
+        resizable: true,
+      });
+      oauthWindow.once("tauri://error", () => {
         if (!settled) {
           settled = true;
           clearTimeout(timeout);
-          reject(new Error("Failed to open browser: " + String(err)));
+          closeWindow();
+          try { invoke("cancel_oauth_server", { port }); } catch { }
+          reject(new Error("Failed to open OAuth window"));
         }
       });
     }).catch((err: unknown) => {
