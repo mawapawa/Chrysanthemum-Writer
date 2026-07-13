@@ -3,7 +3,8 @@ export function handleSlashCommand(view: any, event: KeyboardEvent): boolean {
     const { state } = view;
     const { $from } = state.selection;
     const before = $from.parent.textContent.slice(0, $from.parentOffset);
-    if (before === "" || before.endsWith(" ")) {
+    const nodeBefore = $from.nodeBefore;
+    if (before === "" || before.endsWith(" ") || nodeBefore?.type.name === "hard_break") {
       event.preventDefault();
       const node = view.state.schema.nodes.inlineCommand?.create();
       if (node) {

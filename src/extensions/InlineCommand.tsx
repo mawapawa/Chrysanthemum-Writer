@@ -258,8 +258,10 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
 
   const commitValue = useCallback((value: string) => {
     if (!attrs.type) {
-      const cmd = value;
-      if (COMMAND_STEPS[cmd]) {
+      const cmd = Object.keys(COMMAND_STEPS).find(c =>
+        c.startsWith(value.toLowerCase()) || value.toLowerCase().startsWith(c)
+      );
+      if (cmd) {
         flushSync(() => {
           setCurrentInput("");
           setSelectedIndex(0);
@@ -339,8 +341,9 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
       e.preventDefault();
       const input = (e.currentTarget as HTMLInputElement).value;
       const trimmed = input.trim();
-      if (dynamicOptionsVal) {
-        const filtered = dynamicOptionsVal.filter(opt => !trimmed || opt.toLowerCase().includes(trimmed.toLowerCase()));
+      const options = !attrs.type ? filteredCommands : dynamicOptionsVal;
+      if (options) {
+        const filtered = options.filter(opt => !trimmed || opt.toLowerCase().includes(trimmed.toLowerCase()));
         if (filtered[selectedIndex]) {
           commitValue(filtered[selectedIndex]);
           return;
@@ -354,6 +357,13 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
       e.preventDefault();
       if (isEditing) {
         setIsEditing(false);
+      } else if (step > 0) {
+        setValues(v => v.slice(0, -1));
+        setStep(s => s - 1);
+        setCurrentInput("");
+      } else if (attrs.type) {
+        setCurrentInput("");
+        updateAttributes({ type: "", label: "" });
       } else {
         const pos = getPos();
         if (typeof pos === "number") {

@@ -45,7 +45,7 @@ function blocksToHTML(blocks: SceneBlock[], project: VNProject): string {
   for (const b of blocks) {
     if (!blockHasContent(b)) continue;
     if (b.type === "narrative") {
-      parts.push(escapeHTML(b.text || ""));
+      parts.push(escapeHTML(b.text || "").replace(/\n/g, "<br>"));
     } else {
       const label = badgeLabel(b, project);
       const cls = commandColor(b.type);
@@ -53,7 +53,7 @@ function blocksToHTML(blocks: SceneBlock[], project: VNProject): string {
       parts.push(`<span data-block="${data}" class="${cls}" style="user-select:none;cursor:default;vertical-align:middle;">${escapeHTML(label)}</span>`);
     }
   }
-  return `<p>${parts.join(" ")}</p>`;
+  return `<p>${parts.join("<br>")}</p>`;
 }
 
 // Parse TipTap HTML back to blocks
@@ -187,7 +187,6 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode, o
     event.preventDefault();
     const { from, to } = view.state.selection;
     const selectedText = view.state.doc.textBetween(from, to);
-    if (!selectedText) return true;
     setMenuState({ x: event.clientX, y: event.clientY, selectedText });
     return true;
   }, []);

@@ -322,14 +322,24 @@ export default function App() {
     setIsProjectsModalOpen(false);
   };
 
-  const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_storyboard.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const handleExportJSON = async () => {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_storyboard.json`,
+        types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(project, null, 2));
+      await writable.close();
+    } catch {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
+      const a = document.createElement("a");
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_storyboard.json`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
