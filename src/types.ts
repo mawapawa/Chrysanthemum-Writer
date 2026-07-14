@@ -138,6 +138,26 @@ export interface CalendarPeriod {
   conditions: CalendarCondition[];
 }
 
+export interface TimeSegment {
+  name: string;
+  ticks: number;
+}
+
+export interface CustomTimeConfig {
+  segments: TimeSegment[];
+  daysOfWeek: string[];
+  months: { name: string; days: number }[];
+}
+
+export interface TimeContext {
+  tick: number;
+  segment: string;
+  dayOfWeek: string;
+  dayOfMonth: number;
+  month: string;
+  year: number;
+}
+
 export interface LocationData {
   openTime?: "day" | "night" | "any";
   openPeriodId?: string;
@@ -208,7 +228,8 @@ export type SceneBlock =
   | { type: "sfx"; soundName: string }
   | { type: "background"; asset: string }
   | { type: "delay"; seconds: number }
-  | { type: "itemEffect"; action: "give" | "take"; itemName: string };
+  | { type: "itemEffect"; action: "give" | "take"; itemName: string }
+  | { type: "time"; action: "add" | "set"; value: number; segment?: string };
 
 export interface StoryNode {
   id: string;
@@ -270,6 +291,8 @@ export interface VNProject {
   lastModifiedBy?: { id: string; name: string };
   locks?: NodeLock[];
   calendar?: CalendarPeriod[];
+  customTimeConfig?: CustomTimeConfig;
+  globalTimeTicks?: number;
   scenes?: VNScene[];
   flowDirection?: "horizontal" | "vertical";
   variables?: VNVariable[];

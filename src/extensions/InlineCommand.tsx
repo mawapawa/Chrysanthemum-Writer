@@ -83,8 +83,6 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
       createNodeWithTitle: undefined as ((title: string) => string) | undefined,
       inventoryItemNames: [] as string[],
       createInventoryItem: undefined as ((name: string) => void) | undefined,
-      createLocation: undefined as ((name: string) => string) | undefined,
-      createEncounter: undefined as ((name: string) => string) | undefined,
     };
   },
 
@@ -193,6 +191,7 @@ function blockFallbackLabel(block: any): string {
     case "sfx": return block.soundName || "?";
     case "background": return block.asset || "?";
     case "delay": return `${block.seconds || 1}s`;
+    case "time": return block.action === "set_date" ? `⏰ ${block.dateString || "?"}` : block.action === "set" ? `⏰ Set to ${block.segment || "?"}` : `⏰ +${block.value || 1}`;
     default: return block.type || "?";
   }
 }
@@ -224,11 +223,6 @@ const COMMAND_STEPS: Record<string, StepConfig[]> = {
     { prompt: "Tone", options: ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"] },
     { prompt: "Dialogue text...", options: undefined },
   ],
-  effect: [
-    { prompt: "Stat name...", options: undefined },
-    { prompt: "Effect type", options: ["+", "-", "="] },
-    { prompt: "Value", options: undefined },
-  ],
   condition: [
     { prompt: "Variable name...", options: undefined },
     { prompt: "Operator", options: [">=", "<=", ">", "<", "==", "!="] },
@@ -245,11 +239,9 @@ const COMMAND_STEPS: Record<string, StepConfig[]> = {
     { prompt: "Item name...", options: undefined },
     { prompt: "Give or take?", options: ["give", "take"] },
   ],
-  location: [
-    { prompt: "Location name...", options: undefined },
-  ],
-  encounter: [
-    { prompt: "Encounter name...", options: undefined },
+  time: [
+    { prompt: "Action", options: ["+1 tick", "+1 segment", "+1 day", "set segment", "set date"] },
+    { prompt: "Value (segment name, month day, or tick count)", options: undefined },
   ],
 };
 
@@ -335,17 +327,6 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
           if (!names.includes(itemName)) {
             const createItem = inlineStorage?.createInventoryItem;
             if (createItem) createItem(itemName);
-          }
-        }
-      }
-      if ((attrs.type === "location" || attrs.type === "encounter") && step === 0) {
-        const nodeName = newValues[0];
-        if (nodeName) {
-          const inlineStorage = (editor as any)?.storage?.inlineCommand;
-          const createFn = attrs.type === "location" ? inlineStorage?.createLocation : inlineStorage?.createEncounter;
-          if (createFn) {
-            const newId = createFn(nodeName);
-            blockValues = [nodeName, newId];
           }
         }
       }
@@ -599,8 +580,7 @@ function buildLabel(type: string, values: string[]): string {
     case "continue": return `Continue to ${values[0]}`;
     case "ending": return `${values[0]}${values[1] ? `: ${values[1]}` : ""}`;
     case "item": return `${values[0]} ${values[1] || "give"}`;
-    case "location": return `🏪 ${values[0]}`;
-    case "encounter": return `⚔️ ${values[0]}`;
+    case "time": return values[0] === "set date" ? `⏰ Set date: ${values[1] || "?"}` : values[0] === "set segment" ? `⏰ Set to ${values[1] || "?"}` : `⏰ ${values[0]}`;
     default: return values.filter(Boolean).join(" ");
   }
 }
@@ -619,8 +599,15 @@ function buildBlockData(type: string, values: string[]): string {
     case "continue": block.targetNodeId = values[0] || ""; break;
     case "ending": block.endingType = values[0] || "NORMAL"; block.endingName = values[1] || ""; break;
     case "item": block.type = "itemEffect"; block.itemName = values[0] || ""; block.action = values[1] || "give"; break;
-    case "location": block.nodeName = values[0] || ""; block.nodeId = values[1] || ""; break;
-    case "encounter": block.nodeName = values[0] || ""; block.nodeId = values[1] || ""; break;
+    case "time": 
+      if (values[0] === "set date") {
+        block.action = "set_date"; block.dateString = values[1] || ""; block.value = 0;
+      } else if (values[0] === "set segment") {
+        block.action = "set"; block.value = 0; block.segment = values[1] || "";
+      } else {
+        block.action = "add"; block.value = parseInt(values[0]) || 1; block.segment = "";
+      }
+      break;
     case "bgm": block.trackName = values[0] || ""; break;
     case "sfx": block.soundName = values[0] || ""; break;
     case "bg": block.asset = values[0] || ""; break;

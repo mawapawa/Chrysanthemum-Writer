@@ -1,179 +1,145 @@
-import { useState } from "react";
-import { VNProject, CalendarPeriod, CalendarCondition } from "../types";
-import { Plus, Trash2, Clock } from "lucide-react";
-import { useConfirmDelete } from "../hooks/useConfirmDelete";
+import React, { useState } from "react";
+import { VNProject, CustomTimeConfig } from "../types";
+import { Clock } from "lucide-react";
+import { defaultTimeConfig, ticksPerDay, ticksToTime, timeToString, dateToTicks } from "../utils/timeEngine";
 import { ManagerLayout } from "./ManagerLayout";
-import { EmptyState } from "./EmptyState";
 
 interface CalendarManagerProps {
   project: VNProject;
   onUpdateProject: (project: VNProject) => void;
 }
 
-function ConditionRow({ condition, trackers, onChange, onRemove }: {
-  condition: CalendarCondition;
-  trackers: Array<{ id: string; name: string }>;
-  onChange: (c: CalendarCondition) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <select value={condition.trackerId} onChange={e => onChange({ ...condition, trackerId: e.target.value })}
-        className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1">
-        {trackers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-      </select>
-      <select value={condition.operator} onChange={e => onChange({ ...condition, operator: e.target.value as CalendarCondition["operator"] })}
-        className="bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1">
-        <option value=">=">≥</option>
-        <option value="<=">≤</option>
-        <option value=">">&gt;</option>
-        <option value="<">&lt;</option>
-        <option value="==">=</option>
-        <option value="!=">≠</option>
-      </select>
-      <input type="number" value={condition.value} onChange={e => onChange({ ...condition, value: parseInt(e.target.value) || 0 })}
-        className="w-14 bg-slate-900 border border-slate-800 text-[10px] text-slate-200 rounded p-1 text-center" />
-      <button onClick={onRemove} className="text-rose-400 hover:text-rose-300 text-xs cursor-pointer">✕</button>
-    </div>
-  );
-}
-
 export default function CalendarManager({ project, onUpdateProject }: CalendarManagerProps) {
-  const calendar = project.calendar || [];
-  const trackers = project.trackers;
-  const { confirmId, ref, requestDelete } = useConfirmDelete();
+  const config = project.customTimeConfig || defaultTimeConfig();
+  const totalTicks = project.globalTimeTicks ?? 0;
+  const timeContext = ticksToTime(totalTicks, config);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editConditions, setEditConditions] = useState<CalendarCondition[]>([]);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setEditName("");
-    setEditConditions([]);
+  const updateConfig = (cfg: CustomTimeConfig) => {
+    onUpdateProject({ ...project, customTimeConfig: cfg, lastModified: Date.now() });
   };
 
-  const startAdd = () => {
-    if (trackers.length === 0) { alert("Create at least one tracker first (e.g. 'hour', 'day')."); return; }
-    setEditingId("new");
-    setEditName("");
-    setEditConditions([{ trackerId: trackers[0].id, operator: ">=", value: 0 }]);
+  const updateSegment = (i: number, field: { name?: string; ticks?: number }) => {
+    const segments = [...config.segments];
+    segments[i] = { ...segments[i], ...field };
+    updateConfig({ ...config, segments });
   };
 
-  const startEdit = (p: CalendarPeriod) => {
-    setEditingId(p.id);
-    setEditName(p.name);
-    setEditConditions(p.conditions.map(c => ({ ...c })));
+  const addSegment = () => {
+    updateConfig({ ...config, segments: [...config.segments, { name: "Segment", ticks: 2 }] });
   };
 
-  const save = () => {
-    if (!editName.trim() || editConditions.length === 0) return;
-    const updated: CalendarPeriod = {
-      id: editingId === "new" ? crypto.randomUUID() : editingId!,
-      name: editName.trim(),
-      conditions: editConditions,
-    };
-    const existing = calendar.filter(p => p.id !== updated.id);
-    onUpdateProject({ ...project, calendar: [...existing, updated], lastModified: Date.now() });
-    resetForm();
+  const removeSegment = (i: number) => {
+    updateConfig({ ...config, segments: config.segments.filter((_, idx) => idx !== i) });
   };
 
-  const handleDelete = (id: string) => {
-    if (!requestDelete(id)) return;
-    onUpdateProject({ ...project, calendar: calendar.filter(p => p.id !== id), lastModified: Date.now() });
+  const updateDay = (i: number, name: string) => {
+    const days = [...config.daysOfWeek];
+    days[i] = name;
+    updateConfig({ ...config, daysOfWeek: days });
   };
 
-  const addCondition = () => {
-    if (trackers.length === 0) return;
-    setEditConditions([...editConditions, { trackerId: trackers[0].id, operator: ">=", value: 0 }]);
-  };
-
-  const updateCondition = (idx: number, c: CalendarCondition) => {
-    setEditConditions(editConditions.map((oc, i) => i === idx ? c : oc));
-  };
-
-  const removeCondition = (idx: number) => {
-    setEditConditions(editConditions.filter((_, i) => i !== idx));
+  const updateMonth = (i: number, field: { name?: string; days?: number }) => {
+    const months = [...config.months];
+    months[i] = { ...months[i], ...field };
+    updateConfig({ ...config, months });
   };
 
   return (
-    <ManagerLayout icon={Clock} title="Calendar Periods" listTitle="Periods"
-      description="Define time periods using tracker conditions. Locations can then be set to open during specific periods."
+    <ManagerLayout icon={Clock} title="Time System" listTitle="Live Time Context"
+      description="Configure how time works in your world — segments, days, months."
       form={
         <div className="space-y-4">
-          {editingId && (
-            <>
+          {/* Segments (Day Pulse) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-slate-400">Day Segments</label>
+              <button onClick={addSegment} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer">+ Add</button>
+            </div>
+            <p className="text-[10px] text-slate-500 mb-2">Total: {ticksPerDay(config)} ticks/day</p>
+            {config.segments.map((s, i) => (
+              <div key={i} className="flex items-center gap-2 bg-slate-800/50 p-1.5 rounded-lg border border-slate-700/50 mb-1">
+                <input type="text" value={s.name} onChange={e => updateSegment(i, { name: e.target.value })}
+                  className="flex-1 bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1" placeholder="Name" />
+                <input type="number" min="1" value={s.ticks} onChange={e => updateSegment(i, { ticks: parseInt(e.target.value) || 1 })}
+                  className="w-14 bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1 text-center" title="Ticks" />
+                <button onClick={() => removeSegment(i)} className="text-rose-400 hover:text-rose-300 text-xs cursor-pointer">✕</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Starting Date */}
+          <div className="glass-card p-3 space-y-2">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Starting Date</h4>
+            <p className="text-[10px] text-slate-500">Set the in-game date that tick 0 represents.</p>
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Period Name</label>
-                <input type="text" placeholder="e.g. Daytime, Night, Rainy Week" value={editName} onChange={e => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-600" />
+                <label className="text-[10px] text-slate-500">Month</label>
+                <select value={timeContext.month} onChange={e => {
+                  const month = config.months.find(m => m.name === e.target.value);
+                  const day = Math.min(1, month?.days || 31);
+                  const ticks = dateToTicks(e.target.value, day, config);
+                  onUpdateProject({ ...project, globalTimeTicks: ticks, lastModified: Date.now() });
+                }} className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1.5 mt-0.5">
+                  {config.months.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                </select>
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-slate-400">Conditions</label>
-                  <button onClick={addCondition} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer">+ Add Condition</button>
-                </div>
-                <div className="space-y-1">
-                  {editConditions.map((c, i) => (
-                    <ConditionRow key={i} condition={c} trackers={trackers}
-                      onChange={nc => updateCondition(i, nc)} onRemove={() => removeCondition(i)} />
-                  ))}
-                </div>
-                {editConditions.length === 0 && <p className="text-[11px] text-slate-500 italic">Add at least one condition.</p>}
+                <label className="text-[10px] text-slate-500">Day</label>
+                <input type="number" min="1" max="31" value={timeContext.dayOfMonth}
+                  onChange={e => {
+                    const d = parseInt(e.target.value) || 1;
+                    const ticks = dateToTicks(timeContext.month, d, config);
+                    onUpdateProject({ ...project, globalTimeTicks: ticks, lastModified: Date.now() });
+                  }} className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1.5 mt-0.5 text-center" />
               </div>
-              <div className="flex gap-2">
-                <button onClick={save} disabled={!editName.trim() || editConditions.length === 0}
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-bold rounded-xl cursor-pointer disabled:cursor-not-allowed">
-                  Save Period
-                </button>
-                <button onClick={resetForm} className="py-2 px-4 glass-button text-slate-300 text-xs font-bold rounded-xl cursor-pointer">
-                  Cancel
-                </button>
+              <div>
+                <label className="text-[10px] text-slate-500">Year</label>
+                <input type="number" min="0" value={timeContext.year}
+                  onChange={e => {
+                    const y = parseInt(e.target.value) || 0;
+                    const tpd = ticksPerDay(config);
+                    const yearDays = config.months.reduce((s: number, m: any) => s + m.days, 0);
+                    const base = dateToTicks("January", 1, config);
+                    onUpdateProject({ ...project, globalTimeTicks: base + y * yearDays * tpd, lastModified: Date.now() });
+                  }} className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1.5 mt-0.5 text-center" />
               </div>
-            </>
-          )}
-          {!editingId && (
-            <button onClick={startAdd} className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl flex items-center justify-center gap-2 cursor-pointer">
-              <Plus className="w-4 h-4" /> Add Period
-            </button>
-          )}
+            </div>
+          </div>
+
+          {/* Days of Week */}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Days of the Week</label>
+            {config.daysOfWeek.map((d, i) => (
+              <div key={i} className="flex items-center gap-2 mb-1">
+                <input type="text" value={d} onChange={e => updateDay(i, e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1" />
+              </div>
+            ))}
+          </div>
+
+          {/* Months */}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Months</label>
+            {config.months.map((m, i) => (
+              <div key={i} className="flex items-center gap-2 mb-1">
+                <input type="text" value={m.name} onChange={e => updateMonth(i, { name: e.target.value })}
+                  className="flex-1 bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1" placeholder="Name" />
+                <input type="number" min="1" value={m.days} onChange={e => updateMonth(i, { days: parseInt(e.target.value) || 1 })}
+                  className="w-14 bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1 text-center" title="Days" />
+              </div>
+            ))}
+          </div>
         </div>
       }
     >
-      {calendar.length === 0 ? (
-        <EmptyState icon={Clock} text="No periods defined yet" subtext="Define time periods to control when locations are open or closed." />
-      ) : (
-        <div className="divide-y divide-slate-800">
-          {calendar.map(p => {
-            const condText = p.conditions.map(c => {
-              const t = trackers.find(tr => tr.id === c.trackerId);
-              return `${t?.name || c.trackerId} ${c.operator} ${c.value}`;
-            }).join(", ");
-            return (
-              <div key={p.id} className="py-4 first:pt-0 last:pb-0">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-semibold text-slate-200 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">{p.name}</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1 font-mono">{condText}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => startEdit(p)} className="p-1 text-slate-400 hover:text-indigo-400 cursor-pointer text-xs">✏️</button>
-                    <div ref={ref}>
-                      <button onClick={() => handleDelete(p.id)}
-                        className={`text-xs px-2 py-1 rounded-lg border font-bold cursor-pointer ${confirmId === p.id ? "bg-red-600 border-red-500 text-white animate-pulse" : "text-slate-400 hover:text-red-400 border-transparent"}`}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                        {confirmId === p.id && <span>Confirm?</span>}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+      <div className="space-y-4">
+        <div className="glass-card p-4">
+          <h3 className="text-sm font-bold text-slate-200 mb-2">Current Time</h3>
+          <p className="text-lg font-mono text-indigo-300">{timeToString(timeContext)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Total ticks: {totalTicks}</p>
         </div>
-      )}
+        <p className="text-xs text-slate-500 italic">Use the /time command in the inline editor to advance or set time during playtest.</p>
+      </div>
     </ManagerLayout>
   );
 }

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import TravelMap from "./TravelMap";
 import InspectorOverlay from "./InspectorOverlay";
+import { dateToTicks } from "../utils/timeEngine";
 
 interface PlaytestSimulatorProps {
   project: VNProject;
@@ -64,6 +65,7 @@ export default function PlaytestSimulator({
 
   // Combat state per encounter for persistent HP between rounds
   const [combatState, setCombatState] = useState<Record<string, { currentHp: number }>>({});
+  const [globalTimeTicks, setGlobalTimeTicks] = useState(project.globalTimeTicks ?? 0);
 
   const node = project.nodes[currentNodeId];
 
@@ -88,6 +90,7 @@ export default function PlaytestSimulator({
     setLogs([]);
     setRoomMemory({});
     setCombatState({});
+    setGlobalTimeTicks(project.globalTimeTicks ?? 0);
 
     // Trigger immediate entry effects of starting node
     const startingNode = project.nodes[startNodeId];
@@ -125,6 +128,31 @@ export default function PlaytestSimulator({
         newLogs.push({ text: `🖼️ BG: ${block.asset}`, type: "set" as const });
       } else if (block.type === "delay") {
         newLogs.push({ text: `⏳ Pause ${block.seconds}s`, type: "set" as const });
+      } else if (block.type === "time") {
+        const config = project.customTimeConfig;
+        if (config) {
+          const tpd = config.segments.reduce((s: number, seg: any) => s + seg.ticks, 0);
+          let newTicks = globalTimeTicks;
+          if (block.action === "add") {
+            newTicks += (block.value as number) || 1;
+          } else if (block.action === "set" && block.segment) {
+            const segIdx = config.segments.findIndex((s: any) => s.name === block.segment);
+            if (segIdx >= 0) {
+              const segStart = config.segments.slice(0, segIdx).reduce((s: number, seg: any) => s + seg.ticks, 0);
+              const dayBase = Math.floor(newTicks / tpd) * tpd;
+              newTicks = dayBase + segStart;
+            }
+          } else if (block.action === "set_date" && block.dateString) {
+            const parts = (block.dateString as string).split(" ");
+            if (parts.length >= 2) {
+              const day = parseInt(parts[parts.length - 1]) || 1;
+              const monthName = parts.slice(0, -1).join(" ");
+              newTicks = dateToTicks(monthName, day, config);
+            }
+          }
+          setGlobalTimeTicks(newTicks);
+          newLogs.push({ text: `⏰ Time set to tick ${newTicks}`, type: "set" as const });
+        }
       }
     }
 
@@ -800,10 +828,6 @@ export default function PlaytestSimulator({
               {/* Standard dialogue box player */}
               <div className="glass-card p-6" style={{ minHeight: "160px" }}>
                 
-                {/* Scene Outline Indicator */}
-                <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[9px] font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase">
-                  Active scene outline
-                </div>
 
                 {hasDialogue ? (
                   /* Dialogue screen lines navigation */

@@ -9,11 +9,12 @@ import SettingsDialog from "./components/SettingsDialog";
 import SceneDirectory from "./components/SceneDirectory";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
+import CalendarManager from "./components/CalendarManager";
 import { migrateProject } from "./utils/schemaMigration";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
 import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
-  Package, Users, Layers, BookOpen, Settings, Pencil
+  Package, Users, Layers, BookOpen, Settings, Pencil, Clock
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -113,7 +114,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities">("storyboard");
+  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities" | "calendar">("storyboard");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("node-start");
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
@@ -585,6 +586,9 @@ export default function App() {
           <button onClick={() => setActiveTab("entities")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "entities" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
             <Users className="w-4 h-4 text-indigo-400" /> Entities ({project.entities.length})
           </button>
+          <button onClick={() => setActiveTab("calendar")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "calendar" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <Clock className="w-4 h-4 text-cyan-400" /> Time
+          </button>
         </div>
       </div>
 
@@ -621,6 +625,7 @@ export default function App() {
         )}
         {activeTab === "items" && <ItemsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "entities" && <EntitiesManager project={project} onUpdateProject={handleUpdateProject} />}
+        {activeTab === "calendar" && <CalendarManager project={project} onUpdateProject={handleUpdateProject} />}
       </main>
 
       {isProjectsModalOpen && (
@@ -713,7 +718,7 @@ export default function App() {
             setSelectedNodeId(id);
             setCenterNodeTrigger({ id, timestamp: Date.now() });
           }}
-          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "items" | "entities")}
+          onSwitchTab={(tab) => setActiveTab(tab as "storyboard" | "items" | "entities" | "calendar")}
           onClose={() => setSearchOpen(false)}
         />
       )}

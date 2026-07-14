@@ -135,32 +135,6 @@ export default function FlowchartCanvas({
     });
   }, [project, onUpdateProject]);
 
-  const handleCreateLocation = useCallback((name: string): string => {
-    const id = crypto.randomUUID();
-    const node: StoryNode = {
-      id, title: name || "New Location", description: "", speaker: "Narrator",
-      dialogueLines: [], choices: [], statChanges: [],
-      position: { x: 200 + Math.random() * 100, y: 500 + Math.random() * 100 },
-      isEnding: false, nodeType: "location",
-      locationNodeData: { visuals: { bgImage: "" }, connections: [], mapPosition: { x: 50, y: 50 }, encounterPool: [], baseActions: [], inventory: [], tags: [] },
-    };
-    onUpdateProject((prev: VNProject) => ({ ...prev, nodes: { ...prev.nodes, [id]: node }, lastModified: Date.now() }));
-    return id;
-  }, [onUpdateProject]);
-
-  const handleCreateEncounter = useCallback((name: string): string => {
-    const id = crypto.randomUUID();
-    const node: StoryNode = {
-      id, title: name || "New Encounter", description: "", speaker: "Narrator",
-      dialogueLines: [], choices: [], statChanges: [],
-      position: { x: 200 + Math.random() * 100, y: 700 + Math.random() * 100 },
-      isEnding: false, nodeType: "encounter",
-      encounterData: { enemyName: name || "Enemy", hp: 0, attack: 0, defense: 0, drops: [], tags: [] },
-    };
-    onUpdateProject((prev: VNProject) => ({ ...prev, nodes: { ...prev.nodes, [id]: node }, lastModified: Date.now() }));
-    return id;
-  }, [onUpdateProject]);
-
   const handleCreateNodeFromBlock = useCallback((): string => {
     const childId = crypto.randomUUID();
     const parentId = activeEditNodeId;
@@ -936,8 +910,6 @@ export default function FlowchartCanvas({
                         onCreateNode={handleCreateNodeFromBlock}
                         onCreateNodeWithTitle={handleCreateNodeWithTitle}
                         onCreateInventoryItem={handleCreateInventoryItem}
-                        onCreateLocation={handleCreateLocation}
-                        onCreateEncounter={handleCreateEncounter}
                       />
                     </div>
                   )}
@@ -1093,7 +1065,7 @@ export default function FlowchartCanvas({
           className="absolute bottom-4 right-4 z-20 glass-button text-emerald-300 hover:text-emerald-200 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-sans uppercase tracking-wider cursor-pointer"
         >
           <Play className="w-4 h-4 fill-current" />
-          Test Walkthrough
+          Playtest
         </button>
       )}
     </div>
