@@ -19,6 +19,7 @@ import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
 import { useAuth } from "./hooks/useAuth";
 import { tryHandleOAuthRedirect } from "./services/auth";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const BLANK_PROJECT: VNProject = {
   id: crypto.randomUUID(),
@@ -128,6 +129,10 @@ export default function App() {
   const { user, signIn, signOut } = useAuth();
 
   useEffect(() => { tryHandleOAuthRedirect(); }, []);
+
+  useEffect(() => {
+    try { getCurrentWindow().setShadow(false); } catch { /* not in Tauri */ }
+  }, []);
 
   useEffect(() => {
     const handler = (event: PromiseRejectionEvent) => {
@@ -417,7 +422,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 overflow-hidden font-sans text-slate-200" id="app-root-container">
+    <div className="h-screen flex flex-col bg-transparent overflow-hidden font-sans text-slate-200" id="app-root-container">
       <header className="glass-header shrink-0 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-20">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button

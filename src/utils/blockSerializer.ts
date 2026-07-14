@@ -1,5 +1,9 @@
 import { StoryNode, SceneBlock, StoryChoice, DialogueLine, StatChange, InlineEffect } from "../types";
 
+// blocksToNode extracts legacy fields from the blocks array for backward compatibility.
+// The canonical source of truth is always node.blocks (set by handleEditorBlocksChange).
+// Types without legacy equivalents (bgm, sfx, delay, etc.) are automatically preserved
+// via the blocks field and do not need legacy extraction.
 export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial<StoryNode> {
   const dialogueLines: DialogueLine[] = [];
   const choices: StoryChoice[] = [];

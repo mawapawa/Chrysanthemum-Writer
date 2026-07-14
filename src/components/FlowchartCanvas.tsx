@@ -100,19 +100,36 @@ export default function FlowchartCanvas({
   const handleEditorBlocksChange = useCallback((newBlocks: SceneBlock[]) => {
     setEditorBlocks(newBlocks);
     const targetId = editingTargetRef.current;
-    if (targetId && project.nodes[targetId]) {
-      const node = project.nodes[targetId];
-      const legacy = blocksToNode(newBlocks, node);
-      onUpdateProject({
-        ...project,
-        nodes: {
-          ...project.nodes,
-          [targetId]: { ...node, ...legacy, blocks: newBlocks },
-        },
-        lastModified: Date.now(),
+    if (targetId) {
+      onUpdateProject((prev: VNProject) => {
+        const node = prev.nodes[targetId];
+        if (!node) return prev;
+        const legacy = blocksToNode(newBlocks, node);
+        return {
+          ...prev,
+          nodes: {
+            ...prev.nodes,
+            [targetId]: { ...node, ...legacy, blocks: newBlocks },
+          },
+          lastModified: Date.now(),
+        };
       });
     }
-  }, [project]);
+  }, [onUpdateProject]);
+
+  const handleCreateInventoryItem = useCallback((itemName: string): void => {
+    const newItem = {
+      id: crypto.randomUUID(),
+      displayId: generateDisplayId("ITM"),
+      name: itemName,
+      tags: [] as string[],
+    };
+    onUpdateProject({
+      ...project,
+      inventory: [...project.inventory, newItem],
+      lastModified: Date.now(),
+    });
+  }, [project, onUpdateProject]);
 
   const handleCreateNodeFromBlock = useCallback((): string => {
     const childId = crypto.randomUUID();
@@ -160,14 +177,11 @@ export default function FlowchartCanvas({
       isEnding: false,
       nodeType: "story",
     };
-    // Deferred to avoid batched state conflict with handleEditorBlocksChange
-    setTimeout(() => {
-      onUpdateProject((prev: VNProject) => ({
-        ...prev,
-        nodes: { ...prev.nodes, [childId]: childNode },
-        lastModified: Date.now(),
-      }));
-    }, 0);
+    onUpdateProject((prev: VNProject) => ({
+      ...prev,
+      nodes: { ...prev.nodes, [childId]: childNode },
+      lastModified: Date.now(),
+    }));
     return childId;
   }, [activeEditNodeId, project]);
 
@@ -966,6 +980,7 @@ export default function FlowchartCanvas({
                         onChange={handleEditorBlocksChange}
                         onCreateNode={handleCreateNodeFromBlock}
                         onCreateNodeWithTitle={handleCreateNodeWithTitle}
+                        onCreateInventoryItem={handleCreateInventoryItem}
                       />
                     </div>
                   )}

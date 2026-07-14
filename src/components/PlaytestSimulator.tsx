@@ -51,6 +51,7 @@ export default function PlaytestSimulator({
 
   // Debug options: show disabled choice condition locks
   const [showLockedChoices, setShowLockedChoices] = useState(true);
+  const [showNarrator, setShowNarrator] = useState(true);
 
   // Notification indicator of variable updates
   const [logs, setLogs] = useState<Array<{ text: string; type: "plus" | "minus" | "set" }>>([]);
@@ -363,9 +364,12 @@ export default function PlaytestSimulator({
   }
 
   // Active dialogue line (from dialogueLines)
-  const hasDialogue = (node.dialogueLines?.length ?? 0) > 0;
-  const totalLines = node.dialogueLines?.length ?? 0;
-  const activeLine = node.dialogueLines?.[lineIdx] ?? null;
+  const visibleLines = showNarrator
+    ? (node.dialogueLines || [])
+    : (node.dialogueLines || []).filter(l => l.speaker !== "Narrator" && l.speaker !== "");
+  const hasDialogue = visibleLines.length > 0;
+  const totalLines = visibleLines.length;
+  const activeLine = visibleLines[Math.min(lineIdx, Math.max(0, totalLines - 1))] ?? null;
 
   // Pre-compute visible choices — single evaluation pass
   const availableChoices = node.choices.filter((choice) => {
@@ -480,7 +484,19 @@ export default function PlaytestSimulator({
             <p className="text-[10px] text-slate-400 mt-0.5">Selected scene: <span className="text-slate-300 font-semibold">{node.title}</span></p>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setShowNarrator(!showNarrator)}
+              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                showNarrator
+                  ? "bg-sky-500/15 border-sky-500/30 text-sky-300"
+                  : "bg-slate-900 border-slate-800 text-slate-400"
+              }`}
+              title="Toggle narrator dialogue visibility"
+            >
+              {showNarrator ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              Narrator: {showNarrator ? "On" : "Off"}
+            </button>
             <button
               onClick={() => setShowLockedChoices(!showLockedChoices)}
               className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${

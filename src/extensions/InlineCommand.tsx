@@ -76,7 +76,14 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
   },
 
   addStorage() {
-    return { entityNames: [] as string[], nodeEntries: [] as { title: string; id: string }[], createNodeWithTitle: undefined as ((title: string) => string) | undefined };
+    return {
+      entityNames: [] as string[],
+      entityData: [] as { name: string; trackers: string[]; flags: string[]; expressions: string[] }[],
+      nodeEntries: [] as { title: string; id: string }[],
+      createNodeWithTitle: undefined as ((title: string) => string) | undefined,
+      inventoryItemNames: [] as string[],
+      createInventoryItem: undefined as ((name: string) => void) | undefined,
+    };
   },
 
   addNodeView() {
@@ -101,6 +108,15 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
       Backspace: ({ editor }) => {
         const { selection } = editor.state;
         const node = selection.$anchor.nodeBefore;
+        if (node?.type.name === this.name && !node.attrs.isFinalized) {
+          editor.commands.deleteSelection();
+          return true;
+        }
+        return false;
+      },
+      Delete: ({ editor }) => {
+        const { selection } = editor.state;
+        const node = selection.$anchor.nodeAfter;
         if (node?.type.name === this.name && !node.attrs.isFinalized) {
           editor.commands.deleteSelection();
           return true;
@@ -303,6 +319,17 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
           }
         }
       }
+      if (attrs.type === "item" && step === 0) {
+        const itemName = newValues[0];
+        if (itemName) {
+          const inlineStorage = (editor as any)?.storage?.inlineCommand;
+          const names: string[] = inlineStorage?.inventoryItemNames || [];
+          if (!names.includes(itemName)) {
+            const createItem = inlineStorage?.createInventoryItem;
+            if (createItem) createItem(itemName);
+          }
+        }
+      }
       const label = buildLabel(attrs.type, newValues);
       finalize(attrs.type, label, buildBlockData(attrs.type, blockValues));
     } else {
@@ -313,15 +340,24 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
 
   const steps = COMMAND_STEPS[attrs.type] || null;
   const currentStep = steps ? steps[Math.min(step, steps.length - 1)] : null;
-  const entityData: { name: string; trackers: string[]; flags: string[] }[] = (editor as any)?.storage?.inlineCommand?.entityData || [];
+  const entityData: { name: string; trackers: string[]; flags: string[]; expressions: string[] }[] = (editor as any)?.storage?.inlineCommand?.entityData || [];
+  const inventoryItemNames: string[] = (editor as any)?.storage?.inlineCommand?.inventoryItemNames || [];
+  const DEFAULT_TONES = ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
   const dynamicOptionsVal = (attrs.type === "dialogue" && step === 0) || ((attrs.type === "stat" || attrs.type === "flag") && step === 0)
     ? entityNames
+    : attrs.type === "dialogue" && step === 1 && values[0]
+    ? (() => {
+        const entity = entityData.find(e => e.name === values[0]);
+        return [...new Set([...(entity?.expressions || []), ...DEFAULT_TONES])];
+      })()
     : attrs.type === "stat" && step === 1 && values[0]
     ? entityData.find(e => e.name === values[0])?.trackers
     : attrs.type === "flag" && step === 1 && values[0]
     ? entityData.find(e => e.name === values[0])?.flags
     : (attrs.type === "choice" && step === 1) || (attrs.type === "continue" && step === 0)
     ? nodeEntries.map(n => n.title)
+    : attrs.type === "item" && step === 0
+    ? inventoryItemNames
     : currentStep?.options;
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -390,8 +426,10 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
   const finalize = useCallback((type: string, label: string, blockData?: string) => {
     const newAttrs: Record<string, any> = { type, label, isFinalized: true };
     if (blockData) newAttrs.blockData = blockData;
-    updateAttributes(newAttrs);
-    setIsEditing(false);
+    flushSync(() => {
+      updateAttributes(newAttrs);
+      setIsEditing(false);
+    });
     const pos = getPos();
     if (typeof pos === "number") {
       editor.commands.focus();
@@ -425,7 +463,7 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
       <NodeViewWrapper>
         <span
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${color} border cursor-pointer hover:opacity-80 transition-opacity`}
-          style={{ userSelect: "none", verticalAlign: "middle" }}
+          style={{ verticalAlign: "middle" }}
           contentEditable={false}
           onClick={handleClick}
         >
@@ -559,7 +597,7 @@ function buildBlockData(type: string, values: string[]): string {
     case "redirect":
     case "continue": block.targetNodeId = values[0] || ""; break;
     case "ending": block.endingType = values[0] || "NORMAL"; block.endingName = values[1] || ""; break;
-    case "item": block.itemName = values[0] || ""; block.action = values[1] || "give"; break;
+    case "item": block.type = "itemEffect"; block.itemName = values[0] || ""; block.action = values[1] || "give"; break;
     case "bgm": block.trackName = values[0] || ""; break;
     case "sfx": block.soundName = values[0] || ""; break;
     case "bg": block.asset = values[0] || ""; break;
