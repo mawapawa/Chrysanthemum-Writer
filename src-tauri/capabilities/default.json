@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "core:event:allow-listen",
+    "core:webview:default",
     "core:window:allow-set-shadow",
     "opener:default",
     "oauth:default",
