@@ -14,9 +14,11 @@ interface TokenStore {
 const CLIENT_ID = "1056893092259-lpjbsnuopvfcdkejn0h4rcvq5qfv1hbl.apps.googleusercontent.com";
 const CLIENT_SECRET = "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";
 const REDIRECT_URI = `${window.location.origin}/oauth/callback`;
-const SCOPES = "openid https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
+const SCOPES = "openid https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
 const TOKEN_KEY = "chrysanthemum_tokens";
 const USER_KEY = "chrysanthemum_user";
+const SCOPE_KEY = "chrysanthemum_auth_scope";
+const AUTH_SCOPE_HASH = "v3";
 
 import { isTauri, invoke } from "@tauri-apps/api/core";
 
@@ -48,6 +50,11 @@ function generateCodeVerifier(): string {
 
 function getStoredTokens(): TokenStore | null {
   try {
+    const storedScope = localStorage.getItem(SCOPE_KEY);
+    if (storedScope !== AUTH_SCOPE_HASH) {
+      clearTokens();
+      return null;
+    }
     const raw = localStorage.getItem(TOKEN_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -57,11 +64,13 @@ function getStoredTokens(): TokenStore | null {
 
 function storeTokens(tokens: TokenStore): void {
   localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+  localStorage.setItem(SCOPE_KEY, AUTH_SCOPE_HASH);
 }
 
 function clearTokens(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(SCOPE_KEY);
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<TokenStore> {
@@ -217,6 +226,7 @@ function buildAuthUrl(redirectUri: string, codeChallenge: string): string {
     code_challenge_method: "S256",
     access_type: "offline",
     prompt: "consent",
+    include_granted_scopes: "true",
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }

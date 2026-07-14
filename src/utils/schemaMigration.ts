@@ -1,4 +1,4 @@
-import { VNProject, VNEntity, VNTracker, VNFlag, VNItem } from "../types";
+import { VNProject, VNEntity, VNTracker, VNFlag, VNItem, LocationNodeData, LocationData } from "../types";
 
 export function migrateProject(project: VNProject & Record<string, unknown>): VNProject {
   if (project.schemaVersion >= 2) return project as VNProject;
@@ -53,4 +53,16 @@ export function migrateProject(project: VNProject & Record<string, unknown>): VN
   delete result.characters;
   delete (result as Record<string, unknown>).items;
   return result as VNProject;
+}
+
+export function migrateLocationData(old: LocationData): LocationNodeData {
+  return {
+    visuals: { bgImage: "" },
+    connections: [],
+    mapPosition: { x: 50, y: 50 },
+    encounterPool: [],
+    baseActions: [],
+    inventory: old.inventory || [],
+    tags: old.tags || [],
+  };
 }

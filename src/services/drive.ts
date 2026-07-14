@@ -47,12 +47,21 @@ export async function loadProjectFromDrive(fileId: string): Promise<VNProject | 
   }
 }
 
+function cleanName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").substring(0, 40);
+}
+
+function dateCode(): string {
+  const d = new Date();
+  return `${(d.getMonth() + 1).toString().padStart(2, "0")}${d.getDate().toString().padStart(2, "0")}${d.getFullYear().toString().slice(-2)}`;
+}
+
 export async function saveProjectToDrive(project: VNProject): Promise<string | null> {
   if (!project.driveFolderId) return null;
   const folderId = project.driveFolderId;
   const fileContent = JSON.stringify(project, null, 2);
 
-  const fileName = `chrysanthemum-${project.id}.json`;
+  const fileName = `${cleanName(project.name)}-${dateCode()}.json`;
 
   const uploadContent = async (fileId: string): Promise<void> => {
     const blob = new Blob([fileContent], { type: "application/json" });
@@ -69,12 +78,15 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
     return project.driveFileId;
   }
 
-  // Search for existing UUID-based file in the target folder
+  // Search for existing file by project name (any date) in the target folder
   try {
-    const escapedName = fileName.replace(/'/g, "\\'");
-    const search = await apiFetch(
-      `/files?q=name='${escapedName}' and '${folderId}' in parents and trashed=false&fields=files(id,name)&pageSize=1`
-    );
+    const namePrefix = cleanName(project.name);
+    const searchParams = new URLSearchParams({
+      q: `name contains '${namePrefix}-' and '${folderId}' in parents and trashed=false`,
+      fields: "files(id,name)",
+      pageSize: "1",
+    });
+    const search = await apiFetch(`/files?${searchParams}`);
     if (search.files && search.files.length > 0) {
       const existingId = search.files[0].id;
       await uploadContent(existingId);
@@ -100,16 +112,15 @@ export async function saveProjectToDrive(project: VNProject): Promise<string | n
   return meta.id;
 }
 
-export async function scanDriveForProjects(folderId?: string): Promise<Array<{ fileId: string; name: string }>> {
+export async function scanDriveForProjects(folderId?: string): Promise<Array<{ fileId: string; name: string; modifiedTime?: string }>> {
   try {
-    let query = `name contains 'chrysanthemum-' and trashed=false`;
+    let q = `(name contains '.chrysanthemum' or name contains '.json') and trashed=false`;
     if (folderId) {
-      query += ` and '${folderId.replace(/'/g, "\\'")}' in parents`;
+      q += ` and '${folderId.replace(/'/g, "\\'")}' in parents`;
     }
-    const resp = await apiFetch(
-      `/files?q=${query}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`
-    );
-    return (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name }));
+    const params = new URLSearchParams({ q, fields: "files(id,name,modifiedTime)", orderBy: "modifiedTime desc", supportsAllDrives: "true", includeItemsFromAllDrives: "true" });
+    const resp = await apiFetch(`/files?${params}`);
+    return (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name, modifiedTime: f.modifiedTime }));
   } catch (e) {
     console.error("[DRIVE] scanDriveForProjects failed", e);
     return [];
@@ -118,11 +129,20 @@ export async function scanDriveForProjects(folderId?: string): Promise<Array<{ f
 
 export async function listUserFolders(): Promise<Array<{ id: string; name: string }>> {
   try {
-    const resp = await apiFetch(
-      `/files?q=mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)&orderBy=name`
-    );
+    const params = new URLSearchParams({
+      q: "mimeType='application/vnd.google-apps.folder' and trashed=false",
+      fields: "files(id,name)",
+      orderBy: "name",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    });
+    const resp = await apiFetch(`/files?${params}`);
+    if (!resp.files || resp.files.length === 0) {
+      console.warn("[DRIVE] listUserFolders returned 0 folders — token may have wrong scope. Try signing out and back in.");
+    }
     return resp.files || [];
-  } catch {
+  } catch (e) {
+    console.error("[DRIVE] listUserFolders failed", e);
     return [];
   }
 }

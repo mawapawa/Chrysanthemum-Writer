@@ -1,0 +1,452 @@
+{
+  "id": "kaos-test-001",
+  "schemaVersion": 2,
+  "name": "Kaos",
+  "description": "Test project for the new location and encounter system.",
+  "startNodeId": "node-start",
+  "lastModified": 1783951300000,
+  "entities": [
+    {
+      "id": "ent-player",
+      "displayId": "ENT-001",
+      "name": "Player",
+      "color": "#3b82f6",
+      "tags": [],
+      "ownedTrackers": [
+        { "name": "hp", "defaultValue": 100 },
+        { "name": "gold", "defaultValue": 50 },
+        { "name": "courage", "defaultValue": 10 }
+      ],
+      "ownedFlags": [],
+      "expressions": ["Neutral", "Surprised", "Determined"]
+    },
+    {
+      "id": "ent-merchant",
+      "displayId": "ENT-002",
+      "name": "Merchant",
+      "color": "#f59e0b",
+      "tags": ["shopkeeper"],
+      "ownedTrackers": [{ "name": "trust", "defaultValue": 0 }],
+      "ownedFlags": [{ "name": "met_player", "defaultValue": false }],
+      "expressions": ["Neutral", "Smile", "Suspicious"]
+    },
+    {
+      "id": "ent-guard",
+      "displayId": "ENT-003",
+      "name": "Guard",
+      "color": "#10b981",
+      "tags": ["guard", "combatant"],
+      "ownedTrackers": [],
+      "ownedFlags": [],
+      "expressions": ["Neutral", "Angry"]
+    }
+  ],
+  "trackers": [
+    { "id": "trk-hour", "name": "hour", "defaultValue": 8, "displayId": "TRK-001", "description": "Current in-game hour" },
+    { "id": "trk-day", "name": "day", "defaultValue": 1, "displayId": "TRK-002", "description": "Current day" }
+  ],
+  "flags": [
+    { "id": "flg-intro", "name": "intro_complete", "defaultValue": false, "displayId": "FLG-001", "description": "Has the intro played?" }
+  ],
+  "inventory": [
+    { "id": "inv-potion", "displayId": "ITM-001", "name": "Health Potion", "description": "Restores 25 HP.", "tags": ["consumable", "healing"] },
+    { "id": "inv-sword", "displayId": "ITM-002", "name": "Iron Sword", "description": "A sturdy iron blade.", "tags": ["weapon"] },
+    { "id": "inv-key", "displayId": "ITM-003", "name": "Rusty Key", "description": "Opens something somewhere.", "tags": ["key"] },
+    { "id": "inv-gem", "displayId": "ITM-004", "name": "Glowing Gem", "description": "Pulsates with faint light.", "tags": ["quest"] }
+  ],
+  "scenes": [
+    { "id": "scene-town", "name": "Town", "color": "border-indigo-500", "order": 0 },
+    { "id": "scene-wilds", "name": "Wilderness", "color": "border-emerald-500", "order": 1 }
+  ],
+  "nodes": {
+    "node-start": {
+      "id": "node-start",
+      "title": "Town Square",
+      "description": "The central square of Kaos. Cobblestones gleam from the morning rain.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "l1", "speaker": "Narrator", "text": "You step into the Town Square of Kaos. The morning bustle surrounds you.", "expression": "Neutral" },
+        { "id": "l2", "speaker": "Narrator", "text": "To the north lies the Merchant District. East leads to the Old Gate.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "c1", "text": "Visit the Merchant District", "targetNodeId": "loc-merchant" },
+        { "id": "c2", "text": "Head to the Old Gate", "targetNodeId": "loc-gate" }
+      ],
+      "statChanges": [],
+      "position": { "x": 100, "y": 150 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town",
+      "locationNodeData": {
+        "visuals": { "bgImage": "town_square.png", "ambientAudio": "town_ambient.ogg" },
+        "connections": [],
+        "mapPosition": { "x": 50, "y": 50 },
+        "encounterPool": [],
+        "baseActions": [
+          { "label": "Look Around", "actionCommand": "/examine" },
+          { "label": "Check Map", "actionCommand": "/map" }
+        ],
+        "inventory": [],
+        "tags": ["town", "safe"]
+      }
+    },
+    "loc-merchant": {
+      "id": "loc-merchant",
+      "title": "Merchant District",
+      "description": "Stalls line the street. A merchant beckons you toward his wares.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "m1", "speaker": "Narrator", "text": "The Merchant District hums with activity. You spot a familiar face.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "mc1", "text": "Talk to the Merchant", "targetNodeId": "enc-merchant-meet" },
+        { "id": "mc2", "text": "Browse the stalls", "targetNodeId": "node-stalls" },
+        { "id": "mc3", "text": "Return to Town Square", "targetNodeId": "node-start" }
+      ],
+      "statChanges": [],
+      "position": { "x": 420, "y": 80 },
+      "isEnding": false,
+      "nodeType": "location",
+      "sceneId": "scene-town",
+      "locationNodeData": {
+        "visuals": { "bgImage": "merchant_district.png", "ambientAudio": "market.ogg" },
+        "connections": ["node-start", "loc-gate"],
+        "mapPosition": { "x": 30, "y": 40 },
+        "encounterPool": [
+          { "encounterId": "enc-pickpocket", "weight": 3 },
+          { "encounterId": "enc-merchant-meet", "weight": 1 }
+        ],
+        "baseActions": [
+          { "label": "Browse Wares", "actionCommand": "/shop" },
+          { "label": "Ask Around", "actionCommand": "/gossip" }
+        ],
+        "inventory": [
+          { "itemId": "inv-potion", "price": 25, "quantity": 3 },
+          { "itemId": "inv-sword", "price": 100, "quantity": 1 }
+        ],
+        "tags": ["town", "commerce"]
+      }
+    },
+    "loc-gate": {
+      "id": "loc-gate",
+      "title": "Old Gate",
+      "description": "The ancient stone gate looms ahead. Beyond it, the wilds await.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "g1", "speaker": "Narrator", "text": "Wind howls through the gate arch. A guard stands nearby, eyeing you.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "gc1", "text": "Step through the gate", "targetNodeId": "enc-road-ambush" },
+        { "id": "gc2", "text": "Talk to the Guard", "targetNodeId": "node-guard" },
+        { "id": "gc3", "text": "Return to Town Square", "targetNodeId": "node-start" }
+      ],
+      "statChanges": [],
+      "position": { "x": 420, "y": 280 },
+      "isEnding": false,
+      "nodeType": "location",
+      "sceneId": "scene-town",
+      "locationNodeData": {
+        "visuals": { "bgImage": "old_gate.png" },
+        "connections": ["node-start", "loc-merchant"],
+        "mapPosition": { "x": 70, "y": 60 },
+        "encounterPool": [],
+        "baseActions": [
+          { "label": "Examine Gate", "actionCommand": "/examine gate" }
+        ],
+        "inventory": [],
+        "tags": ["town", "border"]
+      }
+    },
+    "node-stalls": {
+      "id": "node-stalls",
+      "title": "Market Stalls",
+      "description": "Vendors hawk their goods from colorful stalls.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "s1", "speaker": "Narrator", "text": "You weave through the crowd. A gleaming gem catches your eye.", "expression": "Neutral" },
+        { "id": "s2", "speaker": "Narrator", "text": "Do you want to buy the Glowing Gem for 50 gold?", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "sc1", "text": "Buy the Gem (50g)", "targetNodeId": "node-gem-bought" },
+        { "id": "sc2", "text": "Leave the stalls", "targetNodeId": "loc-merchant" }
+      ],
+      "statChanges": [],
+      "position": { "x": 740, "y": 80 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town"
+    },
+    "node-gem-bought": {
+      "id": "node-gem-bought",
+      "title": "Gem Purchased",
+      "description": "You hand over the gold and pocket the gem.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "gb1", "speaker": "Narrator", "text": "The vendor smiles as you hand over the coins. The gem feels warm in your hand.", "expression": "Neutral" },
+        { "id": "gb2", "speaker": "Narrator", "text": "You got: Glowing Gem", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "gbc1", "text": "Return to Merchant District", "targetNodeId": "loc-merchant" }
+      ],
+      "statChanges": [
+        { "variableName": "gold", "operation": "-", "value": 50 }
+      ],
+      "position": { "x": 1060, "y": 80 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town"
+    },
+    "node-guard": {
+      "id": "node-guard",
+      "title": "Gate Guard",
+      "description": "The guard shifts his weight, gripping his spear.",
+      "speaker": "Guard",
+      "dialogueLines": [
+        { "id": "gu1", "speaker": "Guard", "text": "Hail, traveler. Roads beyond are dangerous. You'd best be prepared.", "expression": "Neutral" },
+        { "id": "gu2", "speaker": "Player", "expression": "Determined", "text": "I can handle myself." }
+      ],
+      "choices": [
+        { "id": "guc1", "text": "Ask about dangers", "targetNodeId": "node-rumors" },
+        { "id": "guc2", "text": "Head through the gate", "targetNodeId": "enc-road-ambush" },
+        { "id": "guc3", "text": "Go back to the square", "targetNodeId": "node-start" }
+      ],
+      "statChanges": [],
+      "position": { "x": 740, "y": 280 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town"
+    },
+    "node-rumors": {
+      "id": "node-rumors",
+      "title": "Rumors",
+      "description": "The guard leans in conspiratorially.",
+      "speaker": "Guard",
+      "dialogueLines": [
+        { "id": "r1", "speaker": "Guard", "text": "Bandits on the road. Been hitting caravans near the old crossroads.", "expression": "Angry" },
+        { "id": "r2", "speaker": "Guard", "text": "Watch your back out there.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "rc1", "text": "Head through the gate", "targetNodeId": "enc-road-ambush" },
+        { "id": "rc2", "text": "Return to the square", "targetNodeId": "node-start" }
+      ],
+      "statChanges": [],
+      "position": { "x": 1060, "y": 280 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town"
+    },
+    "enc-merchant-meet": {
+      "id": "enc-merchant-meet",
+      "title": "Meeting the Merchant",
+      "description": "A portly merchant greets you with a wide grin.",
+      "speaker": "Merchant",
+      "dialogueLines": [
+        { "id": "em1", "speaker": "Merchant", "text": "Welcome, welcome! Best wares in all of Kaos!", "expression": "Smile" },
+        { "id": "em2", "speaker": "Narrator", "text": "He eyes your coin purse.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "emc1", "text": "Browse his wares", "targetNodeId": "node-stalls" },
+        { "id": "emc2", "text": "Ask about work", "targetNodeId": "node-quest-gem" },
+        { "id": "emc3", "text": "Leave", "targetNodeId": "loc-merchant" }
+      ],
+      "statChanges": [
+        { "variableName": "trust", "operation": "+", "value": 1 }
+      ],
+      "position": { "x": 1060, "y": 60 },
+      "isEnding": false,
+      "nodeType": "encounter",
+      "sceneId": "scene-town",
+      "encounterData": {
+        "enemyName": "Merchant",
+        "hp": 0,
+        "attack": 0,
+        "defense": 0,
+        "drops": [],
+        "tags": ["friendly"]
+      }
+    },
+    "enc-pickpocket": {
+      "id": "enc-pickpocket",
+      "title": "Pickpocket!",
+      "description": "A street urchin bumps into you — and your coin purse is gone!",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "pp1", "speaker": "Narrator", "text": "A grimy hand darts out from the crowd. Your coin purse vanishes!", "expression": "Neutral" },
+        { "id": "pp2", "speaker": "Narrator", "text": "The urchin bolts down an alley.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "ppc1", "text": "Chase the thief", "targetNodeId": "node-chase" },
+        { "id": "ppc2", "text": "Let it go — it's just gold", "targetNodeId": "loc-merchant" }
+      ],
+      "statChanges": [],
+      "position": { "x": 1060, "y": 180 },
+      "isEnding": false,
+      "nodeType": "encounter",
+      "sceneId": "scene-town",
+      "encounterData": {
+        "enemyName": "Street Urchin",
+        "hp": 15,
+        "attack": 2,
+        "defense": 1,
+        "drops": [],
+        "onFleeNodeId": "loc-merchant",
+        "tags": ["thief", "flee"]
+      }
+    },
+    "node-chase": {
+      "id": "node-chase",
+      "title": "Alley Chase",
+      "description": "You sprint after the thief through winding alleys.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "ch1", "speaker": "Narrator", "text": "You corner the urchin in a dead-end alley. He tosses your purse back and scrambles over a wall.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "chc1", "text": "Check your purse", "targetNodeId": "loc-merchant" }
+      ],
+      "statChanges": [],
+      "position": { "x": 1380, "y": 180 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town"
+    },
+    "node-quest-gem": {
+      "id": "node-quest-gem",
+      "title": "The Lost Gem",
+      "description": "The merchant lowers his voice.",
+      "speaker": "Merchant",
+      "dialogueLines": [
+        { "id": "qg1", "speaker": "Merchant", "text": "There's a gem — the Star of Kaos — stolen from the vault last night.", "expression": "Suspicious" },
+        { "id": "qg2", "speaker": "Merchant", "text": "Rumor is the bandits at the Old Gate have it. Fetch it for me, and I'll make it worth your while.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "qgc1", "text": "Accept the quest", "targetNodeId": "loc-gate" },
+        { "id": "qgc2", "text": "Not interested", "targetNodeId": "loc-merchant" }
+      ],
+      "statChanges": [],
+      "position": { "x": 1380, "y": 60 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-town"
+    },
+    "enc-road-ambush": {
+      "id": "enc-road-ambush",
+      "title": "Road Ambush!",
+      "description": "Bandits spring from the treeline!",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "ra1", "speaker": "Narrator", "text": "The moment you step past the gate, three ragged figures emerge from the brush.", "expression": "Neutral" },
+        { "id": "ra2", "speaker": "Bandit", "text": "Your gold or your life, traveler!", "expression": "Angry" }
+      ],
+      "choices": [
+        { "id": "rac1", "text": "Fight!", "targetNodeId": "node-combat" },
+        { "id": "rac2", "text": "Try to negotiate", "targetNodeId": "node-negotiate" },
+        { "id": "rac3", "text": "Flee back through the gate", "targetNodeId": "loc-gate" }
+      ],
+      "statChanges": [],
+      "position": { "x": 740, "y": 420 },
+      "isEnding": false,
+      "nodeType": "encounter",
+      "sceneId": "scene-wilds",
+      "encounterData": {
+        "enemyName": "Road Bandit",
+        "hp": 30,
+        "attack": 8,
+        "defense": 3,
+        "drops": [
+          { "itemId": "inv-potion", "chance": 50, "quantity": 1 },
+          { "itemId": "inv-key", "chance": 25, "quantity": 1 }
+        ],
+        "onWinNodeId": "node-bandit-win",
+        "onLoseNodeId": "node-bandit-lose",
+        "onFleeNodeId": "loc-gate",
+        "tags": ["bandit", "hostile"]
+      }
+    },
+    "node-combat": {
+      "id": "node-combat",
+      "title": "Battle!",
+      "description": "Steel clashes in the morning light.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "bt1", "speaker": "Narrator", "text": "You draw your weapon. The bandits charge.", "expression": "Neutral" }
+      ],
+      "choices": [],
+      "statChanges": [],
+      "position": { "x": 1060, "y": 420 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-wilds"
+    },
+    "node-negotiate": {
+      "id": "node-negotiate",
+      "title": "Negotiation",
+      "description": "You hold up your hands.",
+      "speaker": "Player",
+      "dialogueLines": [
+        { "id": "ng1", "speaker": "Player", "text": "I'm just passing through. No need for bloodshed.", "expression": "Determined" },
+        { "id": "ng2", "speaker": "Bandit", "text": "Toss us 20 gold and you can pass.", "expression": "Angry" }
+      ],
+      "choices": [
+        { "id": "ngc1", "text": "Pay 20 gold", "targetNodeId": "node-negotiate-pass" },
+        { "id": "ngc2", "text": "Refuse and fight", "targetNodeId": "node-combat" }
+      ],
+      "statChanges": [],
+      "position": { "x": 1060, "y": 500 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-wilds"
+    },
+    "node-negotiate-pass": {
+      "id": "node-negotiate-pass",
+      "title": "Passage Bought",
+      "description": "The bandits part to let you through.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "np1", "speaker": "Narrator", "text": "The bandits step aside, counting your coins.", "expression": "Neutral" }
+      ],
+      "choices": [],
+      "statChanges": [
+        { "variableName": "gold", "operation": "-", "value": 20 }
+      ],
+      "position": { "x": 1380, "y": 500 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-wilds"
+    },
+    "node-bandit-win": {
+      "id": "node-bandit-win",
+      "title": "Bandits Defeated",
+      "description": "The bandits flee into the woods.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "bw1", "speaker": "Narrator", "text": "The remaining bandits scatter. The road is clear.", "expression": "Neutral" }
+      ],
+      "choices": [],
+      "statChanges": [],
+      "position": { "x": 1380, "y": 420 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-wilds"
+    },
+    "node-bandit-lose": {
+      "id": "node-bandit-lose",
+      "title": "Overwhelmed",
+      "description": "You stumble back through the gate, battered.",
+      "speaker": "Narrator",
+      "dialogueLines": [
+        { "id": "bl1", "speaker": "Narrator", "text": "You take a heavy blow and retreat, bleeding.", "expression": "Neutral" }
+      ],
+      "choices": [
+        { "id": "blc1", "text": "Stagger back to town", "targetNodeId": "node-start" }
+      ],
+      "statChanges": [
+        { "variableName": "hp", "operation": "-", "value": 15 }
+      ],
+      "position": { "x": 1380, "y": 340 },
+      "isEnding": false,
+      "nodeType": "story",
+      "sceneId": "scene-wilds"
+    }
+  }
+}

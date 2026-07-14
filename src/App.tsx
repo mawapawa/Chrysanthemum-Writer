@@ -125,6 +125,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
+  const [driveProjects, setDriveProjects] = useState<Array<{ fileId: string; name: string; modifiedTime: string }> | null>(null);
+  const [loadingDrive, setLoadingDrive] = useState(false);
 
   const { user, signIn, signOut } = useAuth();
 
@@ -325,23 +327,56 @@ export default function App() {
     setIsProjectsModalOpen(false);
   };
 
-  const handleExportJSON = async () => {
+  const handleExportJSON = async (sceneId?: string) => {
+    const exportData = sceneId
+      ? { ...project, scenes: (project.scenes || []).filter(s => s.id === sceneId), nodes: Object.fromEntries(Object.entries(project.nodes).filter(([, n]) => n.sceneId === sceneId)) }
+      : project;
+    const suffix = sceneId ? (project.scenes || []).find(s => s.id === sceneId)?.name.toLowerCase().replace(/[^a-z0-9]/g, "_") || "folder" : project.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
     try {
       const handle = await (window as any).showSaveFilePicker({
-        suggestedName: `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_storyboard.json`,
+        suggestedName: `${suffix}_storyboard.json`,
         types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
       });
       const writable = await handle.createWritable();
-      await writable.write(JSON.stringify(project, null, 2));
+      await writable.write(JSON.stringify(exportData, null, 2));
       await writable.close();
     } catch {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
       const a = document.createElement("a");
       a.setAttribute("href", dataStr);
-      a.setAttribute("download", `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_storyboard.json`);
+      a.setAttribute("download", `${suffix}_storyboard.json`);
       document.body.appendChild(a);
       a.click();
       a.remove();
+    }
+  };
+
+  const handleLoadDriveProjects = async () => {
+    setLoadingDrive(true);
+    try {
+      const found = await scanDriveForProjects();
+      setDriveProjects(found.map(f => ({ fileId: f.fileId, name: f.name || "Untitled", modifiedTime: f.modifiedTime || "" })));
+    } catch (e) {
+      console.error("[DRIVE] scan failed", e);
+      setDriveProjects([]);
+    }
+    setLoadingDrive(false);
+  };
+
+  const handleSelectDriveProject = async (fileId: string) => {
+    try {
+      const proj = await loadProjectFromDrive(fileId);
+      if (proj) {
+        setProject(proj);
+        setAllProjects(prev => {
+          const exists = prev.find(p => p.id === proj.id);
+          return exists ? prev.map(p => p.id === proj.id ? proj : p) : [...prev, proj];
+        });
+        setSelectedNodeId(proj.startNodeId);
+        setIsProjectsModalOpen(false);
+      }
+    } catch (e) {
+      console.error("[DRIVE] load failed", e);
     }
   };
 
@@ -389,6 +424,64 @@ export default function App() {
       position: { x: 200, y: 250 },
       isEnding: false,
       nodeType: "story",
+    };
+    setProject({
+      ...project,
+      nodes: { ...project.nodes, [newId]: newNode },
+      lastModified: Date.now(),
+    });
+    setSelectedNodeId(newId);
+    setActiveTab("storyboard");
+  };
+
+  const handleAddLocation = () => {
+    const newId = crypto.randomUUID();
+    const newNode: StoryNode = {
+      id: newId,
+      displayId: generateDisplayId("SCN"),
+      title: "New Location",
+      description: "A location in your world.",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: { x: 100, y: 500 },
+      isEnding: false,
+      nodeType: "location",
+      locationNodeData: {
+        visuals: { bgImage: "" },
+        connections: [],
+        mapPosition: { x: 50, y: 50 },
+        encounterPool: [],
+        baseActions: [],
+        inventory: [],
+        tags: [],
+      },
+    };
+    setProject({
+      ...project,
+      nodes: { ...project.nodes, [newId]: newNode },
+      lastModified: Date.now(),
+    });
+    setSelectedNodeId(newId);
+    setActiveTab("storyboard");
+  };
+
+  const handleAddEncounter = () => {
+    const newId = crypto.randomUUID();
+    const newNode: StoryNode = {
+      id: newId,
+      displayId: generateDisplayId("SCN"),
+      title: "New Encounter",
+      description: "An enemy encounter.",
+      speaker: "Narrator",
+      dialogueLines: [],
+      choices: [],
+      statChanges: [],
+      position: { x: 200, y: 700 },
+      isEnding: false,
+      nodeType: "encounter",
+      encounterData: { enemyName: "Enemy", hp: 0, attack: 0, defense: 0, drops: [], tags: [] },
     };
     setProject({
       ...project,
@@ -508,6 +601,7 @@ export default function App() {
                 setHiddenFolderIds(prev => prev.includes(sceneId) ? prev.filter(id => id !== sceneId) : [...prev, sceneId]);
               }}
               onTriggerCenterNode={(nodeId) => setCenterNodeTrigger({ id: nodeId, timestamp: Date.now() })}
+              onExportFolder={handleExportJSON}
             />
             <div className="flex-1 h-full relative border-r border-white/5">
               <FlowchartCanvas
@@ -519,6 +613,8 @@ export default function App() {
                 hiddenFolderIds={hiddenFolderIds}
                 centerNodeTrigger={centerNodeTrigger}
                 onAddBlankNode={handleAddBlankNode}
+                onAddLocation={handleAddLocation}
+                onAddEncounter={handleAddEncounter}
               />
             </div>
           </div>
@@ -556,11 +652,37 @@ export default function App() {
               <button onClick={() => handleCreateNewProject("blank")} className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white font-bold text-xs p-3 rounded-2xl cursor-pointer transition-colors">+ New Blank Project</button>
               <button onClick={() => handleCreateNewProject("template")} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs p-3 rounded-2xl cursor-pointer shadow-lg shadow-indigo-600/20 transition-all">+ Mystery Template</button>
             </div>
-            <div className="border-t border-slate-800 pt-3">
+            <div className="border-t border-slate-800 pt-3 space-y-2">
               <label className="flex items-center justify-center gap-2 p-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 border-dashed rounded-xl cursor-pointer transition-colors text-xs text-slate-400 hover:text-slate-200 font-bold">
                 <span>📂 Import Project from File</span>
                 <input type="file" accept=".json,.chrysanthemum" onChange={handleImportJSON} className="hidden" />
               </label>
+              {user ? (
+                <div>
+                  <button onClick={handleLoadDriveProjects} disabled={loadingDrive}
+                    className="w-full flex items-center justify-center gap-2 p-2 glass-button text-slate-300 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50">
+                    ☁️ {loadingDrive ? "Scanning Drive..." : "Load from Google Drive"}
+                  </button>
+                  {driveProjects !== null && (
+                    <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                      {driveProjects.length === 0 ? (
+                        <p className="text-[10px] text-slate-500 text-center py-2">No Chrysanthemum projects found in Drive.</p>
+                      ) : (
+                        driveProjects.map(fp => (
+                          <button key={fp.fileId} onClick={() => handleSelectDriveProject(fp.fileId)}
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer truncate flex items-center gap-2">
+                            <span>📄</span>
+                            <span className="truncate flex-1">{fp.name.replace(/\.(chrysanthemum|json)$/, "").replace(/^chrysanthemum-/, "").replace(/-[0-9]{6}$/, "")}</span>
+                            <span className="text-[9px] text-slate-500 shrink-0">{new Date(fp.modifiedTime).toLocaleDateString()}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-500 text-center italic">Sign in via Settings to load from Drive.</p>
+              )}
             </div>
           </div>
         </div>

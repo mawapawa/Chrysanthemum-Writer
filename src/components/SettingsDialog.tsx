@@ -140,7 +140,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
                     {loadingFolders ? (
                       <p className="text-xs text-slate-500 text-center py-4">Loading folders...</p>
                     ) : folders.length === 0 ? (
-                      <p className="text-xs text-slate-500 text-center py-4">No folders found. Create one in Google Drive first.</p>
+                      <p className="text-xs text-slate-500 text-center py-4">No folders found.</p>
                     ) : (
                       <div className="max-h-40 overflow-y-auto space-y-1">
                         {folders.map(f => (
@@ -187,7 +187,7 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
                 )}
                 <p className="text-xs text-slate-500">No Drive folder linked. Project saves locally only.</p>
                 <div className="flex gap-2">
-                  <button onClick={() => setPickerMode("browse")}
+                  <button onClick={() => { console.log("[SETTINGS] Browse clicked, user:", !!user); setPickerMode("browse"); }}
                     disabled={!user}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white disabled:text-slate-500 text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
                     <FolderOpen className="w-3.5 h-3.5" />

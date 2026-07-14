@@ -24,6 +24,10 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
   const [customHex, setCustomHex] = useState("#");
   const [description, setDescription] = useState("");
   const [formTags, setFormTags] = useState<string[]>([]);
+  const [formIsCombatant, setFormIsCombatant] = useState(false);
+  const [formHp, setFormHp] = useState(0);
+  const [formAttack, setFormAttack] = useState(0);
+  const [formDefense, setFormDefense] = useState(0);
   const [formStats, setFormStats] = useState<Record<string, number>>({});
   const [formOwnedTrackers, setFormOwnedTrackers] = useState<VNEntityStat[]>([]);
   const [formOwnedFlags, setFormOwnedFlags] = useState<VNEntityFlag[]>([]);
@@ -38,6 +42,10 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setCustomHex("#");
     setDescription("");
     setFormTags([]);
+    setFormIsCombatant(false);
+    setFormHp(0);
+    setFormAttack(0);
+    setFormDefense(0);
     setFormStats({});
     setFormOwnedTrackers([]);
     setFormOwnedFlags([]);
@@ -54,6 +62,10 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setCustomHex("#");
     setDescription(entity.description || "");
     setFormTags([...entity.tags]);
+    setFormIsCombatant(entity.hp !== undefined || entity.attack !== undefined || entity.defense !== undefined);
+    setFormHp(entity.hp ?? 0);
+    setFormAttack(entity.attack ?? 0);
+    setFormDefense(entity.defense ?? 0);
     setFormStats(entity.stats ? { ...entity.stats } : {});
     setFormOwnedTrackers(entity.ownedTrackers ? [...entity.ownedTrackers] : []);
     setFormOwnedFlags(entity.ownedFlags ? [...entity.ownedFlags] : []);
@@ -81,6 +93,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
               color: finalColor,
               description: description.trim() || undefined,
               tags: [...formTags],
+              hp: formIsCombatant ? (formHp || undefined) : undefined,
+              attack: formIsCombatant ? (formAttack || undefined) : undefined,
+              defense: formIsCombatant ? (formDefense || undefined) : undefined,
               stats: Object.keys(formStats).length > 0 ? { ...formStats } : undefined,
               ownedTrackers: cleanedTrackers.length > 0 ? cleanedTrackers : undefined,
               ownedFlags: cleanedFlags.length > 0 ? cleanedFlags : undefined,
@@ -105,6 +120,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
       color: finalColor,
       description: description.trim() || undefined,
       tags: [...formTags],
+      hp: formHp || undefined,
+      attack: formAttack || undefined,
+      defense: formDefense || undefined,
       ownedTrackers: cleanedTrackers.length > 0 ? cleanedTrackers : undefined,
       ownedFlags: cleanedFlags.length > 0 ? cleanedFlags : undefined,
       expressions: formExpressions.length > 0 ? formExpressions : undefined,
@@ -226,6 +244,12 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
                 <input type="number" value={t.defaultValue}
                   onChange={(e) => updateTracker(idx, { defaultValue: parseInt(e.target.value) || 0 })}
                   className="w-16 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded p-1 text-center" />
+                <label className="flex items-center gap-1 text-[9px] text-slate-500 cursor-pointer" title="Combat stat?">
+                  <input type="checkbox" checked={t.isCombat || false}
+                    onChange={(e) => updateTracker(idx, { isCombat: e.target.checked })}
+                    className="w-3 h-3" />
+                  ⚔️
+                </label>
                 <button type="button" onClick={() => removeTracker(idx)}
                   className="text-rose-400 hover:text-rose-300 text-xs cursor-pointer">✕</button>
               </div>
@@ -323,6 +347,13 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
                         <p className="text-xs text-slate-300 leading-relaxed mt-1">{entity.description}</p>
                       ) : (
                         <p className="text-xs text-slate-500 italic">No description.</p>
+                      )}
+                      {(entity.hp !== undefined || entity.attack !== undefined || entity.defense !== undefined) && (
+                        <div className="flex gap-2 mt-2">
+                          {entity.hp !== undefined && <span className="text-[10px] font-mono text-rose-400 bg-rose-900/30 px-1.5 py-0.5 rounded">HP: {entity.hp}</span>}
+                          {entity.attack !== undefined && <span className="text-[10px] font-mono text-orange-400 bg-orange-900/30 px-1.5 py-0.5 rounded">ATK: {entity.attack}</span>}
+                          {entity.defense !== undefined && <span className="text-[10px] font-mono text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">DEF: {entity.defense}</span>}
+                        </div>
                       )}
                       {trackers.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">

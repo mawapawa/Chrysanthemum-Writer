@@ -15,6 +15,8 @@ interface BlockEditorProps {
   onCreateNode?: () => string;
   onCreateNodeWithTitle?: (title: string) => string;
   onCreateInventoryItem?: (name: string) => void;
+  onCreateLocation?: (name: string) => string;
+  onCreateEncounter?: (name: string) => string;
 }
 
 // Check if a block has meaningful content
@@ -175,7 +177,7 @@ function createDefaultBlock(type: string, project: VNProject): SceneBlock {
   }
 }
 
-export default function BlockEditor({ project, blocks, onChange, onCreateNode, onCreateNodeWithTitle, onCreateInventoryItem }: BlockEditorProps) {
+export default function BlockEditor({ project, blocks, onChange, onCreateNode, onCreateNodeWithTitle, onCreateInventoryItem, onCreateLocation, onCreateEncounter }: BlockEditorProps) {
   const htmlContent = useMemo(() => blocksToHTML(blocks, project), [blocks, project]);
   const [menuState, setMenuState] = useState<{ x: number; y: number; selectedText: string } | null>(null);
   const editorChangeRef = useRef(false);
@@ -247,9 +249,11 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode, o
         storage.createNodeWithTitle = onCreateNodeWithTitle;
         storage.inventoryItemNames = project.inventory.map(i => i.name);
         storage.createInventoryItem = onCreateInventoryItem;
+        storage.createLocation = onCreateLocation;
+        storage.createEncounter = onCreateEncounter;
       }
     }
-  }, [editor, project.entities, project.nodes, onCreateNodeWithTitle, onCreateInventoryItem]);
+  }, [editor, project.entities, project.nodes, onCreateNodeWithTitle, onCreateInventoryItem, onCreateLocation, onCreateEncounter]);
 
   const handleApplyStyle = useCallback((style: string) => {
     if (!editor) return;

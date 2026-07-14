@@ -83,6 +83,8 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
       createNodeWithTitle: undefined as ((title: string) => string) | undefined,
       inventoryItemNames: [] as string[],
       createInventoryItem: undefined as ((name: string) => void) | undefined,
+      createLocation: undefined as ((name: string) => string) | undefined,
+      createEncounter: undefined as ((name: string) => string) | undefined,
     };
   },
 
@@ -243,6 +245,12 @@ const COMMAND_STEPS: Record<string, StepConfig[]> = {
     { prompt: "Item name...", options: undefined },
     { prompt: "Give or take?", options: ["give", "take"] },
   ],
+  location: [
+    { prompt: "Location name...", options: undefined },
+  ],
+  encounter: [
+    { prompt: "Encounter name...", options: undefined },
+  ],
 };
 
 function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
@@ -327,6 +335,17 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
           if (!names.includes(itemName)) {
             const createItem = inlineStorage?.createInventoryItem;
             if (createItem) createItem(itemName);
+          }
+        }
+      }
+      if ((attrs.type === "location" || attrs.type === "encounter") && step === 0) {
+        const nodeName = newValues[0];
+        if (nodeName) {
+          const inlineStorage = (editor as any)?.storage?.inlineCommand;
+          const createFn = attrs.type === "location" ? inlineStorage?.createLocation : inlineStorage?.createEncounter;
+          if (createFn) {
+            const newId = createFn(nodeName);
+            blockValues = [nodeName, newId];
           }
         }
       }
@@ -580,6 +599,8 @@ function buildLabel(type: string, values: string[]): string {
     case "continue": return `Continue to ${values[0]}`;
     case "ending": return `${values[0]}${values[1] ? `: ${values[1]}` : ""}`;
     case "item": return `${values[0]} ${values[1] || "give"}`;
+    case "location": return `🏪 ${values[0]}`;
+    case "encounter": return `⚔️ ${values[0]}`;
     default: return values.filter(Boolean).join(" ");
   }
 }
@@ -598,6 +619,8 @@ function buildBlockData(type: string, values: string[]): string {
     case "continue": block.targetNodeId = values[0] || ""; break;
     case "ending": block.endingType = values[0] || "NORMAL"; block.endingName = values[1] || ""; break;
     case "item": block.type = "itemEffect"; block.itemName = values[0] || ""; block.action = values[1] || "give"; break;
+    case "location": block.nodeName = values[0] || ""; block.nodeId = values[1] || ""; break;
+    case "encounter": block.nodeName = values[0] || ""; block.nodeId = values[1] || ""; break;
     case "bgm": block.trackName = values[0] || ""; break;
     case "sfx": block.soundName = values[0] || ""; break;
     case "bg": block.asset = values[0] || ""; break;

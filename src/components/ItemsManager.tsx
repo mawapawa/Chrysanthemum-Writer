@@ -18,6 +18,7 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
   const [itemName, setItemName] = useState("");
   const [description, setDescription] = useState("");
   const [formTags, setFormTags] = useState<string[]>([]);
+  const [formStatModifiers, setFormStatModifiers] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const { confirmId, ref, requestDelete } = useConfirmDelete();
 
@@ -26,6 +27,7 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
     setItemName("");
     setDescription("");
     setFormTags([]);
+    setFormStatModifiers({});
     setError(null);
   };
 
@@ -34,6 +36,7 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
     setItemName(item.name);
     setDescription(item.description || "");
     setFormTags([...item.tags]);
+    setFormStatModifiers(item.statModifiers ? { ...item.statModifiers } : {});
     setError(null);
   };
 
@@ -47,11 +50,11 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
     }
     if (editingItem) {
       const updated = project.inventory.map(i =>
-        i.id === editingItem.id ? { ...i, name: cleanName, description: description.trim() || undefined, tags: [...formTags] } : i
+        i.id === editingItem.id ? { ...i, name: cleanName, description: description.trim() || undefined, tags: [...formTags], statModifiers: Object.keys(formStatModifiers).length > 0 ? { ...formStatModifiers } : undefined } : i
       );
       onUpdateProject({ ...project, inventory: updated, lastModified: Date.now() });
     } else {
-      const newItem: VNItem = { id: crypto.randomUUID(), displayId: generateDisplayId("ITM"), name: cleanName, description: description.trim() || undefined, tags: [...formTags] };
+      const newItem: VNItem = { id: crypto.randomUUID(), displayId: generateDisplayId("ITM"), name: cleanName, description: description.trim() || undefined, tags: [...formTags], statModifiers: Object.keys(formStatModifiers).length > 0 ? { ...formStatModifiers } : undefined };
       onUpdateProject({ ...project, inventory: [...project.inventory, newItem], lastModified: Date.now() });
     }
     resetForm();
@@ -81,6 +84,28 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Tags</label>
             <TagInput tags={formTags} onChange={setFormTags} existingTags={allItemTags} placeholder="Add tag and press Enter..." />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Stat Modifiers</label>
+            {Object.keys(formStatModifiers).length === 0 && (
+              <p className="text-[10px] text-slate-500 italic mb-1">No stat modifiers. Add ones like "hp", "attack".</p>
+            )}
+            {Object.entries(formStatModifiers).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-2 mb-1">
+                <input type="text" value={key} onChange={e => {
+                  const newMods = { ...formStatModifiers };
+                  delete newMods[key];
+                  newMods[e.target.value] = val;
+                  setFormStatModifiers(newMods);
+                }} className="flex-1 bg-slate-950 border border-slate-800 text-xs rounded p-1.5 text-slate-200" placeholder="stat name" />
+                <input type="number" value={val} onChange={e => setFormStatModifiers({ ...formStatModifiers, [key]: parseInt(e.target.value) || 0 })}
+                  className="w-20 bg-slate-950 border border-slate-800 text-xs rounded p-1.5 text-slate-200 text-center" />
+                <button onClick={() => { const n = { ...formStatModifiers }; delete n[key]; setFormStatModifiers(n); }}
+                  className="text-rose-400 hover:text-rose-300 text-xs cursor-pointer">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setFormStatModifiers({ ...formStatModifiers, "": 0 })}
+              className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer">+ Add Modifier</button>
           </div>
           <div className="flex gap-2">
             <button type="submit" className="flex-1 py-2.5 px-4 glass-button text-white font-medium text-sm rounded-xl flex items-center justify-center gap-2 cursor-pointer">

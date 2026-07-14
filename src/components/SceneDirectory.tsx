@@ -23,6 +23,7 @@ interface SceneDirectoryProps {
   hiddenFolderIds: string[];
   onToggleFolderVisibility: (sceneId: string) => void;
   onTriggerCenterNode: (nodeId: string) => void;
+  onExportFolder?: (sceneId: string) => void;
 }
 
 function SortableFolderItem({ folderId, children }: { folderId: string; children: React.ReactNode }) {
@@ -62,7 +63,7 @@ function SortableNodeItem({ nodeId, isEditMode, children }: { nodeId: string; is
 
 export default function SceneDirectory({
   project, onUpdateProject, selectedNodeId, onSelectNode,
-  hiddenFolderIds, onToggleFolderVisibility, onTriggerCenterNode,
+  hiddenFolderIds, onToggleFolderVisibility, onTriggerCenterNode, onExportFolder,
 }: SceneDirectoryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -448,6 +449,13 @@ export default function SceneDirectory({
                 title={isHidden ? "Show on canvas" : "Hide from canvas"}>
                 {isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
               </button>
+              {onExportFolder && (
+                <button onClick={e => { e.stopPropagation(); onExportFolder(scene.id); }}
+                  className="p-0.5 text-slate-500 hover:text-emerald-400 rounded cursor-pointer"
+                  title="Export this folder">
+                  ⬇
+                </button>
+              )}
             </div>
           </div>
         </SortableFolderItem>

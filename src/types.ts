@@ -30,6 +30,7 @@ export interface StatChange {
 export interface VNEntityStat {
   name: string;
   defaultValue: number;
+  isCombat?: boolean;
 }
 
 export interface VNEntityFlag {
@@ -44,6 +45,9 @@ export interface VNEntity {
   description?: string;
   displayId?: string;
   tags: string[];
+  hp?: number;
+  attack?: number;
+  defense?: number;
   stats?: Record<string, number>;
   ownedTrackers?: VNEntityStat[];
   ownedFlags?: VNEntityFlag[];
@@ -72,6 +76,7 @@ export interface VNItem {
   description?: string;
   displayId?: string;
   tags: string[];
+  statModifiers?: Record<string, number>;
 }
 
 export interface InlineEffect {
@@ -112,6 +117,7 @@ export interface DialogueLine {
 export interface LocationItem {
   itemId: string;
   price: number;
+  quantity?: number;
 }
 
 export interface EncounterDrop {
@@ -140,7 +146,34 @@ export interface LocationData {
   tags: string[];
 }
 
+export interface LocationVisuals {
+  bgImage: string;
+  ambientAudio?: string;
+  uiLayoutId?: string;
+}
+
+export interface EncounterPoolEntry {
+  encounterId: string;
+  weight: number;
+}
+
+export interface BaseAction {
+  label: string;
+  actionCommand: string;
+}
+
+export interface LocationNodeData {
+  visuals: LocationVisuals;
+  connections: string[];
+  mapPosition: { x: number; y: number };
+  encounterPool: EncounterPoolEntry[];
+  baseActions: BaseAction[];
+  inventory: LocationItem[];
+  tags: string[];
+}
+
 export interface EncounterData {
+  entityId?: string;
   enemyName: string;
   hp: number;
   attack: number;
@@ -193,10 +226,12 @@ export interface StoryNode {
   displayId?: string;
   order?: number;
   nodeType: "story" | "location" | "encounter";
+  locationNodeData?: LocationNodeData;
   locationData?: LocationData;
   encounterData?: EncounterData;
   continueToNodeId?: string;
   trigger?: StoryBeatTrigger;
+  interceptFlag?: { targetLocationId: string; condition: ChoiceRequirement };
   blocks?: SceneBlock[];
 }
 

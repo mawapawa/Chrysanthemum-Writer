@@ -3,12 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { VNProject, StoryNode, StoryChoice, SceneBlock, StatChange, InlineEffect } from "../types";
 import { 
   RefreshCw, ChevronRight, ChevronLeft, 
-  Flag, AlertTriangle, Eye, EyeOff, Sliders
+  Flag, AlertTriangle, Eye, EyeOff, Sliders, Search
 } from "lucide-react";
+import TravelMap from "./TravelMap";
+import InspectorOverlay from "./InspectorOverlay";
 
 interface PlaytestSimulatorProps {
   project: VNProject;
@@ -52,9 +54,16 @@ export default function PlaytestSimulator({
   // Debug options: show disabled choice condition locks
   const [showLockedChoices, setShowLockedChoices] = useState(true);
   const [showNarrator, setShowNarrator] = useState(true);
+  const [inspectorActive, setInspectorActive] = useState(false);
 
   // Notification indicator of variable updates
   const [logs, setLogs] = useState<Array<{ text: string; type: "plus" | "minus" | "set" }>>([]);
+
+  // Room memory for location-specific state
+  const [roomMemory, setRoomMemory] = useState<Record<string, { localVariables: Record<string, any> }>>({});
+
+  // Combat state per encounter for persistent HP between rounds
+  const [combatState, setCombatState] = useState<Record<string, { currentHp: number }>>({});
 
   const node = project.nodes[currentNodeId];
 
@@ -77,6 +86,8 @@ export default function PlaytestSimulator({
     setHistory([]);
     setLineIdx(0);
     setLogs([]);
+    setRoomMemory({});
+    setCombatState({});
 
     // Trigger immediate entry effects of starting node
     const startingNode = project.nodes[startNodeId];
@@ -371,6 +382,53 @@ export default function PlaytestSimulator({
   const totalLines = visibleLines.length;
   const activeLine = visibleLines[Math.min(lineIdx, Math.max(0, totalLines - 1))] ?? null;
 
+  // Initialize room memory on entering a location
+  useEffect(() => {
+    if (node.nodeType === "location") {
+      setRoomMemory(prev => {
+        if (prev[node.id]) return prev;
+        return { ...prev, [node.id]: { localVariables: {} } };
+      });
+    }
+  }, [node.id]);
+
+  // Narrative Intercept scan — check for story overrides when entering a location
+  const prevNodeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!node || prevNodeIdRef.current === currentNodeId) return;
+    prevNodeIdRef.current = currentNodeId;
+    if (node.nodeType === "location") {
+      const intercept = Object.values(project.nodes).find(n => {
+        if (!n.interceptFlag || n.id === currentNodeId) return false;
+        if (n.interceptFlag.targetLocationId !== currentNodeId) return false;
+        const req = n.interceptFlag.condition;
+        const entry = [...project.trackers, ...project.flags].find(e => e.id === req.targetId);
+        if (!entry) return false;
+        const val = vars[entry.name];
+        if (req.source === "flag") {
+          return Boolean(val) === (req.expect ?? true);
+        }
+        if (req.source === "tracker") {
+          const numVal = Number(val);
+          const cmp = Number(req.compareValue ?? 1);
+          const op = req.operator || ">=";
+          if (op === ">=") return numVal >= cmp;
+          if (op === "<=") return numVal <= cmp;
+          if (op === ">") return numVal > cmp;
+          if (op === "<") return numVal < cmp;
+          if (op === "==") return String(numVal) === String(cmp);
+          if (op === "!=") return String(numVal) !== String(cmp);
+        }
+        return false;
+      });
+      if (intercept) {
+        setLogs(prev => [{ text: `📖 Intercept: ${intercept.title}`, type: "set" as const }, ...prev].slice(0, 20));
+        setCurrentNodeId(intercept.id);
+        setLineIdx(0);
+      }
+    }
+  }, [currentNodeId]);
+
   // Pre-compute visible choices — single evaluation pass
   const availableChoices = node.choices.filter((choice) => {
     const evalResult = checkChoiceCondition(choice);
@@ -469,6 +527,25 @@ export default function PlaytestSimulator({
             )}
           </div>
         </div>
+
+        {/* Travel Map */}
+        {node.nodeType === "location" && (
+          <TravelMap project={project} currentNodeId={currentNodeId} onTravel={(id) => { setCurrentNodeId(id); setLineIdx(0); }} />
+        )}
+
+        {/* Inspector Overlay */}
+        <div className="mt-2">
+          <button
+            onClick={() => setInspectorActive(!inspectorActive)}
+            className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer w-full ${
+              inspectorActive ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            <Search className="w-3 h-3" />
+            Inspector: {inspectorActive ? "Active" : "Off"}
+          </button>
+          {inspectorActive && <InspectorOverlay node={node} />}
+        </div>
       </div>
 
       {/* Main visual novel theatrical stage */}
@@ -558,64 +635,100 @@ export default function PlaytestSimulator({
                 </button>
               </div>
             </div>
-          ) : node.nodeType === "location" && node.locationData ? (
+          ) : node.nodeType === "location" && (node.locationNodeData || node.locationData) ? (
             <div className="w-full">
               <div className="glass-card p-6 border-amber-500/30">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-2xl">🏪</span>
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
-                  <span className="text-[9px] font-mono text-amber-400 ml-auto">{(() => {
-                    const period = node.locationData.openPeriodId ? (project.calendar || []).find(p => p.id === node.locationData.openPeriodId) : null;
-                    if (period) {
-                      const open = period.conditions.every(c => {
-                        const val = vars[project.trackers.find(t => t.id === c.trackerId)?.name || ""];
-                        if (val === undefined) return false;
-                        if (c.operator === ">=") return Number(val) >= c.value;
-                        if (c.operator === "<=") return Number(val) <= c.value;
-                        if (c.operator === ">") return Number(val) > c.value;
-                        if (c.operator === "<") return Number(val) < c.value;
-                        if (c.operator === "==") return Number(val) === c.value;
-                        if (c.operator === "!=") return Number(val) !== c.value;
-                        return false;
-                      });
-                      return open ? `✅ ${period.name}` : `🔒 ${period.name}`;
-                    }
-                    return "🕐 Any Time";
-                  })()}</span>
                 </div>
                 <p className="text-xs text-slate-300 mb-4">{node.description}</p>
-                <div className="space-y-2">
-                  {node.locationData.inventory.length === 0 && <p className="text-xs text-slate-500 italic">Nothing for sale.</p>}
-                  {node.locationData.inventory.map((li, i) => {
-                    const item = project.inventory.find(it => it.id === li.itemId);
-                    const gold = vars["gold"] ?? 0;
-                    const canAfford = gold >= li.price;
-                    return (
-                      <div key={i} className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <div>
-                          <span className="text-xs font-semibold text-white">{item?.name || li.itemId}</span>
-                          <span className="text-[10px] text-slate-500 ml-2">{li.price} gold</span>
-                        </div>
-                        <button
-                          disabled={!canAfford}
-                          onClick={() => {
-                            let tv = { ...vars };
-                            if (li.price > 0) {
-                              tv["gold"] = (tv["gold"] ?? 0) - li.price;
-                              setVars(tv);
-                            }
-                            const inv = [...playerInventory, li.itemId];
-                            setPlayerInventory(inv);
-                            setLogs(prev => [{ text: `Bought: ${item?.name || li.itemId} for ${li.price} gold`, type: "plus" as const }, ...prev].slice(0, 20));
-                          }}
-                          className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer ${canAfford ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-slate-800 text-slate-600 cursor-not-allowed"}`}
-                        >
-                          {canAfford ? "Buy" : `Need ${li.price - gold} more`}
+
+                {/* Encounter pool — wireless exploration roll */}
+                {node.locationNodeData && node.locationNodeData.encounterPool.length > 0 && (
+                  <div className="mb-4">
+                    <button onClick={() => {
+                      const pool = node.locationNodeData!.encounterPool;
+                      const totalWeight = pool.reduce((s, e) => s + e.weight, 0);
+                      if (totalWeight === 0) return;
+                      const roll = Math.random() * totalWeight;
+                      let cumulative = 0;
+                      for (const entry of pool) {
+                        cumulative += entry.weight;
+                        if (roll < cumulative) {
+                          setLogs(prev => [{ text: `🎲 Random encounter triggered!`, type: "set" as const }, ...prev].slice(0, 20));
+                          if (project.nodes[entry.encounterId]) {
+                            setCurrentNodeId(entry.encounterId);
+                            setLineIdx(0);
+                          }
+                          return;
+                        }
+                      }
+                    }} className="w-full py-2 px-3 glass-button text-amber-300 font-bold text-xs rounded-lg flex items-center justify-center gap-2 cursor-pointer">
+                      🔍 Explore
+                    </button>
+                  </div>
+                )}
+
+                {/* Base actions */}
+                {node.locationNodeData && node.locationNodeData.baseActions.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {node.locationNodeData.baseActions.map((a, i) => (
+                      <span key={i} className="text-[10px] px-2 py-1 bg-slate-800/50 rounded-lg text-slate-400 border border-slate-700/50">
+                        {a.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Connections display */}
+                {node.locationNodeData && node.locationNodeData.connections.length > 0 && (
+                  <div className="text-[10px] text-slate-500 mb-3 flex flex-wrap gap-1.5">
+                    <span className="text-slate-600">Connected to:</span>
+                    {node.locationNodeData.connections.map(cId => {
+                      const loc = project.nodes[cId];
+                      return loc ? (
+                        <button key={cId} onClick={() => { setCurrentNodeId(cId); setLineIdx(0); }}
+                          className="px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 hover:bg-indigo-800/40 cursor-pointer">
+                          {loc.title}
                         </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+
+                {/* Shop inventory — supports both new and old schema */}
+                {((node.locationNodeData?.inventory || [])?.length > 0 || (node.locationData?.inventory || [])?.length > 0) && (
+                  <div className="space-y-2 border-t border-white/10 pt-3 mt-3">
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Shop</h3>
+                    {(node.locationNodeData?.inventory || node.locationData?.inventory || []).map((li: any, i: number) => {
+                      const item = project.inventory.find(it => it.id === li.itemId);
+                      const gold = vars["gold"] ?? 0;
+                      const price = li.price ?? 0;
+                      const canAfford = gold >= price;
+                      return (
+                        <div key={i} className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+                          <div>
+                            <span className="text-xs font-semibold text-white">{item?.name || li.itemId}</span>
+                            <span className="text-[10px] text-slate-500 ml-2">{price} gold</span>
+                          </div>
+                          <button
+                            disabled={!canAfford}
+                            onClick={() => {
+                              let tv = { ...vars };
+                              if (price > 0) { tv["gold"] = (tv["gold"] ?? 0) - price; setVars(tv); }
+                              setPlayerInventory([...playerInventory, li.itemId]);
+                              setLogs(prev => [{ text: `Bought: ${item?.name || li.itemId} for ${price} gold`, type: "plus" as const }, ...prev].slice(0, 20));
+                            }}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer ${canAfford ? "glass-button text-white" : "bg-slate-800 text-slate-600 cursor-not-allowed"}`}
+                          >
+                            {canAfford ? "Buy" : `Need ${price - gold} more`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           ) : node.nodeType === "encounter" && node.encounterData ? (
@@ -645,12 +758,14 @@ export default function PlaytestSimulator({
                     const playerDef = vars["def"] ?? 5;
                     const dmgToEnemy = Math.max(1, playerAtk - ed.defense);
                     const dmgToPlayer = Math.max(1, ed.attack - playerDef);
-                    const newHp = Math.max(0, ed.hp - dmgToEnemy);
+                    const prevHp = combatState[node.id]?.currentHp ?? ed.hp;
+                    const newHp = Math.max(0, prevHp - dmgToEnemy);
                     let tv = { ...vars };
                     let ti = [...playerInventory];
                     const nl: Array<{ text: string; type: "set" | "plus" | "minus" }> = [];
                     nl.push({ text: `You deal ${dmgToEnemy} damage. Enemy at ${newHp} HP.`, type: "set" });
                     if (newHp <= 0) {
+                      setCombatState(prev => { const n = { ...prev }; delete n[node.id]; return n; });
                       nl.push({ text: `Victory! ${ed.enemyName} defeated.`, type: "plus" as const });
                       ed.drops.forEach(d => {
                         if (Math.random() * 100 < d.chance) {
@@ -664,6 +779,7 @@ export default function PlaytestSimulator({
                       setLogs(prev => [...nl, ...prev].slice(0, 20));
                       if (ed.onWinNodeId) { setCurrentNodeId(ed.onWinNodeId); setLineIdx(0); }
                     } else {
+                      setCombatState(prev => ({ ...prev, [node.id]: { currentHp: newHp } }));
                       const playerHp = (tv["hp"] ?? 20) - dmgToPlayer;
                       tv["hp"] = Math.max(0, playerHp);
                       nl.push({ text: `Enemy deals ${dmgToPlayer} damage. Player HP: ${Math.max(0, playerHp)}.`, type: "minus" });
@@ -672,6 +788,7 @@ export default function PlaytestSimulator({
                     }
                   }} className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg cursor-pointer">⚔️ Fight</button>
                   <button onClick={() => {
+                    setCombatState(prev => { const n = { ...prev }; delete n[node.id]; return n; });
                     const ed = node.encounterData;
                     if (ed?.onFleeNodeId) { setCurrentNodeId(ed.onFleeNodeId); setLineIdx(0); }
                   }} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg cursor-pointer">🏃 Flee</button>
