@@ -76,7 +76,7 @@ export default function FlowchartCanvas({
   // Focus editing state and single block editor state
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editorBlocks, setEditorBlocks] = useState<SceneBlock[]>([]);
-  const [editorNodeId, setEditorNodeId] = useState<string | null>(null);
+
   const editingTargetRef = useRef<string | null>(null);
 
   const activeEditNodeId = editingNodeId || selectedNodeId;
@@ -93,10 +93,8 @@ export default function FlowchartCanvas({
     if (activeEditNode) {
       const blocks = activeEditNode.blocks || nodeToBlocks(activeEditNode);
       setEditorBlocks(blocks);
-      setEditorNodeId(activeEditNodeId);
     } else {
       setEditorBlocks([]);
-      setEditorNodeId(null);
     }
   }, [activeEditNodeId, project.nodes[activeEditNodeId || ""]?.blocks]);
 
@@ -135,32 +133,22 @@ export default function FlowchartCanvas({
     });
   }, [project, onUpdateProject]);
 
-  const handleCreateNodeFromBlock = useCallback((): string => {
-    const childId = crypto.randomUUID();
-    const parentId = activeEditNodeId;
-    const parent = parentId ? project.nodes[parentId] : null;
-    const childNode: StoryNode = {
-      id: childId,
-      displayId: generateDisplayId("SCN"),
-      title: "New Scene",
-      description: "",
-      speaker: "Narrator",
-      dialogueLines: [],
-      choices: [],
-      statChanges: [],
-      position: parent
-        ? { x: parent.position.x + 320, y: parent.position.y + (parent.choices.length * 120) }
-        : { x: 400, y: 300 },
-      isEnding: false,
-      nodeType: "story",
+  const handleCreateEntity = useCallback((entityName: string): void => {
+    const newEntity = {
+      id: crypto.randomUUID(),
+      name: entityName,
+      color: "#94a3b8",
+      tags: [] as string[],
+      ownedTrackers: [],
+      ownedFlags: [],
+      expressions: [] as string[],
     };
     onUpdateProject({
       ...project,
-      nodes: { ...project.nodes, [childId]: childNode },
+      entities: [...project.entities, newEntity],
       lastModified: Date.now(),
     });
-    return childId;
-  }, [activeEditNodeId, project]);
+  }, [project, onUpdateProject]);
 
   const handleCreateNodeWithTitle = useCallback((title: string): string => {
     const childId = crypto.randomUUID();
@@ -204,11 +192,7 @@ export default function FlowchartCanvas({
     (n.sceneId && hiddenSet.has(n.sceneId)) &&
     n.choices.some(c => c.targetNodeId && visibleNodesMap.has(c.targetNodeId))
   );
-  const hiddenOutgoingTargets = new Set(
-    hiddenNodesWithOutgoing.flatMap(n =>
-      n.choices.filter(c => c.targetNodeId && visibleNodesMap.has(c.targetNodeId)).map(c => c.targetNodeId!)
-    )
-  );
+
 
   // Zoom limits
   const minZoom = 0.4;
@@ -216,6 +200,27 @@ export default function FlowchartCanvas({
 
   // Track node coordinate references for drawing wires
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Helper: get node's screen position with live drag offset
+  const getNodeScreenPos = (node: { position: { x: number; y: number }; id: string }) => {
+    const isDragging = dragGroupRef.current.some(g => g.id === node.id);
+    return {
+      x: node.position.x * zoom + pan.x + (isDragging ? dragDelta.current.x * zoom : 0),
+      y: node.position.y * zoom + pan.y + (isDragging ? dragDelta.current.y * zoom : 0),
+    };
+  };
+
+  // Returns connection-side offsets for direction-aware wire routing
+  const wireOffsets = (isVertical: boolean, reversed: boolean) => {
+    if (isVertical) {
+      return reversed
+        ? { sX: 120, sY: 0, tX: 120, tY: 115 }
+        : { sX: 120, sY: 115, tX: 120, tY: 0 };
+    }
+    return reversed
+      ? { sX: 0, sY: 70, tX: 240, tY: 40 }
+      : { sX: 240, sY: 70, tX: 0, tY: 40 };
+  };
 
   // Trigger state update to force line redraws when elements render or move
   const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -435,7 +440,7 @@ export default function FlowchartCanvas({
     // Group nodes by folder (sceneId) then by card type
     const scenes = (project.scenes || []).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
     const typeOrder: Record<string, number> = { story: 0, location: 1, encounter: 2 };
-    const TYPE_LABELS: Record<string, string> = { story: "📜 Story", location: "🏪 Location", encounter: "⚔️ Encounter" };
+
 
     // Build folder → type → nodeIds mapping
     const folderMap: Record<string, { name: string; types: Record<string, string[]> }> = {};
@@ -619,12 +624,18 @@ export default function FlowchartCanvas({
               const targetVisible = visibleNodesMap.has(targetNode.id) ? 1 : 0.25;
 
               let sX: number, sY: number, tX: number, tY: number, pathD: string;
+              const sp = getNodeScreenPos(sourceNode);
+              const tp = getNodeScreenPos(targetNode);
+              const reversed = isVertical
+                ? tp.y < sp.y
+                : tp.x < sp.x;
+              const off = wireOffsets(isVertical, reversed);
 
               if (isVertical) {
-                sX = sourceNode.position.x * zoom + pan.x + 120 * zoom;
-                sY = sourceNode.position.y * zoom + pan.y + 115 * zoom;
-                tX = targetNode.position.x * zoom + pan.x + 120 * zoom;
-                tY = targetNode.position.y * zoom + pan.y;
+                sX = sp.x + off.sX * zoom;
+                sY = sp.y + off.sY * zoom;
+                tX = tp.x + off.tX * zoom;
+                tY = tp.y + off.tY * zoom;
                 const dy = Math.abs(tY - sY) * 0.5;
                 const midY = (sY + tY) / 2;
                 pathD = `M ${sX} ${sY} C ${sX} ${sY + dy}, ${tX} ${tY - dy}, ${tX} ${tY}`;
@@ -648,10 +659,10 @@ export default function FlowchartCanvas({
                   </g>
                 );
               } else {
-                sX = sourceNode.position.x * zoom + pan.x + 240 * zoom;
-                sY = sourceNode.position.y * zoom + pan.y + 70 * zoom;
-                tX = targetNode.position.x * zoom + pan.x;
-                tY = targetNode.position.y * zoom + pan.y + 40 * zoom;
+                sX = sp.x + off.sX * zoom;
+                sY = sp.y + off.sY * zoom;
+                tX = tp.x + off.tX * zoom;
+                tY = tp.y + off.tY * zoom;
                 const dx = Math.abs(tX - sX) * 0.5;
                 const midY = (sY + tY) / 2;
                 pathD = `M ${sX} ${sY} C ${sX + dx} ${sY}, ${tX - dx} ${tY}, ${tX} ${tY}`;
@@ -684,19 +695,17 @@ export default function FlowchartCanvas({
           {visibleNodes.filter(n => n.continueToNodeId && visibleNodesMap.has(n.continueToNodeId)).map((node) => {
             const targetNode = project.nodes[node.continueToNodeId!]!;
             const isVertical = flowDirection === "vertical";
-            let sX: number, sY: number, tX: number, tY: number;
+            const sp = getNodeScreenPos(node);
+            const tp = getNodeScreenPos(targetNode);
+            const reversed = isVertical
+              ? tp.y < sp.y
+              : tp.x < sp.x;
+            const off = wireOffsets(isVertical, reversed);
 
-            if (isVertical) {
-              sX = node.position.x * zoom + pan.x + 120 * zoom;
-              sY = node.position.y * zoom + pan.y + 115 * zoom;
-              tX = targetNode.position.x * zoom + pan.x + 120 * zoom;
-              tY = targetNode.position.y * zoom + pan.y;
-            } else {
-              sX = node.position.x * zoom + pan.x + 240 * zoom;
-              sY = node.position.y * zoom + pan.y + 70 * zoom;
-              tX = targetNode.position.x * zoom + pan.x;
-              tY = targetNode.position.y * zoom + pan.y + 40 * zoom;
-            }
+            const sX = sp.x + off.sX * zoom;
+            const sY = sp.y + off.sY * zoom;
+            const tX = tp.x + off.tX * zoom;
+            const tY = tp.y + off.tY * zoom;
 
             const dy = Math.abs(tY - sY) * 0.5;
             const dx = Math.abs(tX - sX) * 0.5;
@@ -720,20 +729,13 @@ export default function FlowchartCanvas({
                 const targetNode = project.nodes[choice.targetNodeId!]!;
                 const isConditioned = !!(choice.condition || choice.requirement);
                 const color = isConditioned ? "#d97706" : "#6366f1";
+                const tp = getNodeScreenPos(targetNode);
+                const isVertical = flowDirection === "vertical";
 
-                let stubStartX: number, stubStartY: number, stubEndX: number, stubEndY: number;
-
-                if (flowDirection === "vertical") {
-                  stubEndX = targetNode.position.x * zoom + pan.x + 120 * zoom;
-                  stubEndY = targetNode.position.y * zoom + pan.y;
-                  stubStartX = stubEndX;
-                  stubStartY = stubEndY - 20;
-                } else {
-                  stubEndX = targetNode.position.x * zoom + pan.x;
-                  stubEndY = targetNode.position.y * zoom + pan.y + 40 * zoom;
-                  stubStartX = stubEndX - 20;
-                  stubStartY = stubEndY;
-                }
+                const stubEndX = tp.x + (isVertical ? 120 * zoom : 0);
+                const stubEndY = tp.y + (isVertical ? 0 : 40 * zoom);
+                const stubStartX = isVertical ? stubEndX : stubEndX - 20;
+                const stubStartY = isVertical ? stubEndY - 20 : stubEndY;
 
                 return (
                   <g key={`hid-${choice.id}`}>
@@ -758,6 +760,7 @@ export default function FlowchartCanvas({
             const isEditing = editingNodeId === node.id;
             const isSelected = selectedNodeId === node.id;
             const isStart = project.startNodeId === node.id;
+            const updateNode = (patch: any) => onUpdateProject({ ...project, nodes: { ...project.nodes, [node.id]: { ...node, ...patch } }, lastModified: Date.now() });
 
             return (
               <div
@@ -903,13 +906,44 @@ export default function FlowchartCanvas({
                   {/* Editor — shows in focus mode (inline expansion removed) */}
                   {isEditing && (
                     <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-y-auto">
+                      {/* Narrative Intercept — only on story nodes */}
+                      {node.nodeType === "story" && (
+                        <div className="space-y-1.5 pb-2 border-b border-slate-700/30">
+                          <label className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Narrative Intercept</label>
+                          <p className="text-[8px] text-slate-500">Redirect to this node when entering a target location, if condition is met.</p>
+                          <select value={node.interceptFlag?.targetLocationId || ""}
+                            onChange={(e) => updateNode({ interceptFlag: e.target.value ? { targetLocationId: e.target.value, condition: { source: "flag", targetId: "" } } : undefined })}
+                            className="w-full bg-slate-950 border border-slate-700 text-[10px] text-slate-200 rounded p-1">
+                            <option value="">— No intercept —</option>
+                            {Object.values(project.nodes).filter((n: any) => n.nodeType === "location").map((n: any) => (
+                              <option key={n.id} value={n.id}>{n.title}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Story Beat Trigger — on any non-location node */}
+                      {node.nodeType !== "location" && (
+                        <div className="space-y-1.5 pb-2 border-b border-slate-700/30">
+                          <label className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Beat Trigger</label>
+                          <p className="text-[8px] text-slate-500">Auto-navigate here when a variable condition is met during playtest.</p>
+                          <select value={node.trigger?.source || ""}
+                            onChange={(e) => updateNode({ trigger: e.target.value ? { source: e.target.value } : undefined })}
+                            className="w-full bg-slate-950 border border-slate-700 text-[10px] text-slate-200 rounded p-1">
+                            <option value="">— No trigger —</option>
+                            <option value="flag">Flag</option>
+                            <option value="tracker">Tracker</option>
+                          </select>
+                        </div>
+                      )}
+
                       <BlockEditor
                         project={project}
                         blocks={editorBlocks}
                         onChange={handleEditorBlocksChange}
-                        onCreateNode={handleCreateNodeFromBlock}
                         onCreateNodeWithTitle={handleCreateNodeWithTitle}
                         onCreateInventoryItem={handleCreateInventoryItem}
+                        onCreateEntity={handleCreateEntity}
                       />
                     </div>
                   )}

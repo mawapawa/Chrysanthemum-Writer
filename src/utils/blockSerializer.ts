@@ -4,7 +4,7 @@ import { StoryNode, SceneBlock, StoryChoice, DialogueLine, StatChange, InlineEff
 // The canonical source of truth is always node.blocks (set by handleEditorBlocksChange).
 // Types without legacy equivalents (bgm, sfx, delay, etc.) are automatically preserved
 // via the blocks field and do not need legacy extraction.
-export function blocksToNode(blocks: SceneBlock[], existing: StoryNode): Partial<StoryNode> {
+export function blocksToNode(blocks: SceneBlock[], _existing: StoryNode): Partial<StoryNode> {
   const dialogueLines: DialogueLine[] = [];
   const choices: StoryChoice[] = [];
   const statChanges: StatChange[] = [];
@@ -111,14 +111,13 @@ export function nodeToBlocks(node: StoryNode): SceneBlock[] {
   const blocks: SceneBlock[] = [];
 
   // Build from dialogueLines and narrative text
-  let hasDialogue = false;
   for (const line of node.dialogueLines || []) {
     if (line.speaker === "Narrator" || !line.speaker) {
       blocks.push({ type: "narrative", text: line.text });
     } else {
       blocks.push({ type: "dialogue", speaker: line.speaker, expression: line.expression, text: line.text });
     }
-    hasDialogue = true;
+
   }
 
   // Interleave statChanges after the last dialogue block if any

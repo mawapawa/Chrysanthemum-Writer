@@ -146,6 +146,15 @@ export default function ItemsManager({ project, onUpdateProject }: ItemsManagerP
                   </div>
                 </div>
                 {item.description ? <p className="text-xs text-slate-300 leading-relaxed mt-1">{item.description}</p> : <p className="text-xs text-slate-500 italic">No description provided.</p>}
+                {item.statModifiers && Object.keys(item.statModifiers).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {Object.entries(item.statModifiers).map(([stat, val]) => (
+                      <span key={stat} className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-900/50 text-emerald-300">
+                        {stat} {val > 0 ? `+${val}` : val}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {item.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {item.tags.map(tag => <span key={tag} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-900/50 text-indigo-300">{tag}</span>)}

@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import { VNProject, StoryNode, StoryChoice, SceneBlock, StatChange, InlineEffect } from "../types";
+import { useState, useEffect, useRef } from "react";
+import { VNProject, StoryChoice, SceneBlock, StatChange, InlineEffect } from "../types";
 import { 
   RefreshCw, ChevronRight, ChevronLeft, 
   Flag, AlertTriangle, Eye, EyeOff, Sliders, Search
 } from "lucide-react";
 import TravelMap from "./TravelMap";
 import InspectorOverlay from "./InspectorOverlay";
-import { dateToTicks } from "../utils/timeEngine";
+import { dateToTicks, ticksToTime } from "../utils/timeEngine";
 
 interface PlaytestSimulatorProps {
   project: VNProject;
@@ -39,7 +39,6 @@ export default function PlaytestSimulator({
   project, 
   startNodeId, 
   onExit, 
-  onUpdateProject 
 }: PlaytestSimulatorProps) {
   // Current game node
   const [currentNodeId, setCurrentNodeId] = useState<string>(startNodeId);
@@ -60,11 +59,16 @@ export default function PlaytestSimulator({
   // Notification indicator of variable updates
   const [logs, setLogs] = useState<Array<{ text: string; type: "plus" | "minus" | "set" }>>([]);
 
-  // Room memory for location-specific state
-  const [roomMemory, setRoomMemory] = useState<Record<string, { localVariables: Record<string, any> }>>({});
 
-  // Combat state per encounter for persistent HP between rounds
-  const [combatState, setCombatState] = useState<Record<string, { currentHp: number }>>({});
+
+  // Combat state per encounter — cloned instance protecting root template
+  const [combatState, setCombatState] = useState<Record<string, {
+    currentHp: number;
+    maxHp: number;
+    attack: number;
+    defense: number;
+    name: string;
+  }>>({});
   const [globalTimeTicks, setGlobalTimeTicks] = useState(project.globalTimeTicks ?? 0);
 
   const node = project.nodes[currentNodeId];
@@ -88,7 +92,6 @@ export default function PlaytestSimulator({
     setHistory([]);
     setLineIdx(0);
     setLogs([]);
-    setRoomMemory({});
     setCombatState({});
     setGlobalTimeTicks(project.globalTimeTicks ?? 0);
 
@@ -101,6 +104,25 @@ export default function PlaytestSimulator({
       processNodeBlocks(startingNode, initialVars, []);
     }
   };
+
+  // Clone encounter data into activeEnemyState on entering an encounter node
+  useEffect(() => {
+    if (node?.nodeType === "encounter" && node.encounterData) {
+      setCombatState(prev => {
+        if (prev[node.id]) return prev;
+        return {
+          ...prev,
+          [node.id]: {
+            currentHp: node.encounterData!.hp,
+            maxHp: node.encounterData!.hp,
+            attack: node.encounterData!.attack,
+            defense: node.encounterData!.defense,
+            name: node.encounterData!.enemyName,
+          }
+        };
+      });
+    }
+  }, [currentNodeId]);
 
   const processNodeBlocks = (n: any, currentVars: Record<string, any>, currentInventory: string[]) => {
     if (!n.blocks) return;
@@ -116,9 +138,20 @@ export default function PlaytestSimulator({
         if (block.action === "give") {
           updatedInventory.push(block.itemName);
           newLogs.push({ text: `🎒 + ${block.itemName}`, type: "set" as const });
-        } else {
+        } else if (block.action === "take") {
           updatedInventory = updatedInventory.filter(i => i !== block.itemName);
           newLogs.push({ text: `🎒 - ${block.itemName}`, type: "set" as const });
+        } else if (block.action === "use") {
+          const item = project.inventory.find(i => i.name === block.itemName);
+          if (item && updatedInventory.includes(item.id)) {
+            updatedInventory = updatedInventory.filter(i => i !== item.id);
+            if (item.statModifiers) {
+              for (const [stat, val] of Object.entries(item.statModifiers)) {
+                updatedVars[stat] = (updatedVars[stat] ?? 0) + val;
+              }
+            }
+            newLogs.push({ text: `🧪 Used ${block.itemName}`, type: "set" as const });
+          }
         }
       } else if (block.type === "bgm") {
         newLogs.push({ text: `🎵 BGM: ${block.trackName}`, type: "set" as const });
@@ -131,19 +164,38 @@ export default function PlaytestSimulator({
       } else if (block.type === "time") {
         const config = project.customTimeConfig;
         if (config) {
-          const tpd = config.segments.reduce((s: number, seg: any) => s + seg.ticks, 0);
+          const tpd = config.segments.reduce((s: number, seg) => s + seg.ticks, 0);
           let newTicks = globalTimeTicks;
           if (block.action === "add") {
-            newTicks += (block.value as number) || 1;
+            const unit = block.unit || "tick";
+            const amount = block.value || 1;
+            if (unit === "day") {
+              newTicks += amount * tpd;
+            } else if (unit === "month") {
+              const tc = ticksToTime(newTicks, config);
+              let monthIdx = config.months.findIndex(m => m.name === tc.month);
+              let targetMonth = (monthIdx + amount) % config.months.length;
+              let yearOffset = Math.floor((monthIdx + amount) / config.months.length);
+              if (targetMonth < 0) { targetMonth += config.months.length; yearOffset -= 1; }
+              let totalDays = 0;
+              for (let y = 0; y < tc.year + yearOffset; y++) {
+                for (const m of config.months) totalDays += m.days;
+              }
+              for (let i = 0; i < targetMonth; i++) totalDays += config.months[i].days;
+              totalDays += Math.min(tc.dayOfMonth - 1, config.months[targetMonth].days - 1);
+              newTicks = totalDays * tpd + tc.tick;
+            } else {
+              newTicks += amount;
+            }
           } else if (block.action === "set" && block.segment) {
-            const segIdx = config.segments.findIndex((s: any) => s.name === block.segment);
+            const segIdx = config.segments.findIndex(s => s.name === block.segment);
             if (segIdx >= 0) {
-              const segStart = config.segments.slice(0, segIdx).reduce((s: number, seg: any) => s + seg.ticks, 0);
+              const segStart = config.segments.slice(0, segIdx).reduce((s: number, seg) => s + seg.ticks, 0);
               const dayBase = Math.floor(newTicks / tpd) * tpd;
               newTicks = dayBase + segStart;
             }
           } else if (block.action === "set_date" && block.dateString) {
-            const parts = (block.dateString as string).split(" ");
+            const parts = block.dateString.split(" ");
             if (parts.length >= 2) {
               const day = parseInt(parts[parts.length - 1]) || 1;
               const monthName = parts.slice(0, -1).join(" ");
@@ -226,6 +278,18 @@ export default function PlaytestSimulator({
     });
 
     return { vars: updatedVars, inventory: updatedInventory, logs: newLogs };
+  };
+
+  // Compute effective stats by summing base vars with item statModifiers (equipment)
+  const computeEffectiveStat = (statName: string, base: number): number => {
+    let total = base;
+    for (const itemId of playerInventory) {
+      const item = project.inventory.find(i => i.id === itemId);
+      if (item?.statModifiers?.[statName]) {
+        total += item.statModifiers[statName];
+      }
+    }
+    return total;
   };
 
   // Condition evaluation (legacy + requirement)
@@ -409,16 +473,6 @@ export default function PlaytestSimulator({
   const hasDialogue = visibleLines.length > 0;
   const totalLines = visibleLines.length;
   const activeLine = visibleLines[Math.min(lineIdx, Math.max(0, totalLines - 1))] ?? null;
-
-  // Initialize room memory on entering a location
-  useEffect(() => {
-    if (node.nodeType === "location") {
-      setRoomMemory(prev => {
-        if (prev[node.id]) return prev;
-        return { ...prev, [node.id]: { localVariables: {} } };
-      });
-    }
-  }, [node.id]);
 
   // Narrative Intercept scan — check for story overrides when entering a location
   const prevNodeIdRef = useRef<string | null>(null);
@@ -767,54 +821,70 @@ export default function PlaytestSimulator({
                   <h2 className="text-lg font-bold text-white">{node.title}</h2>
                 </div>
                 <p className="text-xs text-slate-300 mb-4">{node.description}</p>
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-bold text-rose-400">{node.encounterData.enemyName}</span>
-                    <span className="text-xs font-mono text-slate-400">HP: {node.encounterData.hp} | ATK: {node.encounterData.attack} | DEF: {node.encounterData.defense}</span>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-bold text-rose-400">{node.encounterData.enemyName}</span>
+                      <span className="text-xs font-mono text-slate-400">
+                        HP: {(combatState[node.id]?.currentHp ?? node.encounterData.hp)} / {combatState[node.id]?.maxHp ?? node.encounterData.hp}
+                        {' | '}ATK: {combatState[node.id]?.attack ?? node.encounterData.attack}
+                        {' | '}DEF: {combatState[node.id]?.defense ?? node.encounterData.defense}
+                      </span>
+                    </div>
+                    {node.encounterData.drops.length > 0 && (
+                      <div className="text-[10px] text-slate-500">Drops: {node.encounterData.drops.map(d => {
+                        const item = project.inventory.find(it => it.id === d.itemId);
+                        return `${item?.name || d.itemId} (${d.chance}%)`;
+                      }).join(", ")}</div>
+                    )}
                   </div>
-                  {node.encounterData.drops.length > 0 && (
-                    <div className="text-[10px] text-slate-500">Drops: {node.encounterData.drops.map(d => {
-                      const item = project.inventory.find(it => it.id === d.itemId);
-                      return `${item?.name || d.itemId} (${d.chance}%)`;
-                    }).join(", ")}</div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => {
-                    const ed = node.encounterData!;
-                    const playerAtk = vars["atk"] ?? 10;
-                    const playerDef = vars["def"] ?? 5;
-                    const dmgToEnemy = Math.max(1, playerAtk - ed.defense);
-                    const dmgToPlayer = Math.max(1, ed.attack - playerDef);
-                    const prevHp = combatState[node.id]?.currentHp ?? ed.hp;
-                    const newHp = Math.max(0, prevHp - dmgToEnemy);
-                    let tv = { ...vars };
-                    let ti = [...playerInventory];
-                    const nl: Array<{ text: string; type: "set" | "plus" | "minus" }> = [];
-                    nl.push({ text: `You deal ${dmgToEnemy} damage. Enemy at ${newHp} HP.`, type: "set" });
-                    if (newHp <= 0) {
-                      setCombatState(prev => { const n = { ...prev }; delete n[node.id]; return n; });
-                      nl.push({ text: `Victory! ${ed.enemyName} defeated.`, type: "plus" as const });
-                      ed.drops.forEach(d => {
-                        if (Math.random() * 100 < d.chance) {
-                          ti.push(d.itemId);
-                          const item = project.inventory.find(it => it.id === d.itemId);
-                          nl.push({ text: `Dropped: ${item?.name || d.itemId}`, type: "plus" });
+                  <div className="flex gap-2">
+                    <button onClick={() => {
+                      const ed = node.encounterData!;
+                      const es = combatState[node.id];
+                      const effAtk = computeEffectiveStat("attack", vars["atk"] ?? 10);
+                      const effDef = computeEffectiveStat("defense", vars["def"] ?? 5);
+                      const dmgToEnemy = Math.max(1, effAtk - (es?.defense ?? ed.defense));
+                      const dmgToPlayer = Math.max(1, (es?.attack ?? ed.attack) - effDef);
+                      const prevHp = es?.currentHp ?? ed.hp;
+                      const newHp = Math.max(0, prevHp - dmgToEnemy);
+                      let tv = { ...vars };
+                      let ti = [...playerInventory];
+                      const nl: Array<{ text: string; type: "set" | "plus" | "minus" }> = [];
+                      nl.push({ text: `You deal ${dmgToEnemy} damage. Enemy at ${newHp} HP.`, type: "set" });
+                      if (newHp <= 0) {
+                        setCombatState(prev => { const n = { ...prev }; delete n[node.id]; return n; });
+                        nl.push({ text: `Victory! ${ed.enemyName} defeated.`, type: "plus" as const });
+                        ed.drops.forEach(d => {
+                          if (Math.random() * 100 < d.chance) {
+                            ti.push(d.itemId);
+                            const item = project.inventory.find(it => it.id === d.itemId);
+                            nl.push({ text: `Dropped: ${item?.name || d.itemId}`, type: "plus" });
+                          }
+                        });
+                        setVars(tv);
+                        setPlayerInventory(ti);
+                        setLogs(prev => [...nl, ...prev].slice(0, 20));
+                        if (ed.onWinNodeId) { setCurrentNodeId(ed.onWinNodeId); setLineIdx(0); }
+                      } else {
+                        setCombatState(prev => {
+                          const existing = prev[node.id];
+                          return { ...prev, [node.id]: { ...existing!, currentHp: newHp } };
+                        });
+                        const playerHp = (tv["hp"] ?? 20) - dmgToPlayer;
+                        tv["hp"] = Math.max(0, playerHp);
+                        nl.push({ text: `Enemy deals ${dmgToPlayer} damage. Player HP: ${Math.max(0, playerHp)}.`, type: "minus" });
+                        if (tv["hp"] <= 0 && ed.onLoseNodeId) {
+                          setCombatState(prev => { const n = { ...prev }; delete n[node.id]; return n; });
+                          setVars(tv);
+                          setLogs(prev => [...nl, ...prev].slice(0, 20));
+                          setCurrentNodeId(ed.onLoseNodeId);
+                          setLineIdx(0);
+                          return;
                         }
-                      });
-                      setVars(tv);
-                      setPlayerInventory(ti);
-                      setLogs(prev => [...nl, ...prev].slice(0, 20));
-                      if (ed.onWinNodeId) { setCurrentNodeId(ed.onWinNodeId); setLineIdx(0); }
-                    } else {
-                      setCombatState(prev => ({ ...prev, [node.id]: { currentHp: newHp } }));
-                      const playerHp = (tv["hp"] ?? 20) - dmgToPlayer;
-                      tv["hp"] = Math.max(0, playerHp);
-                      nl.push({ text: `Enemy deals ${dmgToPlayer} damage. Player HP: ${Math.max(0, playerHp)}.`, type: "minus" });
-                      setVars(tv);
-                      setLogs(prev => [...nl, ...prev].slice(0, 20));
-                    }
-                  }} className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg cursor-pointer">⚔️ Fight</button>
+                        setVars(tv);
+                        setLogs(prev => [...nl, ...prev].slice(0, 20));
+                      }
+                    }} className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg cursor-pointer">⚔️ Fight</button>
                   <button onClick={() => {
                     setCombatState(prev => { const n = { ...prev }; delete n[node.id]; return n; });
                     const ed = node.encounterData;

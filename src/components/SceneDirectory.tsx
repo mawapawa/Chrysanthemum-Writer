@@ -407,10 +407,6 @@ export default function SceneDirectory({
     const childScenes = sceneChildren[scene.id] || [];
     const folderNodes = nodesByScene[scene.id] || [];
     const isExpanded = expandedFolders[scene.id] !== false;
-    const items = [
-      ...childScenes.map(s => `folder-${s.id}`),
-      ...(isEditMode ? [] : folderNodes.map(n => `node-${n.id}`)),
-    ];
 
     return (
       <div key={scene.id} className="rounded-lg border border-transparent">
@@ -436,7 +432,7 @@ export default function SceneDirectory({
               <span className="text-[10px] text-slate-500 font-mono">({folderNodes.length + childScenes.length})</span>
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={(e) => handleOpenCreateFolder(scene.id)} className="p-0.5 text-slate-500 hover:text-emerald-400 rounded cursor-pointer" title="Add subfolder"><FolderPlus className="w-3 h-3" /></button>
+              <button onClick={() => handleOpenCreateFolder(scene.id)} className="p-0.5 text-slate-500 hover:text-emerald-400 rounded cursor-pointer" title="Add subfolder"><FolderPlus className="w-3 h-3" /></button>
               <button onClick={(e) => handleAddNodeToFolder(scene.id, e)} className="p-0.5 text-slate-500 hover:text-emerald-400 rounded cursor-pointer" title="Add Scene Point"><Plus className="w-3.5 h-3.5" /></button>
               <button onClick={(e) => handleStartRename(scene, e)} className="p-0.5 text-slate-500 hover:text-white rounded cursor-pointer" title="Rename"><Edit2 className="w-3 h-3" /></button>
               <button onClick={(e) => handleDeleteScene(scene.id, e)}

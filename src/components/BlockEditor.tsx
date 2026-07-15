@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Mark } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -12,9 +12,9 @@ interface BlockEditorProps {
   project: VNProject;
   blocks: SceneBlock[];
   onChange: (blocks: SceneBlock[]) => void;
-  onCreateNode?: () => string;
   onCreateNodeWithTitle?: (title: string) => string;
   onCreateInventoryItem?: (name: string) => void;
+  onCreateEntity?: (name: string) => void;
 }
 
 // Check if a block has meaningful content
@@ -58,7 +58,7 @@ function blocksToHTML(blocks: SceneBlock[], project: VNProject): string {
 }
 
 // Parse TipTap HTML back to blocks
-function htmlToBlocks(html: string, project: VNProject): SceneBlock[] {
+function htmlToBlocks(html: string): SceneBlock[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
   const container = doc.body.firstChild as HTMLElement;
@@ -155,27 +155,7 @@ const TextColorMark = Mark.create({
   },
 });
 
-function createDefaultBlock(type: string, project: VNProject): SceneBlock {
-  switch (type) {
-    case "dialogue": return { type: "dialogue", speaker: "Narrator", text: "" };
-    case "effect": return { type: "effect", variableName: "", operation: "+", value: 0 };
-    case "statDisplay": return { type: "statDisplay", variableName: "" };
-    case "choice": return { type: "choice", text: "", targetNodeId: "" };
-    case "entity": return { type: "entity", entityId: "" };
-    case "condition": return { type: "condition", source: "tracker", targetId: "" };
-    case "continue": return { type: "continue", targetNodeId: "" };
-    case "ending": return { type: "ending", endingType: "NORMAL" };
-    case "flag": return { type: "flag", flagName: "", flagValue: true };
-    case "bgm": return { type: "bgm", trackName: "" };
-    case "sfx": return { type: "sfx", soundName: "" };
-    case "background": return { type: "background", asset: "" };
-    case "delay": return { type: "delay", seconds: 1 };
-    case "itemEffect": return { type: "itemEffect", action: "give", itemName: "" };
-    default: return { type: "narrative", text: "" };
-  }
-}
-
-export default function BlockEditor({ project, blocks, onChange, onCreateNode, onCreateNodeWithTitle, onCreateInventoryItem }: BlockEditorProps) {
+export default function BlockEditor({ project, blocks, onChange, onCreateNodeWithTitle, onCreateInventoryItem, onCreateEntity }: BlockEditorProps) {
   const htmlContent = useMemo(() => blocksToHTML(blocks, project), [blocks, project]);
   const [menuState, setMenuState] = useState<{ x: number; y: number; selectedText: string } | null>(null);
   const editorChangeRef = useRef(false);
@@ -211,7 +191,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode, o
     onUpdate: ({ editor }) => {
       editorChangeRef.current = true;
       const html = editor.getHTML();
-      const newBlocks = htmlToBlocks(html, project);
+      const newBlocks = htmlToBlocks(html);
       if (JSON.stringify(newBlocks) !== JSON.stringify(blocks)) {
         onChange(newBlocks);
       }
@@ -226,7 +206,7 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode, o
     }
     const currentHtml = editor.getHTML();
     if (currentHtml === htmlContent) return;
-    const currentBlocks = htmlToBlocks(currentHtml, project);
+    const currentBlocks = htmlToBlocks(currentHtml);
     if (JSON.stringify(currentBlocks) !== JSON.stringify(blocks)) {
       editor.commands.setContent(htmlContent);
     }
@@ -247,9 +227,12 @@ export default function BlockEditor({ project, blocks, onChange, onCreateNode, o
         storage.createNodeWithTitle = onCreateNodeWithTitle;
         storage.inventoryItemNames = project.inventory.map(i => i.name);
         storage.createInventoryItem = onCreateInventoryItem;
+        storage.segmentNames = (project.customTimeConfig?.segments || []).map(s => s.name);
+        storage.createEntity = onCreateEntity;
+        storage.createEntity = onCreateEntity;
       }
     }
-  }, [editor, project.entities, project.nodes, onCreateNodeWithTitle, onCreateInventoryItem]);
+  }, [editor, project.entities, project.nodes, project.customTimeConfig, onCreateNodeWithTitle, onCreateInventoryItem, onCreateEntity]);
 
   const handleApplyStyle = useCallback((style: string) => {
     if (!editor) return;

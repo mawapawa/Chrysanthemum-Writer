@@ -15,11 +15,13 @@ interface SettingsDialogProps {
   onOpenTutorial?: () => void;
   onLoadTemplate?: () => void;
   onExportProject?: () => void;
+  onExportCSV?: () => void;
+  onImportCSV?: () => void;
 }
 
 type PickerMode = null | "browse" | "paste";
 
-export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onLoadTemplate, onExportProject }: SettingsDialogProps) {
+export default function SettingsDialog({ project, onUpdateProject, onClose, user, signIn, signOut, onOpenTutorial, onLoadTemplate, onExportProject, onExportCSV, onImportCSV }: SettingsDialogProps) {
   const { status, syncNow } = useDriveSync(project);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
@@ -214,6 +216,24 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
               className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer">
               Download
             </button>
+          </div>
+        </div>
+
+        {/* Localization */}
+        <div>
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Localization</h3>
+          <div className="bg-white/5 rounded-xl p-3 space-y-2">
+            <p className="text-xs text-slate-500">Export text to CSV for translation, then re-import.</p>
+            <div className="flex gap-2">
+              <button onClick={() => { onExportCSV?.(); onClose(); }}
+                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg cursor-pointer">
+                Export CSV
+              </button>
+              <button onClick={() => { onImportCSV?.(); }}
+                className="flex-1 py-1.5 glass-button text-slate-300 text-xs font-bold rounded-lg cursor-pointer">
+                Import CSV
+              </button>
+            </div>
           </div>
         </div>
 

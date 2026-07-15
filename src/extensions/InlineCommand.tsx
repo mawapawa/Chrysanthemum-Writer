@@ -1,4 +1,4 @@
-import { Node, mergeAttributes } from "@tiptap/core";
+import { Node } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { flushSync } from "react-dom";
@@ -83,6 +83,8 @@ export const InlineCommandNode = Node.create<{ onFinalize?: (attrs: InlineComman
       createNodeWithTitle: undefined as ((title: string) => string) | undefined,
       inventoryItemNames: [] as string[],
       createInventoryItem: undefined as ((name: string) => void) | undefined,
+      segmentNames: [] as string[],
+      createEntity: undefined as ((name: string) => void) | undefined,
     };
   },
 
@@ -144,6 +146,7 @@ export function commandColor(type: string): string {
     sfx: "text-purple-300 bg-purple-500/15 border-purple-500/30",
     bg: "text-green-300 bg-green-500/15 border-green-500/30",
     delay: "text-orange-300 bg-orange-500/15 border-orange-500/30",
+    use_item: "text-violet-300 bg-violet-500/15 border-violet-500/30",
   };
   return colors[type] || "text-slate-300 bg-slate-500/15 border-slate-500/30";
 }
@@ -165,6 +168,7 @@ export function commandIcon(type: string): string {
     bg: "🖼️",
     delay: "⏳",
     item: "🎒",
+    use_item: "🧪",
   };
   return icons[type] || "📝";
 }
@@ -186,17 +190,15 @@ function blockFallbackLabel(block: any): string {
     case "continue": return `→ ${block.targetNodeId || "?"}`;
     case "ending": return `${block.endingType || "?"}${block.endingName ? `: ${block.endingName}` : ""}`;
     case "itemEffect":
-    case "item": return `${block.itemName || "?"}`;
+    case "item": return block.action === "use" ? `🧪 ${block.itemName || "?"}` : `${block.itemName || "?"}`;
     case "bgm": return block.trackName || "?";
     case "sfx": return block.soundName || "?";
     case "background": return block.asset || "?";
     case "delay": return `${block.seconds || 1}s`;
-    case "time": return block.action === "set_date" ? `⏰ ${block.dateString || "?"}` : block.action === "set" ? `⏰ Set to ${block.segment || "?"}` : `⏰ +${block.value || 1}`;
+    case "time": return block.action === "set_date" ? `⏰ ${block.dateString || "?"}` : block.action === "set" ? `⏰ ${block.segment || "?"}` : `⏰ +${block.value || 1} ${block.unit || "tick"}${(block.value || 1) > 1 ? "s" : ""}`;
     default: return block.type || "?";
   }
 }
-
-type Step = "command" | "argument" | "value" | "done";
 
 interface StepConfig {
   prompt: string;
@@ -240,8 +242,12 @@ const COMMAND_STEPS: Record<string, StepConfig[]> = {
     { prompt: "Give or take?", options: ["give", "take"] },
   ],
   time: [
-    { prompt: "Action", options: ["+1 tick", "+1 segment", "+1 day", "set segment", "set date"] },
-    { prompt: "Value (segment name, month day, or tick count)", options: undefined },
+    { prompt: "Action", options: ["add", "set segment", "set date"] },
+    { prompt: "Unit / Segment / Date", options: undefined },
+    { prompt: "Amount", options: undefined },
+  ],
+  use_item: [
+    { prompt: "Item name...", options: undefined },
   ],
 };
 
@@ -330,6 +336,28 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
           }
         }
       }
+      if ((attrs.type === "stat" || attrs.type === "flag") && step === 0) {
+        const entityName = newValues[0];
+        if (entityName) {
+          const inlineStorage = (editor as any)?.storage?.inlineCommand;
+          const names: string[] = inlineStorage?.entityNames || [];
+          if (!names.includes(entityName)) {
+            const createEntity = inlineStorage?.createEntity;
+            if (createEntity) createEntity(entityName);
+          }
+        }
+      }
+      if (attrs.type === "use_item" && step === 0) {
+        const itemName = newValues[0];
+        if (itemName) {
+          const inlineStorage = (editor as any)?.storage?.inlineCommand;
+          const names: string[] = inlineStorage?.inventoryItemNames || [];
+          if (!names.includes(itemName)) {
+            const createItem = inlineStorage?.createInventoryItem;
+            if (createItem) createItem(itemName);
+          }
+        }
+      }
       const label = buildLabel(attrs.type, newValues);
       finalize(attrs.type, label, buildBlockData(attrs.type, blockValues));
     } else {
@@ -343,6 +371,7 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
   const entityData: { name: string; trackers: string[]; flags: string[]; expressions: string[] }[] = (editor as any)?.storage?.inlineCommand?.entityData || [];
   const inventoryItemNames: string[] = (editor as any)?.storage?.inlineCommand?.inventoryItemNames || [];
   const DEFAULT_TONES = ["Neutral", "Smile", "Surprise", "Serious", "Sad", "Angry"];
+  const segmentNames: string[] = (editor as any)?.storage?.inlineCommand?.segmentNames || [];
   const dynamicOptionsVal = (attrs.type === "dialogue" && step === 0) || ((attrs.type === "stat" || attrs.type === "flag") && step === 0)
     ? entityNames
     : attrs.type === "dialogue" && step === 1 && values[0]
@@ -358,6 +387,14 @@ function InlineCommandNodeView({ node, updateAttributes, editor, getPos }: {
     ? nodeEntries.map(n => n.title)
     : attrs.type === "item" && step === 0
     ? inventoryItemNames
+    : attrs.type === "use_item" && step === 0
+    ? inventoryItemNames
+    : attrs.type === "time" && step === 1 && values[0] === "set segment"
+    ? segmentNames
+    : attrs.type === "time" && step === 1 && values[0] === "add"
+    ? ["ticks", "days", "months"]
+    : attrs.type === "time" && step === 1 && values[0] === "set date"
+    ? undefined
     : currentStep?.options;
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -580,7 +617,8 @@ function buildLabel(type: string, values: string[]): string {
     case "continue": return `Continue to ${values[0]}`;
     case "ending": return `${values[0]}${values[1] ? `: ${values[1]}` : ""}`;
     case "item": return `${values[0]} ${values[1] || "give"}`;
-    case "time": return values[0] === "set date" ? `⏰ Set date: ${values[1] || "?"}` : values[0] === "set segment" ? `⏰ Set to ${values[1] || "?"}` : `⏰ ${values[0]}`;
+    case "time": return values[0] === "set date" ? `⏰ Set date: ${values[1] || "?"}` : values[0] === "set segment" ? `⏰ ${values[1] || "?"}` : `⏰ +${values[2] || "?"} ${values[1] || ""}`;
+    case "use_item": return `🧪 ${values[0] || "?"}`;
     default: return values.filter(Boolean).join(" ");
   }
 }
@@ -599,15 +637,16 @@ function buildBlockData(type: string, values: string[]): string {
     case "continue": block.targetNodeId = values[0] || ""; break;
     case "ending": block.endingType = values[0] || "NORMAL"; block.endingName = values[1] || ""; break;
     case "item": block.type = "itemEffect"; block.itemName = values[0] || ""; block.action = values[1] || "give"; break;
-    case "time": 
+    case "time":
       if (values[0] === "set date") {
         block.action = "set_date"; block.dateString = values[1] || ""; block.value = 0;
       } else if (values[0] === "set segment") {
         block.action = "set"; block.value = 0; block.segment = values[1] || "";
       } else {
-        block.action = "add"; block.value = parseInt(values[0]) || 1; block.segment = "";
+        block.action = "add"; block.value = parseInt(values[2]) || 1; block.unit = values[1] || "tick"; block.segment = "";
       }
       break;
+    case "use_item": block.type = "itemEffect"; block.action = "use"; block.itemName = values[0] || ""; break;
     case "bgm": block.trackName = values[0] || ""; break;
     case "sfx": block.soundName = values[0] || ""; break;
     case "bg": block.asset = values[0] || ""; break;

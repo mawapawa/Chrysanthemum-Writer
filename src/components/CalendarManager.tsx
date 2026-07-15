@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import { VNProject, CustomTimeConfig } from "../types";
 import { Clock } from "lucide-react";
 import { defaultTimeConfig, ticksPerDay, ticksToTime, timeToString, dateToTicks } from "../utils/timeEngine";

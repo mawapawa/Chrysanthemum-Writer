@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+
 import { VNProject, StoryNode, LocationNodeData, LocationItem } from "../types";
 
 interface LocationEditorProps {

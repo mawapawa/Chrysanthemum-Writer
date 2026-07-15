@@ -1,4 +1,4 @@
-import React from "react";
+
 import { VNProject } from "../types";
 
 interface TravelMapProps {

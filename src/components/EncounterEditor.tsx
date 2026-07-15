@@ -1,4 +1,4 @@
-import React from "react";
+
 import { VNProject, StoryNode, EncounterDrop } from "../types";
 
 interface EncounterEditorProps {
@@ -94,9 +94,7 @@ export default function EncounterEditor({ project, node, onUpdateNode }: Encount
           <button onClick={addDrop} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer">+ Add Drop</button>
         </div>
         {ed.drops.length === 0 && <p className="text-[11px] text-slate-500 italic p-2 bg-slate-950/40 rounded-xl border border-slate-800/40">No drops defined.</p>}
-        {ed.drops.map((d, i) => {
-          const item = project.inventory.find(it => it.id === d.itemId);
-          return (
+        {ed.drops.map((d, i) => (
             <div key={i} className="flex items-center gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800 mb-1">
               <select value={d.itemId} onChange={(e) => updateDrop(i, { itemId: e.target.value })}
                 className="flex-1 bg-slate-900 border border-slate-800 text-xs text-slate-200 rounded p-1">
@@ -110,8 +108,8 @@ export default function EncounterEditor({ project, node, onUpdateNode }: Encount
                 className="w-12 bg-slate-900 border border-slate-800 text-xs text-slate-200 rounded p-1 text-center" />
               <button onClick={() => removeDrop(i)} className="text-rose-400 hover:text-rose-300 text-xs cursor-pointer">✕</button>
             </div>
-          );
-        })}
+          ))
+        }
       </div>
 
       <div className="grid grid-cols-3 gap-2">

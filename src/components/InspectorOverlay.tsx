@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { StoryNode } from "../types";
 
 interface InspectorOverlayProps {
@@ -7,8 +7,7 @@ interface InspectorOverlayProps {
 
 export default function InspectorOverlay({ node }: InspectorOverlayProps) {
   const [expanded, setExpanded] = useState(true);
-  const [editField, setEditField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+
 
   const entries: Array<{ key: string; value: any }> = [
     { key: "id", value: node.id },

@@ -10,11 +10,13 @@ import SceneDirectory from "./components/SceneDirectory";
 import ItemsManager from "./components/ItemsManager";
 import EntitiesManager from "./components/EntitiesManager";
 import CalendarManager from "./components/CalendarManager";
+import Dashboard from "./components/Dashboard";
 import { migrateProject } from "./utils/schemaMigration";
+import { exportToCSV, importFromCSV } from "./utils/localization";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
 import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
-  Package, Users, Layers, BookOpen, Settings, Pencil, Clock
+  Package, Users, Layers, BookOpen, Settings, Pencil, Clock, BarChart3
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { useDriveSync } from "./hooks/useDriveSync";
@@ -114,7 +116,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities" | "calendar">("storyboard");
+  const [activeTab, setActiveTab] = useState<"storyboard" | "items" | "entities" | "calendar" | "dashboard">("storyboard");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("node-start");
   const [playtestStartId, setPlaytestStartId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<string[]>([]);
@@ -352,6 +354,48 @@ export default function App() {
     }
   };
 
+  const handleExportCSV = () => {
+    const csv = exportToCSV(project);
+    try {
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.setAttribute("href", url);
+      a.setAttribute("download", `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_text.csv`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+      const a = document.createElement("a");
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_text.csv`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
+
+  const handleImportCSV = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".csv";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      const result = importFromCSV(project, text);
+      if (result.success) {
+        handleUpdateProject({ ...project });
+        alert(result.message);
+      } else {
+        alert(`CSV import failed: ${result.message}`);
+      }
+    };
+    input.click();
+  };
+
   const handleLoadDriveProjects = async () => {
     setLoadingDrive(true);
     try {
@@ -493,6 +537,12 @@ export default function App() {
     setActiveTab("storyboard");
   };
 
+  const handleGoToNode = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setActiveTab("storyboard");
+    setCenterNodeTrigger({ id: nodeId, timestamp: Date.now() });
+  }, []);
+
   if (playtestStartId) {
     return (
       <PlaytestSimulator
@@ -505,7 +555,6 @@ export default function App() {
   }
 
   const itemCount = project.inventory.length;
-  const entityCount = project.entities.length;
 
   if (loading) {
     return (
@@ -589,6 +638,9 @@ export default function App() {
           <button onClick={() => setActiveTab("calendar")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "calendar" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
             <Clock className="w-4 h-4 text-cyan-400" /> Time
           </button>
+          <button onClick={() => setActiveTab("dashboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "dashboard" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
+            <BarChart3 className="w-4 h-4 text-amber-400" /> Dashboard
+          </button>
         </div>
       </div>
 
@@ -626,6 +678,7 @@ export default function App() {
         {activeTab === "items" && <ItemsManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "entities" && <EntitiesManager project={project} onUpdateProject={handleUpdateProject} />}
         {activeTab === "calendar" && <CalendarManager project={project} onUpdateProject={handleUpdateProject} />}
+        {activeTab === "dashboard" && <Dashboard project={project} onGoToNode={handleGoToNode} />}
       </main>
 
       {isProjectsModalOpen && (
@@ -704,6 +757,8 @@ export default function App() {
           onOpenTutorial={() => setShowTutorial(true)}
           onLoadTemplate={handleLoadTemplate}
           onExportProject={handleExportJSON}
+          onExportCSV={handleExportCSV}
+          onImportCSV={handleImportCSV}
         />
       )}
 

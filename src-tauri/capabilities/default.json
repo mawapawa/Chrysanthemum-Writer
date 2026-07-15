@@ -10,7 +10,6 @@
     "core:event:allow-listen",
     "core:webview:default",
     "core:window:allow-set-shadow",
-    "opener:default",
     "oauth:default",
     {
       "identifier": "fs:scope",

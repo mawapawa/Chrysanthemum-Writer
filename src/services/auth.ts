@@ -261,7 +261,7 @@ async function signInTauri(): Promise<AuthUser> {
     const TIMEOUT_MS = 5 * 60 * 1000;
     let settled = false;
     let unlisten: (() => void) | null = null;
-    let oauthWindow: WebviewWindow | null = null;
+    let oauthWindow: any = null;
 
     const closeWindow = () => {
       try { oauthWindow?.close(); } catch { }

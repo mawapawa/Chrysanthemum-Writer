@@ -13,7 +13,7 @@ export function migrateProject(project: VNProject & Record<string, unknown>): VN
   }));
 
   const allVars = (project.variables || []) as VNProject["variables"];
-  const trackers: VNTracker[] = allVars
+  const trackers: VNTracker[] = (allVars || [])
     .filter(v => v.type === "number")
     .map(v => ({
       id: v.id || crypto.randomUUID(),
@@ -23,7 +23,7 @@ export function migrateProject(project: VNProject & Record<string, unknown>): VN
       displayId: v.displayId,
     }));
 
-  const flags: VNFlag[] = allVars
+  const flags: VNFlag[] = (allVars || [])
     .filter(v => v.type === "boolean")
     .map(v => ({
       id: v.id || crypto.randomUUID(),

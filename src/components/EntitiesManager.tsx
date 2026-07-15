@@ -24,7 +24,6 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
   const [customHex, setCustomHex] = useState("#");
   const [description, setDescription] = useState("");
   const [formTags, setFormTags] = useState<string[]>([]);
-  const [formIsCombatant, setFormIsCombatant] = useState(false);
   const [formHp, setFormHp] = useState(0);
   const [formAttack, setFormAttack] = useState(0);
   const [formDefense, setFormDefense] = useState(0);
@@ -42,7 +41,6 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setCustomHex("#");
     setDescription("");
     setFormTags([]);
-    setFormIsCombatant(false);
     setFormHp(0);
     setFormAttack(0);
     setFormDefense(0);
@@ -62,7 +60,6 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setCustomHex("#");
     setDescription(entity.description || "");
     setFormTags([...entity.tags]);
-    setFormIsCombatant(entity.hp !== undefined || entity.attack !== undefined || entity.defense !== undefined);
     setFormHp(entity.hp ?? 0);
     setFormAttack(entity.attack ?? 0);
     setFormDefense(entity.defense ?? 0);
@@ -71,6 +68,18 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
     setFormOwnedFlags(entity.ownedFlags ? [...entity.ownedFlags] : []);
     setFormExpressions(entity.expressions ? [...entity.expressions] : []);
     setError(null);
+  };
+
+  const isCombatant = formTags.includes("#combatant");
+  const handleTagsChange = (newTags: string[]) => {
+    const wasCombatant = formTags.includes("#combatant");
+    const nowCombatant = newTags.includes("#combatant");
+    if (nowCombatant && !wasCombatant) {
+      setFormHp(prev => prev === 0 ? 10 : prev);
+      setFormAttack(prev => prev === 0 ? 5 : prev);
+      setFormDefense(prev => prev === 0 ? 3 : prev);
+    }
+    setFormTags(newTags);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -93,9 +102,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
               color: finalColor,
               description: description.trim() || undefined,
               tags: [...formTags],
-              hp: formIsCombatant ? (formHp || undefined) : undefined,
-              attack: formIsCombatant ? (formAttack || undefined) : undefined,
-              defense: formIsCombatant ? (formDefense || undefined) : undefined,
+              hp: isCombatant ? (formHp || undefined) : undefined,
+              attack: isCombatant ? (formAttack || undefined) : undefined,
+              defense: isCombatant ? (formDefense || undefined) : undefined,
               stats: Object.keys(formStats).length > 0 ? { ...formStats } : undefined,
               ownedTrackers: cleanedTrackers.length > 0 ? cleanedTrackers : undefined,
               ownedFlags: cleanedFlags.length > 0 ? cleanedFlags : undefined,
@@ -120,9 +129,9 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
       color: finalColor,
       description: description.trim() || undefined,
       tags: [...formTags],
-      hp: formHp || undefined,
-      attack: formAttack || undefined,
-      defense: formDefense || undefined,
+      hp: isCombatant ? (formHp || undefined) : undefined,
+      attack: isCombatant ? (formAttack || undefined) : undefined,
+      defense: isCombatant ? (formDefense || undefined) : undefined,
       ownedTrackers: cleanedTrackers.length > 0 ? cleanedTrackers : undefined,
       ownedFlags: cleanedFlags.length > 0 ? cleanedFlags : undefined,
       expressions: formExpressions.length > 0 ? formExpressions : undefined,
@@ -220,8 +229,34 @@ export default function EntitiesManager({ project, onUpdateProject }: EntitiesMa
 
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Tags</label>
-            <TagInput tags={formTags} onChange={setFormTags} existingTags={allEntityTags} placeholder="Add tag and press Enter..." />
+            <TagInput tags={formTags} onChange={handleTagsChange} existingTags={allEntityTags} placeholder="Add tag and press Enter..." />
           </div>
+
+          {isCombatant && (
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Combat Stats (from #combatant tag)</label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-0.5">HP</label>
+                  <input type="number" value={formHp}
+                    onChange={(e) => setFormHp(parseInt(e.target.value) || 0)}
+                    className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-0.5">ATK</label>
+                  <input type="number" value={formAttack}
+                    onChange={(e) => setFormAttack(parseInt(e.target.value) || 0)}
+                    className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-0.5">DEF</label>
+                  <input type="number" value={formDefense}
+                    onChange={(e) => setFormDefense(parseInt(e.target.value) || 0)}
+                    className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Owned Trackers */}
           <div>

@@ -228,8 +228,8 @@ export type SceneBlock =
   | { type: "sfx"; soundName: string }
   | { type: "background"; asset: string }
   | { type: "delay"; seconds: number }
-  | { type: "itemEffect"; action: "give" | "take"; itemName: string }
-  | { type: "time"; action: "add" | "set"; value: number; segment?: string };
+  | { type: "itemEffect"; action: "give" | "take" | "use"; itemName: string }
+  | { type: "time"; action: "add" | "set" | "set_date"; value: number; segment?: string; dateString?: string; unit?: "tick" | "day" | "month" };
 
 export interface StoryNode {
   id: string;
