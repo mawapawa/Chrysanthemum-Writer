@@ -12,6 +12,8 @@ export function blocksToNode(blocks: SceneBlock[], _existing: StoryNode): Partia
   let endingType: "GOOD" | "BAD" | "NEUTRAL" | "NORMAL" | undefined;
   let endingName: string | undefined;
   let continueToNodeId: string | undefined;
+  let interceptFlag: { targetLocationId: string; condition: { source: "tracker" | "flag"; targetId: string; operator?: "==" | "!=" | ">=" | "<=" | ">" | "<"; compareValue?: number; expect?: boolean } } | undefined;
+  let trigger: { source: "flag" | "tracker"; targetId: string; expect?: boolean; min?: number } | undefined;
   const skipIdx = new Set<number>();
 
   for (let i = 0; i < blocks.length; i++) {
@@ -82,6 +84,12 @@ export function blocksToNode(blocks: SceneBlock[], _existing: StoryNode): Partia
         endingType = block.endingType;
         endingName = block.endingName;
         break;
+      case "intercept":
+        interceptFlag = { targetLocationId: block.targetLocationId, condition: block.condition };
+        break;
+      case "trigger":
+        trigger = { source: block.source, targetId: block.targetId, expect: block.expect, min: block.min };
+        break;
       case "flag":
       case "conditional":
       case "bgm":
@@ -104,6 +112,8 @@ export function blocksToNode(blocks: SceneBlock[], _existing: StoryNode): Partia
     endingType,
     endingName,
     continueToNodeId,
+    interceptFlag,
+    trigger,
   };
 }
 
@@ -160,6 +170,16 @@ export function nodeToBlocks(node: StoryNode): SceneBlock[] {
   // Add ending if applicable
   if (node.isEnding) {
     blocks.push({ type: "ending", endingType: node.endingType || "NORMAL", endingName: node.endingName });
+  }
+
+  // Add intercept if applicable
+  if (node.interceptFlag) {
+    blocks.push({ type: "intercept", targetLocationId: node.interceptFlag.targetLocationId, condition: node.interceptFlag.condition });
+  }
+
+  // Add trigger if applicable
+  if (node.trigger) {
+    blocks.push({ type: "trigger", source: node.trigger.source, targetId: node.trigger.targetId, expect: node.trigger.expect, min: node.trigger.min });
   }
 
   return blocks;

@@ -36,6 +36,8 @@ function blockHasContent(b: SceneBlock): boolean {
     case "background": return (b.asset || "").trim().length > 0;
     case "delay": return (b.seconds || 0) > 0;
     case "itemEffect": return (b.itemName || "").trim().length > 0;
+    case "intercept": return (b.targetLocationId || "").length > 0;
+    case "trigger": return (b.targetId || "").length > 0;
     default: return true;
   }
 }
@@ -117,6 +119,8 @@ function badgeLabel(b: SceneBlock, project: VNProject): string {
     case "background": return `🖼️ ${b.asset}`;
     case "delay": return `⏳ ${b.seconds}s`;
     case "itemEffect": return `🎒 ${b.action === "give" ? "+" : "-"} ${b.itemName}`;
+    case "intercept": { const loc = project.nodes[b.targetLocationId]; return `🚧 Intercept: ${loc?.title || b.targetLocationId}${b.condition?.targetId ? ` if ${b.condition.source}.${b.condition.targetId}` : ""}`; }
+    case "trigger": return `⏰ Trigger: ${b.source}.${b.targetId} ${b.source === "flag" ? `= ${b.expect ?? true}` : `>= ${b.min ?? 1}`}`;
     default: return "📝";
   }
 }

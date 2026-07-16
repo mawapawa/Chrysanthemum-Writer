@@ -229,7 +229,12 @@ export type SceneBlock =
   | { type: "background"; asset: string }
   | { type: "delay"; seconds: number }
   | { type: "itemEffect"; action: "give" | "take" | "use"; itemName: string }
-  | { type: "time"; action: "add" | "set" | "set_date"; value: number; segment?: string; dateString?: string; unit?: "tick" | "day" | "month" };
+  | { type: "time"; action: "add" | "set" | "set_date"; value: number; segment?: string; dateString?: string; unit?: "tick" | "day" | "month" }
+  | { type: "intercept"; targetLocationId: string; condition: ChoiceRequirement }
+  | { type: "trigger"; source: "flag" | "tracker"; targetId: string; expect?: boolean; min?: number }
+  | { type: "showOverlay"; overlayId: string }
+  | { type: "hideOverlay" }
+  | { type: "inputDialog"; variableName: string; prompt: string; defaultValue?: string };
 
 export interface StoryNode {
   id: string;
@@ -297,4 +302,119 @@ export interface VNProject {
   flowDirection?: "horizontal" | "vertical";
   variables?: VNVariable[];
   characters?: VNCharacter[];
+  dashboardLayout?: WidgetConfig[];
+  overlays?: OverlayDef[];
+  keyMappings?: KeyMapping[];
+}
+
+export type WidgetType = "container" | "text" | "image" | "statText" | "statBar" | "button" | "choiceList" | "portrait" | "inventory" | "divider" | "borderBox" | "repeater" | "inspector";
+
+export interface WidgetConfig {
+  id: string;
+  type: WidgetType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  settings?: WidgetSettings;
+  children?: WidgetConfig[];
+}
+
+export interface WidgetSettings {
+  // container
+  direction?: "row" | "column";
+  padding?: string;
+  bgColor?: string;
+  borderColor?: string;
+  gap?: string;
+
+  // text
+  textType?: "label" | "title" | "characterName" | "dialogue" | "narrator" | "custom";
+  content?: string;
+  fontSize?: string;
+  color?: string;
+  align?: "left" | "center" | "right";
+
+  // image
+  src?: string;
+  aspectRatio?: string;
+  fit?: "cover" | "contain" | "fill";
+
+  // statText / statBar
+  statSource?: string;    // "tracker.NAME" | "flag.NAME" | "entity.NAME.field"
+  statLabel?: string;
+  statMin?: number;
+  statMax?: number;
+  barColor?: string;
+
+  // button
+  buttonLabel?: string;
+  buttonAction?: string;  // "menu" | "save" | "load" | "settings" | "custom" | "next" | "continue"
+
+  // choiceList
+  choiceListLabel?: string;
+
+  // portrait
+  portraitSpeaker?: string;
+  portraitSrc?: string;
+  portraitShape?: "circle" | "rounded" | "square";
+
+  // inventory
+  inventoryLabel?: string;
+  inventoryShowEmpty?: boolean;
+
+  // divider
+  dividerColor?: string;
+  dividerStyle?: "solid" | "dashed" | "dotted";
+
+  // repeater
+  repeaterSource?: string;
+
+  // inspector
+  trackedItemId?: string;
+
+  // borderBox (9-slice)
+  borderImage?: string;
+  borderSliceTop?: number;
+  borderSliceRight?: number;
+  borderSliceBottom?: number;
+  borderSliceLeft?: number;
+  borderWidth?: string;
+  borderPadding?: string;
+
+  // conditional visibility (all widget types)
+  showIfSource?: string;    // "tracker.NAME" | "flag.NAME"
+  showIfOperator?: "==" | "!=" | ">=" | "<=" | ">" | "<" | "exists";
+  showIfValue?: string;
+}
+
+export interface KeyMapping {
+  key: string;
+  action: string;
+  label: string;
+}
+
+export interface OverlayDef {
+  id: string;
+  name: string;
+  layout: WidgetConfig[];
+  settings: {
+    closeOnClickOutside: boolean;
+    transition: "fade" | "slideUp" | "none";
+    backgroundColor: string;
+  };
+}
+
+export interface SaveData {
+  slot: number;
+  name: string;
+  timestamp: number;
+  currentNodeId: string;
+  lineIdx: number;
+  vars: Record<string, number>;
+  playerInventory: string[];
+  combatState: Record<string, { currentHp: number; maxHp: number; attack: number; defense: number; name: string }>;
+  history: Array<{ nodeId: string; variables: Record<string, number> }>;
+  logs: Array<{ text: string; type: "set" | "plus" | "minus" }>;
+  nodeTitle?: string;
 }

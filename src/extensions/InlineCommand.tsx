@@ -147,6 +147,8 @@ export function commandColor(type: string): string {
     bg: "text-green-300 bg-green-500/15 border-green-500/30",
     delay: "text-orange-300 bg-orange-500/15 border-orange-500/30",
     use_item: "text-violet-300 bg-violet-500/15 border-violet-500/30",
+    intercept: "text-yellow-300 bg-yellow-500/15 border-yellow-500/30",
+    trigger: "text-cyan-300 bg-cyan-500/15 border-cyan-500/30",
   };
   return colors[type] || "text-slate-300 bg-slate-500/15 border-slate-500/30";
 }
@@ -169,6 +171,8 @@ export function commandIcon(type: string): string {
     delay: "⏳",
     item: "🎒",
     use_item: "🧪",
+    intercept: "🚧",
+    trigger: "⏰",
   };
   return icons[type] || "📝";
 }
@@ -196,6 +200,8 @@ function blockFallbackLabel(block: any): string {
     case "background": return block.asset || "?";
     case "delay": return `${block.seconds || 1}s`;
     case "time": return block.action === "set_date" ? `⏰ ${block.dateString || "?"}` : block.action === "set" ? `⏰ ${block.segment || "?"}` : `⏰ +${block.value || 1} ${block.unit || "tick"}${(block.value || 1) > 1 ? "s" : ""}`;
+    case "intercept": return `🚧 Intercept: ${block.targetLocationId || "?"}${block.condition?.targetId ? ` if ${block.condition.source}.${block.condition.targetId}` : ""}`;
+    case "trigger": return `⏰ ${block.source || "?"}.${block.targetId || "?"} ${block.source === "flag" ? `= ${block.expect ?? true}` : `>= ${block.min ?? 1}`}`;
     default: return block.type || "?";
   }
 }

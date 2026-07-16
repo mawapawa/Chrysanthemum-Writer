@@ -1,6 +1,6 @@
 import { VNProject } from "../types";
-import { ManagerLayout } from "./ManagerLayout";
 import { BarChart3, FileText, GitFork, AlertTriangle } from "lucide-react";
+import { ManagerLayout } from "./ManagerLayout";
 
 interface DashboardProps {
   project: VNProject;
@@ -53,7 +53,6 @@ export default function Dashboard({ project, onGoToNode }: DashboardProps) {
         }
       }
     }
-
     const choiceCount = node.choices.length;
     if (choiceCount === 0) branchCounts.zero++;
     else if (choiceCount === 1) branchCounts.one++;
