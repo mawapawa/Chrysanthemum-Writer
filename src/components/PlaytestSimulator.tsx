@@ -193,6 +193,7 @@ export default function PlaytestSimulator({
       } else if (block.type === "inputDialog") {
         setPendingInput({ variableName: block.variableName, prompt: block.prompt, defaultValue: block.defaultValue ?? "" });
         newLogs.push({ text: `✏️ Input dialog: ${block.variableName}`, type: "set" as const });
+        break; // stop processing further blocks until dialog is resolved
       } else if (block.type === "time") {
         const config = project.customTimeConfig;
         if (config) {
@@ -397,7 +398,7 @@ export default function PlaytestSimulator({
     }
 
     // Capture history for rollback
-    setHistory([...history, { nodeId: currentNodeId, variables: { ...vars } }]);
+    setHistory(prev => [...prev, { nodeId: currentNodeId, variables: { ...vars } }]);
 
     // Apply immediate selection rewards/costs
     let tempVars = { ...vars };
@@ -466,20 +467,19 @@ export default function PlaytestSimulator({
       return false;
     });
     if (triggeredNode) {
-      setTimeout(() => {
-        setCurrentNodeId(triggeredNode.id);
-        setLineIdx(0);
-        setLogs(prev => [{ text: `📖 Story beat: ${triggeredNode.title}`, type: "plus" as const }, ...prev].slice(0, 20));
-      }, 0);
+      setCurrentNodeId(triggeredNode.id);
+      setLineIdx(0);
+      setLogs(prev => [{ text: `📖 Story beat: ${triggeredNode.title}`, type: "plus" as const }, ...prev].slice(0, 20));
     }
   };
 
   const handleBack = () => {
     if (history.length === 0) return;
+    if (history.length === 0) return;
     const previous = history[history.length - 1];
     setCurrentNodeId(previous.nodeId);
     setVars(previous.variables);
-    setHistory(history.slice(0, -1));
+    setHistory(prev => prev.slice(0, -1));
     setLineIdx(0);
   };
 
@@ -487,15 +487,44 @@ export default function PlaytestSimulator({
     setInspectedItemId(itemId);
   };
 
+  const handleUseItem = (itemId: string) => {
+    const item = project.inventory.find(i => i.id === itemId);
+    if (!item) return;
+    setPlayerInventory(prev => {
+      if (!prev.includes(itemId)) {
+        setLogs(l => [{ text: `Don't have: ${item.name}`, type: "minus" as const }, ...l].slice(0, 20));
+        return prev;
+      }
+      return prev.filter(id => id !== itemId);
+    });
+    if (item.statModifiers) {
+      setVars(prev => { const n = { ...prev }; for (const [k, v] of Object.entries(item.statModifiers!)) { n[k] = (n[k] ?? 0) + v; } return n; });
+    }
+    setLogs(prev => [{ text: `Used ${item.name}`, type: "plus" as const }, ...prev].slice(0, 20));
+  };
+
+  const handleEquipItem = (itemId: string) => {
+    const item = project.inventory.find(i => i.id === itemId);
+    if (!item || !playerInventory.includes(itemId)) return;
+    if (item.statModifiers) {
+      setVars(prev => { const n = { ...prev }; for (const [k, v] of Object.entries(item.statModifiers!)) { n[k] = (n[k] ?? 0) + v; } return n; });
+    }
+    setLogs(prev => [{ text: `Equipped ${item.name}`, type: "set" as const }, ...prev].slice(0, 20));
+  };
+
   // Global keydown listener for keymappings
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (showSaveDialog || showLoadDialog || activeOverlayId) return;
       const mappings = project.keyMappings ?? [];
       for (const m of mappings) {
         if (e.key === m.key || e.code === m.key) {
-          if (m.action === "rollback" && history.length > 0) handleBack();
-          else if (m.action === "quit") onExit();
+          if (m.action === "rollback" && history.length > 0) handleBackRef.current();
+          else if (m.action === "quit") onExitRef.current();
           else if (m.action === "save") setShowSaveDialog(true);
           else if (m.action === "load") setShowLoadDialog(true);
           else if (m.action.startsWith("open_overlay:")) setActiveOverlayId(m.action.slice("open_overlay:".length));
@@ -578,6 +607,7 @@ export default function PlaytestSimulator({
     return evalResult.passed || showLockedChoices;
   });
 
+  const isOnLastLine = !hasDialogue || lineIdx === totalLines - 1;
   const choicesData = availableChoices.map(c => ({
     id: c.id,
     text: c.text,
@@ -585,9 +615,11 @@ export default function PlaytestSimulator({
     passed: checkChoiceCondition(c).passed,
     statChanges: c.statChanges,
   }));
+  const showChoicesNow = isOnLastLine && availableChoices.length > 0;
+  const widgetChoices = showChoicesNow ? choicesData : [];
+  const runtimeVars = { ...vars, _hasChoices: showChoicesNow ? 1 : 0 };
 
   // Sequential block processing — determine ending state
-  const isOnLastLine = !hasDialogue || lineIdx === totalLines - 1;
   const endingBlock = (node.blocks || []).find((b): b is SceneBlock & { type: "ending" } => b.type === "ending");
   const showEndingNow = !!endingBlock && isOnLastLine && availableChoices.length === 0;
   const activeEndingType = endingBlock?.endingType || node.endingType;
@@ -788,7 +820,7 @@ export default function PlaytestSimulator({
         </div>
 
         {/* Narrative / Script stage visualization area */}
-        <div className="flex-1 flex flex-col justify-start py-4 overflow-y-auto" id="vn-player-expressive-stage">
+        <div className="flex-1 flex flex-col justify-start py-4 overflow-y-auto relative" id="vn-player-expressive-stage">
           {showUIEditor ? (
             <WidgetEditor project={project} onUpdateProject={onUpdateProject} />
           ) : (
@@ -901,9 +933,8 @@ export default function PlaytestSimulator({
                           <button
                             disabled={!canAfford}
                             onClick={() => {
-                              let tv = { ...vars };
-                              if (price > 0) { tv["gold"] = (tv["gold"] ?? 0) - price; setVars(tv); }
-                              setPlayerInventory([...playerInventory, li.itemId]);
+                              if (price > 0) { setVars(prev => ({ ...prev, gold: (prev.gold ?? 0) - price })); }
+                              setPlayerInventory(prev => [...prev, li.itemId]);
                               setLogs(prev => [{ text: `Bought: ${item?.name || li.itemId} for ${price} gold`, type: "plus" as const }, ...prev].slice(0, 20));
                             }}
                             className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer ${canAfford ? "glass-button text-white" : "bg-slate-800 text-slate-600 cursor-not-allowed"}`}
@@ -997,54 +1028,59 @@ export default function PlaytestSimulator({
                 </div>
               </div>
             </div>
-          ) : project.dashboardLayout?.length ? (
-            <WidgetPlaytestView
-              project={project}
-              layout={project.dashboardLayout}
-              runtime={{
-                dialogueText: activeLine?.text,
-                dialogueFormattedText: activeLine?.formattedText ? expandWiggleSpans(activeLine.formattedText) : undefined,
-                dialogueSpeaker: activeLine?.speaker,
-                runtimeValues: vars,
-                inventory: playerInventory,
-                choices: choicesData,
-                onSelectChoice: (choiceId) => {
-                  const choice = node.choices.find(c => c.id === choiceId);
-                  if (choice) handleSelectChoice(choice);
-                },
-              }}
-              hasDialogue={hasDialogue}
-              lineIdx={lineIdx}
-              totalLines={totalLines}
-              showContinue={!showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && !!node.continueToNodeId && !!project.nodes[node.continueToNodeId]}
-              choices={choicesData}
-              onNextLine={() => { if (lineIdx < totalLines - 1) setLineIdx(lineIdx + 1); }}
-              onPrevLine={() => { if (lineIdx > 0) setLineIdx(lineIdx - 1); }}
-              onContinue={() => {
-                if (node.continueToNodeId) {
-                  setHistory([...history, { nodeId: currentNodeId, variables: { ...vars } }]);
-                  const next = project.nodes[node.continueToNodeId!];
-                  if (next) { setCurrentNodeId(node.continueToNodeId!); setLineIdx(0); processNodeBlocks(next, vars, playerInventory); }
-                }
-              }}
-              onSelectChoice={(choiceId) => {
-                const choice = node.choices.find(c => c.id === choiceId);
-                if (choice) handleSelectChoice(choice);
-              }}
-              onOpenSave={() => setShowSaveDialog(true)}
-              onOpenLoad={() => setShowLoadDialog(true)}
-              onOpenOverlay={(overlayId) => setActiveOverlayId(overlayId)}
-              onCloseOverlay={() => setActiveOverlayId(null)}
-              onGoToNode={(nodeId) => { if (project.nodes[nodeId]) { setCurrentNodeId(nodeId); setLineIdx(0); setLogs(prev => [{ text: `Jumped to: ${project.nodes[nodeId].title}`, type: "set" as const }, ...prev].slice(0, 20)); } }}
-              onUseItem={(itemId) => { setLogs(prev => [{ text: `Used item: ${project.inventory.find(i => i.id === itemId)?.name ?? itemId}`, type: "plus" as const }, ...prev].slice(0, 20)); }}
-              onEquipItem={(itemId) => { setLogs(prev => [{ text: `Equipped item: ${project.inventory.find(i => i.id === itemId)?.name ?? itemId}`, type: "set" as const }, ...prev].slice(0, 20)); }}
-              onRollback={() => { if (history.length > 0) handleBack(); }}
-              onQuit={() => onExit()}
-              onInspectItem={handleInspectItem}
-              inspectedItemId={inspectedItemId ?? ""}
-            />
           ) : (
-            <div className="w-full" id="playtest-story-stage">
+            <>
+            {project.dashboardLayout?.length && (
+              <div className="w-full">
+                <WidgetPlaytestView
+                  project={project}
+                  layout={project.dashboardLayout}
+                  runtime={{
+                    dialogueText: activeLine?.text,
+                    dialogueFormattedText: activeLine?.formattedText ? expandWiggleSpans(activeLine.formattedText) : undefined,
+                    dialogueSpeaker: activeLine?.speaker,
+                    runtimeValues: runtimeVars,
+                    inventory: playerInventory,
+                    choices: choicesData,
+                    onSelectChoice: (choiceId) => {
+                      const choice = node.choices.find(c => c.id === choiceId);
+                      if (choice) handleSelectChoice(choice);
+                    },
+                  }}
+                  lineIdx={lineIdx}
+                  totalLines={totalLines}
+                  hasDialogue={hasDialogue}
+                  onNextLine={() => { if (lineIdx < totalLines - 1) setLineIdx(lineIdx + 1); }}
+                  onPrevLine={() => { if (lineIdx > 0) setLineIdx(lineIdx - 1); }}
+                  showContinue={!showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && !!node.continueToNodeId && !!project.nodes[node.continueToNodeId]}
+                  onContinue={() => {
+                    if (node.continueToNodeId) {
+                      setHistory(prev => [...prev, { nodeId: currentNodeId, variables: { ...vars } }]);
+                      const next = project.nodes[node.continueToNodeId!];
+                      if (next) { setCurrentNodeId(node.continueToNodeId!); setLineIdx(0); processNodeBlocks(next, vars, playerInventory); }
+                    }
+                  }}
+                  choices={choicesData}
+                  onSelectChoice={(choiceId) => {
+                    const choice = node.choices.find(c => c.id === choiceId);
+                    if (choice) handleSelectChoice(choice);
+                  }}
+                  onOpenSave={() => setShowSaveDialog(true)}
+                  onOpenLoad={() => setShowLoadDialog(true)}
+                  onOpenOverlay={(overlayId) => setActiveOverlayId(overlayId)}
+                  onCloseOverlay={() => setActiveOverlayId(null)}
+                  onGoToNode={(nodeId) => { if (project.nodes[nodeId]) { setCurrentNodeId(nodeId); setLineIdx(0); setLogs(prev => [{ text: `Jumped to: ${project.nodes[nodeId].title}`, type: "set" as const }, ...prev].slice(0, 20)); } }}
+                  onUseItem={handleUseItem}
+                  onEquipItem={handleEquipItem}
+                  onRollback={() => { if (history.length > 0) handleBack(); }}
+                  onQuit={() => onExit()}
+                  onInspectItem={handleInspectItem}
+                  inspectedItemId={inspectedItemId ?? ""}
+                />
+              </div>
+            )}
+            {!project.dashboardLayout?.length && (
+            <div className="relative z-10 w-full" id="playtest-story-stage">
               {/* Standard dialogue box player */}
               <div className="glass-card p-6" style={{ minHeight: "160px" }}>
 
@@ -1148,7 +1184,7 @@ export default function PlaytestSimulator({
                     <div className="flex justify-center">
                       <button
                         onClick={() => {
-                          setHistory([...history, { nodeId: currentNodeId, variables: { ...vars } }]);
+                          setHistory(prev => [...prev, { nodeId: currentNodeId, variables: { ...vars } }]);
                           const next = project.nodes[node.continueToNodeId!];
                           if (next) {
                             setCurrentNodeId(node.continueToNodeId!);
@@ -1216,6 +1252,8 @@ export default function PlaytestSimulator({
                 )}
               </div>
             </div>
+            )}
+            </>
           )
         )}
         </div>
@@ -1239,9 +1277,9 @@ export default function PlaytestSimulator({
                     {overlay.layout.map(widget => (
                       <div key={widget.id} style={{ position: "absolute", left: widget.x, top: widget.y, width: widget.w, height: widget.h, overflow: "hidden" }}>
                         <WidgetRenderer project={project} config={widget} runtime={{
-                          runtimeValues: vars,
+                          runtimeValues: runtimeVars,
                           inventory: playerInventory,
-                          choices: choicesData,
+                    choices: widgetChoices,
                           inspectedItemId: inspectedItemId ?? "",
                           onInspectItem: handleInspectItem,
                           onSelectChoice: (choiceId) => {
@@ -1249,6 +1287,7 @@ export default function PlaytestSimulator({
                             if (choice) handleSelectChoice(choice);
                           },
                           onButtonAction: (action) => {
+                            const showContinue = !showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && !!node.continueToNodeId && !!project.nodes[node.continueToNodeId];
                             if (action === "close_overlay") setActiveOverlayId(null);
                             else if (action.startsWith("inspect_item:")) { handleInspectItem(action.slice("inspect_item:".length)); }
                             else if (action.startsWith("goto_node:")) {
@@ -1257,6 +1296,16 @@ export default function PlaytestSimulator({
                             }
                             else if (action === "rollback" && history.length > 0) { setActiveOverlayId(null); handleBack(); }
                             else if (action === "quit") onExit();
+                            else if (action === "save") setShowSaveDialog(true);
+                            else if (action === "load") setShowLoadDialog(true);
+                            else if (action === "next" && hasDialogue && lineIdx < totalLines - 1) setLineIdx(lineIdx + 1);
+                            else if (action === "continue" && showContinue && node.continueToNodeId) {
+                              setHistory(prev => [...prev, { nodeId: currentNodeId, variables: { ...vars } }]);
+                              const next = project.nodes[node.continueToNodeId!];
+                              if (next) { setActiveOverlayId(null); setCurrentNodeId(node.continueToNodeId!); setLineIdx(0); processNodeBlocks(next, vars, playerInventory); }
+                            }
+                            else if (action.startsWith("use_item:")) { handleUseItem(action.slice("use_item:".length)); }
+                            else if (action.startsWith("equip_item:")) { handleEquipItem(action.slice("equip_item:".length)); }
                           },
                         }} />
                       </div>
@@ -1280,6 +1329,9 @@ export default function PlaytestSimulator({
             history,
             logs,
             nodeTitle: node?.title ?? activeLine?.speaker ?? "Unknown",
+            inspectedItemId: inspectedItemId ?? undefined,
+            globalTimeTicks,
+            activeOverlayId,
           }}
           onLoad={() => {}}
           onClose={() => setShowSaveDialog(false)}
@@ -1295,6 +1347,9 @@ export default function PlaytestSimulator({
             setCombatState(data.combatState);
             setHistory(data.history);
             setLogs(data.logs);
+            if (data.inspectedItemId !== undefined) setInspectedItemId(data.inspectedItemId);
+            if (data.globalTimeTicks !== undefined) setGlobalTimeTicks(data.globalTimeTicks);
+            if (data.activeOverlayId !== undefined) setActiveOverlayId(data.activeOverlayId);
             setShowLoadDialog(false);
           }}
           onClose={() => setShowLoadDialog(false)}
@@ -1463,23 +1518,34 @@ function WidgetEditor({ project, onUpdateProject }: { project: VNProject; onUpda
   };
 
   const getLayout = (): WidgetConfig[] => {
-    if (editMode === "overlay-edit" && editingOverlay) return editingOverlay.layout?.length ? editingOverlay.layout : defaultLayout();
-    return project.dashboardLayout && project.dashboardLayout.length > 0 ? project.dashboardLayout : defaultLayout();
+    if (editMode === "overlay-edit" && editingOverlay) return editingOverlay.layout ?? [];
+    return project.dashboardLayout ?? [];
   };
 
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const overlaysRef = useRef(overlays);
+  overlaysRef.current = overlays;
+  const editModeRef = useRef(editMode);
+  editModeRef.current = editMode;
+  const editingOverlayIdRef = useRef(editingOverlayId);
+  editingOverlayIdRef.current = editingOverlayId;
+
   const updateProject = (patch: Partial<VNProject>) => {
-    onUpdateProject?.({ ...project, ...patch, lastModified: Date.now() });
+    onUpdateProject?.({ ...projectRef.current, ...patch, lastModified: Date.now() });
   };
 
   const updateLayout = (widgets: WidgetConfig[]) => {
-    if (editMode === "overlay-edit") {
-      updateProject({ overlays: overlays.map(o => o.id === editingOverlayId ? { ...o, layout: widgets } : o) });
+    if (editModeRef.current === "overlay-edit") {
+      updateProject({ overlays: overlaysRef.current.map((o: import("../types").OverlayDef) => o.id === editingOverlayIdRef.current ? { ...o, layout: widgets } : o) });
     } else {
       updateProject({ dashboardLayout: widgets });
     }
   };
 
   const layout = getLayout();
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
 
   const findWidget = (id: string, list: WidgetConfig[]): WidgetConfig | null => {
     for (const w of list) {
@@ -1498,24 +1564,28 @@ function WidgetEditor({ project, onUpdateProject }: { project: VNProject; onUpda
     });
 
   const updateWidget = (id: string, patch: Partial<WidgetConfig>) => {
-    updateLayout(patchWidget(id, patch, layout));
+    updateLayout(patchWidget(id, patch, layoutRef.current));
   };
 
   const removeWidget = (id: string) => {
     if (selectedId === id) setSelectedId(null);
-    updateLayout(removeNested(id, layout));
+    updateLayout(removeNested(id, layoutRef.current));
   };
 
   const removeNested = (id: string, list: WidgetConfig[]): WidgetConfig[] =>
-    list.filter(w => {
-      if (w.id === id) return false;
-      if (w.children) w.children = removeNested(id, w.children);
-      return true;
+    list.flatMap(w => {
+      if (w.id === id) return [];
+      if (w.children) {
+        const filtered = removeNested(id, w.children);
+        if (filtered.length !== w.children.length) return [{ ...w, children: filtered }];
+      }
+      return [w];
     });
 
   const addWidget = (type: WidgetType) => {
+    const current = layoutRef.current;
     const desc = REGISTRY[type];
-    const count = layout.filter(w => w.type === type).length;
+    const count = current.filter(w => w.type === type).length;
     const defaultSizes: Record<string, { w: number; h: number }> = {
       container: { w: 200, h: 200 }, text: { w: 300, h: 80 }, image: { w: 140, h: 220 },
       statText: { w: 150, h: 36 }, statBar: { w: 250, h: 40 }, button: { w: 120, h: 40 },
@@ -1529,10 +1599,11 @@ function WidgetEditor({ project, onUpdateProject }: { project: VNProject; onUpda
   };
 
   const duplicateWidget = (widget: WidgetConfig) => {
-    const count = layout.filter(w => w.type === widget.type).length;
+    const current = layoutRef.current;
+    const count = current.filter(w => w.type === widget.type).length;
     const clone: WidgetConfig = { ...widget, id: `${widget.type}-dup-${count}-${Date.now()}`, x: clampCanvas(widget.x + 20, CANVAS_W - widget.w), y: clampCanvas(widget.y + 20, CANVAS_H - widget.h) };
     if (clone.children) clone.children = clone.children.map(c => ({ ...c, id: `${c.id}-clone-${Date.now()}` }));
-    updateLayout([...layout, clone]);
+    updateLayout([...current, clone]);
   };
 
   const findNestedWidget = (id: string, list: WidgetConfig[]): WidgetConfig | null => {
@@ -1544,52 +1615,75 @@ function WidgetEditor({ project, onUpdateProject }: { project: VNProject; onUpda
   };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const updateLayoutRef = useRef(updateLayout);
+  updateLayoutRef.current = updateLayout;
 
   const handleDragEnd = (event: DragEndEvent) => {
+    const currentLayout = layoutRef.current;
+    const doUpdate = updateLayoutRef.current;
     const { active, delta } = event;
     if (delta.x === 0 && delta.y === 0) return;
     const activeId = active.id as string;
+
+    const snap = (v: number) => Math.round(v / 10) * 10;
 
     // ── Resize handle drag ──
     if (activeId.startsWith("resize-")) {
       const lastDash = activeId.lastIndexOf("-");
       const dir = activeId.slice(lastDash + 1);
       const wId = activeId.slice(7, lastDash);
-      const w = findNestedWidget(wId, layout);
+      const w = findNestedWidget(wId, currentLayout);
       if (!w) return;
       const dx = Math.round(delta.x);
       const dy = Math.round(delta.y);
       let patch: Partial<WidgetConfig> = {};
-      if (dir.includes("e")) { patch.w = Math.max(MIN_W, (w.w ?? 100) + dx); }
-      if (dir.includes("w")) { patch.x = clampCanvas((w.x ?? 0) + dx, CANVAS_W - MIN_W); patch.w = Math.max(MIN_W, (w.w ?? 100) - dx); }
-      if (dir.includes("s")) { patch.h = Math.max(MIN_H, (w.h ?? 100) + dy); }
-      if (dir.includes("n")) { patch.y = clampCanvas((w.y ?? 0) + dy, CANVAS_H - MIN_H); patch.h = Math.max(MIN_H, (w.h ?? 100) - dy); }
-      updateLayout(patchWidget(w.id, patch, layout));
+      if (dir.includes("e")) { patch.w = snap(Math.max(MIN_W, (w.w ?? 100) + dx)); }
+      if (dir.includes("w")) { patch.x = snap(clampCanvas((w.x ?? 0) + dx, CANVAS_W - MIN_W)); patch.w = snap(Math.max(MIN_W, (w.w ?? 100) - dx)); }
+      if (dir.includes("s")) { patch.h = snap(Math.max(MIN_H, (w.h ?? 100) + dy)); }
+      if (dir.includes("n")) { patch.y = snap(clampCanvas((w.y ?? 0) + dy, CANVAS_H - MIN_H)); patch.h = snap(Math.max(MIN_H, (w.h ?? 100) - dy)); }
+      doUpdate(patchWidget(w.id, patch, currentLayout));
       return;
     }
 
-    // ── Container drop ──
-    const overContainer = event.over ? findNestedWidget(event.over.id as string, layout) : null;
-    if (overContainer && overContainer.type === "container") {
-      const dragged = findNestedWidget(activeId, layout);
-      if (!dragged || dragged.id === overContainer.id) return;
-      const relX = Math.max(0, dragged.x - overContainer.x);
-      const relY = Math.max(0, dragged.y - overContainer.y);
-      const updated = removeNested(dragged.id, layout).map(w =>
-        w.id === overContainer.id
-          ? { ...w, children: [...(w.children ?? []), { ...dragged, x: relX, y: relY }] }
-          : w
-      );
-      updateLayout(updated);
-      return;
+    // ── Container drop (position-based detection) ──
+    const dragged = findNestedWidget(activeId, currentLayout);
+    const isTopLevel = dragged && currentLayout.some(w => w.id === dragged.id);
+    if (dragged && isTopLevel) {
+      const destX = dragged.x + Math.round(delta.x);
+      const destY = dragged.y + Math.round(delta.y);
+      const destCX = destX + (dragged.w ?? 100) / 2;
+      const destCY = destY + (dragged.h ?? 100) / 2 - 10;
+      let dropContainer: WidgetConfig | null = null;
+      for (const w of currentLayout) {
+        if (w.id === dragged.id || w.type !== "container") continue;
+        const topY = w.y - 20;
+        const bottomY = w.y + (w.h ?? 200);
+        if (destCX >= w.x && destCX <= w.x + (w.w ?? 200) && destCY >= topY && destCY <= bottomY) {
+          dropContainer = w;
+          break;
+        }
+      }
+      if (dropContainer) {
+        const dw = dragged.w ?? 100;
+        const dh = dragged.h ?? 100;
+        const relX = Math.max(0, snap(destX - dropContainer.x));
+        const relY = Math.max(0, snap(destY - dropContainer.y));
+        const updated = removeNested(dragged.id, currentLayout).map(w =>
+          w.id === dropContainer!.id
+            ? { ...w, children: [...(w.children ?? []), { ...dragged, x: relX, y: relY, w: dw, h: dh }] }
+            : w
+        );
+        doUpdate(updated);
+        return;
+      }
     }
 
-    // ── Freeform movement ──
-    const a = findNestedWidget(activeId, layout);
+    // ── Freeform movement (top-level or nested) ──
+    const a = findNestedWidget(activeId, currentLayout);
     if (!a) return;
-    const newX = clampCanvas(a.x + Math.round(delta.x), CANVAS_W - a.w);
-    const newY = clampCanvas(a.y + Math.round(delta.y), CANVAS_H - a.h);
-    updateLayout(patchWidget(a.id, { x: newX, y: newY }, layout));
+    const newX = snap(clampCanvas(a.x + Math.round(delta.x), CANVAS_W - a.w));
+    const newY = snap(clampCanvas(a.y + Math.round(delta.y), CANVAS_H - a.h));
+    doUpdate(patchWidget(a.id, { x: newX, y: newY }, currentLayout));
   };
 
   const addOverlay = () => {
@@ -1698,17 +1792,18 @@ function WidgetEditor({ project, onUpdateProject }: { project: VNProject; onUpda
 }
 
 // ── Freeform Canvas ──────────────────────────────────────────────
-function FreeformCanvas({ children, scale, gridId }: { children: React.ReactNode; scale?: number; gridId?: string }) {
+function FreeformCanvas({ children, scale, gridId, onDeselect }: { children: React.ReactNode; scale?: number; gridId?: string; onDeselect?: () => void }) {
   const s = scale ?? 1;
   const uid = gridId ?? "dot-grid";
   return (
     <div className="relative w-full overflow-auto" style={{ minHeight: CANVAS_H * s + 40 }}>
-      <div className="relative bg-slate-950/80 rounded-xl border border-slate-800 overflow-hidden"
+      <div className="relative bg-slate-900 rounded-xl border border-slate-800 overflow-hidden"
+        onClick={(e) => { if (e.target === e.currentTarget) onDeselect?.(); }}
         style={{ width: CANVAS_W * s, height: CANVAS_H * s }}>
         <svg className="absolute inset-0 pointer-events-none" width={CANVAS_W * s} height={CANVAS_H * s}>
           <defs>
-            <pattern id={uid} x="0" y="0" width={20 * s} height={20 * s} patternUnits="userSpaceOnUse">
-              <circle cx={2 * s} cy={2 * s} r={1} fill="#334155" />
+            <pattern id={uid} x="0" y="0" width={24 * s} height={24 * s} patternUnits="userSpaceOnUse">
+              <circle cx={1.5 * s} cy={1.5 * s} r={1.5 * s} fill="rgba(255,255,255,0.04)" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill={`url(#${uid})`} />
@@ -1755,7 +1850,7 @@ function DroppableContainer({ containerId, children }: { containerId: string; ch
   const { setNodeRef, isOver } = useDroppable({ id: `drop-${containerId}` });
   return (
     <div ref={setNodeRef} className={`w-full h-full ${isOver ? "ring-2 ring-indigo-400 ring-inset brightness-110" : ""}`}
-      style={{ pointerEvents: "auto" }}>
+      style={{ pointerEvents: "auto", position: "relative" }}>
       {children}
       {isOver && (
         <div className="absolute inset-0 bg-indigo-500/10 rounded-xl border-2 border-dashed border-indigo-400 pointer-events-none z-10 flex items-center justify-center">
@@ -1785,7 +1880,7 @@ function WidgetLayoutEditor({ layout, selectedId, setSelectedId, selectedWidget,
     <div className="flex gap-4">
       <div className="flex-1 min-w-0">
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-          <FreeformCanvas gridId="editor-dots">
+          <FreeformCanvas gridId="editor-dots" onDeselect={() => setSelectedId(null)}>
             {layout.map(widget => (
               <DraggableWidget key={widget.id}
                 widget={widget}
@@ -1796,7 +1891,7 @@ function WidgetLayoutEditor({ layout, selectedId, setSelectedId, selectedWidget,
                 onUpdate={(patch) => onUpdateWidget(widget.id, patch)}>
                 {widget.type === "container" ? (
                   <DroppableContainer containerId={widget.id}>
-                    <WidgetRenderer project={project} config={widget} onSelectWidget={(id) => setSelectedId(id)} />
+                    <WidgetRenderer project={project} config={widget} onSelectWidget={(id) => setSelectedId(id)} selectedWidgetId={selectedId ?? undefined} />
                   </DroppableContainer>
                 ) : (
                   <WidgetRenderer project={project} config={widget} onSelectWidget={(id) => setSelectedId(id)} />
@@ -1842,18 +1937,18 @@ function WidgetLayoutEditor({ layout, selectedId, setSelectedId, selectedWidget,
 }
 
 // ── Widget Playtest View ─────────────────────────────────────────
-function WidgetPlaytestView({ project, layout, runtime, hasDialogue, lineIdx, totalLines, showContinue, choices, onNextLine, onPrevLine, onContinue, onSelectChoice, onOpenSave, onOpenLoad, onOpenOverlay, onCloseOverlay, onGoToNode, onUseItem, onEquipItem, onRollback, onQuit, onInspectItem, inspectedItemId }: {
+function WidgetPlaytestView({ project, layout, runtime, lineIdx, totalLines, hasDialogue, onNextLine, onPrevLine, showContinue, onContinue, choices, onSelectChoice, onOpenSave, onOpenLoad, onOpenOverlay, onCloseOverlay, onGoToNode, onUseItem, onEquipItem, onRollback, onQuit, onInspectItem, inspectedItemId }: {
   project: VNProject;
   layout: WidgetConfig[];
   runtime: WidgetRuntimeProps;
-  hasDialogue: boolean;
-  lineIdx: number;
-  totalLines: number;
-  showContinue: boolean;
-  choices: { id: string; text: string; targetNodeTitle?: string; passed: boolean; statChanges?: { variableName: string; operation: string; value: string | number | boolean }[] }[];
-  onNextLine: () => void;
-  onPrevLine: () => void;
-  onContinue: () => void;
+  lineIdx?: number;
+  totalLines?: number;
+  hasDialogue?: boolean;
+  onNextLine?: () => void;
+  onPrevLine?: () => void;
+  showContinue?: boolean;
+  onContinue?: () => void;
+  choices?: { id: string; text: string; targetNodeTitle?: string; passed: boolean; statChanges?: { variableName: string; operation: string; value: string | number | boolean }[] }[];
   onSelectChoice: (id: string) => void;
   onOpenSave?: () => void;
   onOpenLoad?: () => void;
@@ -1868,8 +1963,8 @@ function WidgetPlaytestView({ project, layout, runtime, hasDialogue, lineIdx, to
   inspectedItemId?: string;
 }) {
   const handleButtonAction = (action: string) => {
-    if (action === "next" && hasDialogue) onNextLine();
-    else if (action === "continue" && showContinue) onContinue();
+    if (action === "next" && hasDialogue && onNextLine) onNextLine();
+    else if (action === "continue" && showContinue && onContinue) onContinue();
     else if (action === "save") onOpenSave?.();
     else if (action === "load") onOpenLoad?.();
     else if (action === "rollback") onRollback?.();
@@ -1882,11 +1977,28 @@ function WidgetPlaytestView({ project, layout, runtime, hasDialogue, lineIdx, to
     else if (action.startsWith("inspect_item:")) onInspectItem?.(action.slice("inspect_item:".length));
     else if (action.startsWith("choose_")) {
       const idx = parseInt(action.split("_")[1]);
-      if (!isNaN(idx) && choices[idx]) onSelectChoice(choices[idx].id);
+      if (choices && !isNaN(idx) && choices[idx]) onSelectChoice(choices[idx].id);
     }
   };
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full flex flex-col gap-3">
+      {hasDialogue && (
+        <div className="flex items-center justify-between glass-card p-2 shrink-0">
+          <span className="text-slate-500 font-mono text-xs">
+            Script line {lineIdx + 1} of {totalLines}
+          </span>
+          <div className="flex items-center gap-1">
+            <button onClick={onPrevLine} disabled={lineIdx === 0}
+              className="p-1 px-2 bg-slate-950 text-slate-400 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer text-xs">
+              <ChevronLeft className="w-3 h-3" />
+            </button>
+            <button onClick={onNextLine} disabled={lineIdx === totalLines - 1}
+              className="py-1 px-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-30 cursor-pointer text-xs flex items-center gap-0.5">
+              Next <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
       <FreeformCanvas gridId="playtest-dots">
         {layout.map(widget => (
           <div key={widget.id} style={{ position: "absolute", left: widget.x, top: widget.y, width: widget.w, height: widget.h, overflow: "hidden" }}>
@@ -1894,74 +2006,6 @@ function WidgetPlaytestView({ project, layout, runtime, hasDialogue, lineIdx, to
           </div>
         ))}
       </FreeformCanvas>
-
-      {/* Line navigation */}
-      {hasDialogue && (
-        <div className="flex items-center justify-between glass-card p-3">
-          <span className="text-slate-500 font-mono text-xs">
-            Script line {lineIdx + 1} of {totalLines}
-          </span>
-          <div className="flex items-center gap-1">
-            <button onClick={onPrevLine} disabled={lineIdx === 0}
-              className="p-1 px-2.5 bg-slate-950 text-slate-400 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer text-xs">
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onNextLine} disabled={lineIdx === totalLines - 1}
-              className="py-1 px-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-30 cursor-pointer text-xs flex items-center gap-0.5">
-              Next <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Continue button */}
-      {showContinue && (
-        <div className="flex justify-center">
-          <button onClick={onContinue}
-            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105 cursor-pointer flex items-center gap-2">
-            Continue →
-          </button>
-        </div>
-      )}
-
-      {/* Choices */}
-      {choices.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {choices.map((choice) => (
-            <button key={choice.id}
-              disabled={!choice.passed}
-              onClick={() => onSelectChoice(choice.id)}
-              className={`relative text-left p-4 rounded-xl border transition-all text-xs font-bold cursor-pointer group ${
-                choice.passed
-                  ? "bg-slate-900 border-slate-800 text-white hover:border-indigo-500 hover:bg-slate-800 shadow-md hover:shadow-lg hover:scale-105"
-                  : "bg-slate-950 border-red-950/20 text-slate-500 cursor-not-allowed"
-              }`}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-sans text-xs font-bold leading-normal">{choice.text}</p>
-                  {choice.targetNodeTitle && (
-                    <span className="text-[9px] font-mono text-slate-500 mt-1 block group-hover:text-indigo-400">
-                      Leads to: {choice.targetNodeTitle}
-                    </span>
-                  )}
-                </div>
-                {!choice.passed && (
-                  <div className="text-[10px] text-rose-400 font-mono flex items-center gap-0.5 shrink-0 bg-rose-950/20 px-1.5 py-0.5 rounded">
-                    <AlertTriangle className="w-3 h-3" /> Locked
-                  </div>
-                )}
-              </div>
-              {choice.statChanges && choice.statChanges.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {choice.statChanges.map((sc, i) => (
-                    <span key={i} className="text-[8px] font-mono px-1 bg-slate-950 text-indigo-400 rounded">{sc.variableName} {sc.operation}{sc.value}</span>
-                  ))}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1983,9 +2027,9 @@ function DraggableWidget({ widget, selected, onSelect, onRemove, onDuplicate, on
   const baseStyle: React.CSSProperties = {
     position: "absolute",
     left: widget.x,
-    top: widget.y,
+    top: widget.y - 20,
     width: widget.w,
-    height: widget.h,
+    height: widget.h + 20,
     transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 100 : selected ? 10 : 1,
@@ -1994,7 +2038,7 @@ function DraggableWidget({ widget, selected, onSelect, onRemove, onDuplicate, on
 
   return (
     <div ref={setNodeRef}
-      className={`rounded-xl overflow-hidden group ${
+      className={`rounded-xl group ${
         selected ? "ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/20" : "hover:ring-1 hover:ring-slate-600"
       }`}
       style={baseStyle}
@@ -2002,13 +2046,13 @@ function DraggableWidget({ widget, selected, onSelect, onRemove, onDuplicate, on
       {/* Drag handle bar */}
       <div {...listeners}
         className="h-5 bg-slate-800/80 flex items-center gap-1.5 px-2 cursor-grab active:cursor-grabbing select-none"
-        onClick={(e) => e.stopPropagation()}>
+        onClick={(e) => { e.stopPropagation(); onSelect(); }}>
         <GripHorizontal className="w-3 h-3 text-slate-500 shrink-0" />
         <span className="text-[7px] text-slate-500 uppercase tracking-widest font-bold">{label}</span>
       </div>
 
       {/* Content body */}
-      <div onClick={onSelect} className="h-[calc(100%-20px)]">
+      <div onClick={onSelect} className="h-[calc(100%-20px)] overflow-hidden">
         {children}
       </div>
 
@@ -2091,11 +2135,15 @@ function WidgetSettingsPanel({ widget, project, onChange, onRemoveChild }: {
       {widget.type === "container" && <>
         {field("Direction", selectInput("direction", [
           { value: "row", label: "Row" }, { value: "column", label: "Column" },
-        ]))}
+        ], "None (freeform)"))}
         {field("Padding", textInput("padding", "e.g. 8px"))}
         {field("Gap", textInput("gap", "e.g. 4px"))}
         {field("Background", colorInput("bgColor"))}
         {field("Border", colorInput("borderColor"))}
+        {field("Show Border in Playtest", selectInput("containerBorder", [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ], "No"))}
         <div className="border-t border-slate-700 pt-2">
           <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Children ({widget.children?.length ?? 0})</label>
           <div className="mt-1 space-y-1">
@@ -2121,7 +2169,6 @@ function WidgetSettingsPanel({ widget, project, onChange, onRemoveChild }: {
           { value: "title", label: "Title" },
           { value: "characterName", label: "Character Name" },
           { value: "dialogue", label: "Dialogue Box" },
-          { value: "narrator", label: "Narrator" },
           { value: "custom", label: "Custom" },
         ], "Select type..."))}
         {field("Content", textInput("content", "Enter text..."))}
@@ -2252,16 +2299,32 @@ function WidgetSettingsPanel({ widget, project, onChange, onRemoveChild }: {
         <p className="text-[9px] text-slate-500 italic">Leave empty to auto-display the currently inspected item (click an item with inspect_item action).</p>
       </>}
 
+      {/* ── Styling (all widget types) ──── */}
+      <div className="border-t border-slate-700/50 pt-3 mt-2">
+        <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Styling</h4>
+        {field("Opacity (%)", textInput("widgetOpacity", "100"))}
+        {field("Border Radius", textInput("widgetBorderRadius", "e.g. 8px"))}
+        {field("Border Width", textInput("widgetBorderWidth", "e.g. 1px"))}
+        {field("Border Color", colorInput("widgetBorderColor"))}
+        {field("Border Style", selectInput("widgetBorderStyle", [
+          { value: "none", label: "None" },
+          { value: "solid", label: "Solid" },
+          { value: "dashed", label: "Dashed" },
+          { value: "dotted", label: "Dotted" },
+        ]))}
+      </div>
+
       {/* ── Conditional Visibility (all widget types) ──── */}
       <div className="border-t border-slate-700/50 pt-3 mt-2">
         <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Visibility Rule</h4>
         {field("Show when", selectInput("showIfSource", [
+          { value: "tracker._hasChoices", label: "Choices are present (built-in)" },
           ...project.trackers.map(t => ({ value: `tracker.${t.name}`, label: `${t.name} (tracker)` })),
           ...project.flags.map(f => ({ value: `flag.${f.name}`, label: `${f.name} (flag)` })),
         ], "Always visible"))}
         {(s.showIfSource as string) && (
           <div className="flex items-center gap-2">
-            {field("Operator", selectInput("showIfOperator", [
+            {widget.type !== "choiceList" && field("Operator", selectInput("showIfOperator", [
               { value: "exists", label: "is truthy" },
               { value: "==", label: "==" },
               { value: "!=", label: "!=" },
@@ -2270,10 +2333,46 @@ function WidgetSettingsPanel({ widget, project, onChange, onRemoveChild }: {
               { value: ">", label: ">" },
               { value: "<", label: "<" },
             ]))}
-            {(s.showIfOperator as string) && (s.showIfOperator as string) !== "exists" && (
+            {widget.type !== "choiceList" && (s.showIfOperator as string) && (s.showIfOperator as string) !== "exists" && (
               field("Value", textInput("showIfValue", "0"))
             )}
           </div>
+        )}
+      </div>
+
+      {/* ── State Filter (all widget types) ──── */}
+      <div className="border-t border-slate-700/50 pt-3 mt-2">
+        <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">State Filter</h4>
+        {field("Style", selectInput("stateFilterStyle", [
+          { value: "none", label: "None" },
+          { value: "grayscale", label: "Grayscale (locked)" },
+          { value: "low-opacity", label: "Low Opacity" },
+          { value: "blur", label: "Blur" },
+        ]))}
+        {(s.stateFilterStyle as string) && (s.stateFilterStyle as string) !== "none" && (
+          <>
+            {field("When", selectInput("stateFilterSource", [
+              { value: "tracker._hasChoices", label: "Choices are present (built-in)" },
+              ...project.trackers.map(t => ({ value: `tracker.${t.name}`, label: `${t.name} (tracker)` })),
+              ...project.flags.map(f => ({ value: `flag.${f.name}`, label: `${f.name} (flag)` })),
+            ], "Select condition..."))}
+            {(s.stateFilterSource as string) && (
+              <div className="flex items-center gap-2">
+                {field("Operator", selectInput("stateFilterOperator", [
+                  { value: "exists", label: "is truthy" },
+                  { value: "==", label: "==" },
+                  { value: "!=", label: "!=" },
+                  { value: ">=", label: ">=" },
+                  { value: "<=", label: "<=" },
+                  { value: ">", label: ">" },
+                  { value: "<", label: "<" },
+                ]))}
+                {(s.stateFilterOperator as string) && (s.stateFilterOperator as string) !== "exists" && (
+                  field("Value", textInput("stateFilterValue", "0"))
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

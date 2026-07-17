@@ -1,6 +1,7 @@
 import React from "react";
-import { Square, Type, Image, Hash, BarChart3, MousePointerClick, ListChecks, UserCircle, Backpack, SeparatorHorizontal, Search } from "lucide-react";
-import type { VNProject, WidgetConfig, WidgetType } from "../types";
+import { useDraggable } from "@dnd-kit/core";
+import { Square, LayoutGrid, Type, Image, Hash, BarChart3, MousePointerClick, ListChecks, List, UserCircle, Backpack, SeparatorHorizontal, Search, CopyPlus } from "lucide-react";
+import type { VNProject, VNItem, WidgetConfig, WidgetType } from "../types";
 
 export interface WidgetRuntimeProps {
   dialogueText?: string;
@@ -21,6 +22,7 @@ interface WidgetProps {
   config: WidgetConfig;
   onSelectWidget?: (id: string) => void;
   runtime?: WidgetRuntimeProps;
+  selectedWidgetId?: string;
 }
 
 export interface WidgetDescriptor {
@@ -33,6 +35,11 @@ export interface WidgetDescriptor {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
+function isVarDefined(key: string, runtimeValues?: Record<string, any>): { defined: boolean; value: any } {
+  if (runtimeValues && key in runtimeValues) return { defined: true, value: runtimeValues[key] };
+  return { defined: false, value: undefined };
+}
+
 function interpolateText(text: string, values?: Record<string, any>): string {
   return text.replace(/\[(\w+)\]/g, (_, name) => {
     if (values?.[name] !== undefined) return String(values[name]);
@@ -44,48 +51,116 @@ function resolveStat(project: VNProject, source: string | undefined, runtimeValu
   if (!source) return null;
   const [kind, ...rest] = source.split(".");
   const key = rest.join(".");
-  if (runtimeValues?.[key] !== undefined) {
-    if (kind === "flag") return { label: key, value: runtimeValues[key], max: 1 };
-    return { label: key, value: runtimeValues[key] };
-  }
+  if (!key) return null;
+  const rv = isVarDefined(key, runtimeValues);
   if (kind === "tracker") {
     const t = project.trackers.find(t => t.name === key);
-    if (!t) return null;
-    return { label: t.name, value: t.defaultValue ?? 0 };
+    if (!t && !rv.defined) return null;
+    return { label: t?.name ?? key, value: rv.defined ? Number(rv.value) : (t?.defaultValue ?? 0) };
   }
   if (kind === "flag") {
     const f = project.flags.find(f => f.name === key);
-    if (!f) return null;
-    return { label: f.name, value: f.defaultValue ? 1 : 0, max: 1 };
+    if (!f && !rv.defined) return null;
+    return { label: f?.name ?? key, value: rv.defined ? Number(rv.value) : (f?.defaultValue ? 1 : 0), max: 1 };
   }
   return null;
 }
 
+const CHILD_HANDLE = 12;
+const CHILD_BAR_H = 14;
+
+function ChildDragBar({ childId }: { childId: string }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: childId });
+  return (
+    <div ref={setNodeRef} {...listeners} {...attributes}
+      className={`flex items-center gap-1 px-1.5 bg-slate-800/60 cursor-grab active:cursor-grabbing select-none rounded-t ${isDragging ? "opacity-50" : ""}`}
+      style={{ height: CHILD_BAR_H, fontSize: 0 }}
+      onClick={(e) => e.stopPropagation()}>
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-slate-500 shrink-0">
+        <circle cx="3" cy="2" r="1" fill="currentColor"/><circle cx="7" cy="2" r="1" fill="currentColor"/>
+        <circle cx="3" cy="5" r="1" fill="currentColor"/><circle cx="7" cy="5" r="1" fill="currentColor"/>
+        <circle cx="3" cy="8" r="1" fill="currentColor"/><circle cx="7" cy="8" r="1" fill="currentColor"/>
+      </svg>
+    </div>
+  );
+}
+
+function ChildResizeHandles({ widgetId }: { widgetId: string }) {
+  const dirs = ["nw", "n", "ne", "w", "e", "sw", "s", "se"] as const;
+  const pos: Record<string, React.CSSProperties> = {
+    nw: { top: -CHILD_HANDLE/2, left: -CHILD_HANDLE/2, cursor: "nwse-resize" },
+    n:  { top: -CHILD_HANDLE/2, left: "50%", marginLeft: -CHILD_HANDLE/2, cursor: "ns-resize" },
+    ne: { top: -CHILD_HANDLE/2, right: -CHILD_HANDLE/2, cursor: "nesw-resize" },
+    w:  { top: "50%", marginTop: -CHILD_HANDLE/2, left: -CHILD_HANDLE/2, cursor: "ew-resize" },
+    e:  { top: "50%", marginTop: -CHILD_HANDLE/2, right: -CHILD_HANDLE/2, cursor: "ew-resize" },
+    sw: { bottom: -CHILD_HANDLE/2, left: -CHILD_HANDLE/2, cursor: "nesw-resize" },
+    s:  { bottom: -CHILD_HANDLE/2, left: "50%", marginLeft: -CHILD_HANDLE/2, cursor: "ns-resize" },
+    se: { bottom: -CHILD_HANDLE/2, right: -CHILD_HANDLE/2, cursor: "nwse-resize" },
+  };
+  return (
+    <>
+      {dirs.map(d => {
+        const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `resize-${widgetId}-${d}` });
+        return (
+          <div key={d} ref={setNodeRef} {...listeners} {...attributes}
+            className={`absolute z-30 bg-white border-2 border-indigo-500 rounded-sm ${isDragging ? "opacity-80 scale-125" : ""}`}
+            style={{ width: CHILD_HANDLE, height: CHILD_HANDLE, boxSizing: "border-box", ...pos[d] }} />
+        );
+      })}
+    </>
+  );
+}
+
 // ── Container ────────────────────────────────────────────────────
-const ContainerWidget = ({ project, config, onSelectWidget, runtime }: WidgetProps) => {
+const ContainerWidget = ({ project, config, onSelectWidget, runtime, selectedWidgetId }: WidgetProps) => {
   const s = config.settings ?? {};
   const children = config.children ?? [];
+  const direction = (s.direction as string) ?? "";
+  const isFlex = direction === "row" || direction === "column";
+  const showBorder = !runtime || s.containerBorder === true;
   return (
-    <div className="h-full w-full rounded-xl border-2 border-dashed border-slate-600/50 bg-slate-900/20 relative overflow-hidden"
+    <div className={`h-full w-full rounded-xl bg-slate-900/20 ${showBorder ? "border-2 border-dashed border-slate-600/50" : "border-0"}`}
       style={{
+        position: "relative",
+        display: isFlex ? "flex" : undefined,
+        flexDirection: isFlex ? (direction as any) : undefined,
+        gap: isFlex ? (s.gap ?? "8px") : undefined,
+        padding: isFlex ? (s.padding ?? "8px") : undefined,
         backgroundColor: (s.bgColor as string) ?? undefined,
         borderColor: (s.borderColor as string) ?? undefined,
       }}>
       {children.length === 0 ? (
-        <span className="text-[9px] text-slate-500 italic absolute inset-0 flex items-center justify-center">Container — add child widgets</span>
+        <span onClick={(e) => { e.stopPropagation(); onSelectWidget?.(config.id); }} className={`text-[9px] text-slate-500 italic ${isFlex ? "" : "absolute inset-0"} flex items-center justify-center`}>Container — add child widgets</span>
+      ) : isFlex ? (
+        children.map(child => (
+          <div key={child.id}
+            onClick={(e) => { e.stopPropagation(); onSelectWidget?.(child.id); }}
+            className={`group ${selectedWidgetId === child.id ? "ring-1 ring-indigo-400" : ""}`}
+            style={{
+              position: "relative",
+              flex: child.w ? `0 0 ${child.w}px` : undefined,
+              minHeight: child.h ? `${child.h}px` : undefined,
+            }}>
+            {!runtime && <ChildDragBar childId={child.id} />}
+            <WidgetRenderer project={project} config={child} onSelectWidget={onSelectWidget} runtime={runtime} selectedWidgetId={selectedWidgetId} />
+            {selectedWidgetId === child.id && <ChildResizeHandles widgetId={child.id} />}
+          </div>
+        ))
       ) : (
         children.map(child => (
           <div key={child.id}
             style={{
               position: "absolute",
-              left: child.x ?? 0,
-              top: child.y ?? 0,
-              width: child.w ?? 100,
-              height: child.h ?? 100,
-              overflow: "hidden",
+              left: (child.x ?? 0) + 2,
+              top: (child.y ?? 0) + 2,
+              width: Math.max(20, child.w ?? 100),
+              height: Math.max(20, child.h ?? 100),
             }}
+            className={`group ${selectedWidgetId === child.id ? "ring-1 ring-indigo-400" : ""}`}
             onClick={(e) => { e.stopPropagation(); onSelectWidget?.(child.id); }}>
-            <WidgetRenderer project={project} config={child} onSelectWidget={onSelectWidget} runtime={runtime} />
+            {!runtime && <ChildDragBar childId={child.id} />}
+            <WidgetRenderer project={project} config={child} onSelectWidget={onSelectWidget} runtime={runtime} selectedWidgetId={selectedWidgetId} />
+            {selectedWidgetId === child.id && <ChildResizeHandles widgetId={child.id} />}
           </div>
         ))
       )}
@@ -99,10 +174,12 @@ const TextWidget = ({ config, runtime }: WidgetProps) => {
   const textType = (s.textType as string) ?? "custom";
   const isDialogueBox = textType === "dialogue";
 
-  const displayText = isDialogueBox && runtime?.dialogueText
-    ? runtime.dialogueText
+  const dialogueText = runtime?.dialogueText;
+  const hasDialogueText = isDialogueBox && dialogueText !== undefined && dialogueText !== null;
+  const displayText = hasDialogueText
+    ? dialogueText
     : interpolateText((s.content as string) ?? "", { ...runtime?.runtimeValues, ...runtime?.repeaterItemProps });
-  const displayFormatted = isDialogueBox && runtime?.dialogueFormattedText;
+  const displayFormatted = hasDialogueText && runtime?.dialogueFormattedText;
 
   const style: React.CSSProperties = {
     fontSize: s.fontSize as string ?? "12px",
@@ -122,9 +199,6 @@ const TextWidget = ({ config, runtime }: WidgetProps) => {
     style.fontSize = "13px";
     style.fontWeight = 600;
     style.color = "#818cf8";
-  } else if (textType === "narrator") {
-    style.fontStyle = "italic";
-    style.color = "#94a3b8";
   } else if (isDialogueBox) {
     style.fontSize = "15px";
     style.lineHeight = 1.6;
@@ -153,7 +227,7 @@ const TextWidget = ({ config, runtime }: WidgetProps) => {
 // ── Image ────────────────────────────────────────────────────────
 const ImageWidget = ({ config, runtime }: WidgetProps) => {
   const s = config.settings ?? {};
-  const src = interpolateText(s.src as string ?? "", { ...runtime?.runtimeValues, ...runtime?.repeaterItemProps });
+  const src = interpolateText(String(s.src ?? ""), { ...runtime?.runtimeValues, ...runtime?.repeaterItemProps });
   return (
     <div className="h-full glass-card p-2 flex items-center justify-center overflow-hidden">
       {src ? (
@@ -196,8 +270,9 @@ const StatBarWidget = ({ project, config, runtime }: WidgetProps) => {
   const combined = { ...runtime?.runtimeValues, ...runtime?.repeaterItemProps };
   const rawMinVal = s.statMin != null ? interpolateText(String(s.statMin), combined) : "0";
   const rawMaxVal = s.statMax != null ? interpolateText(String(s.statMax), combined) : String(stat?.max ?? 100);
-  const min = parseInt(rawMinVal, 10) || 0;
-  const max = parseInt(rawMaxVal, 10) || 100;
+  function toNum(v: string, def: number): number { const n = Number(v); return Number.isNaN(n) ? def : Math.max(0, n); }
+  const min = toNum(rawMinVal, 0);
+  const max = toNum(rawMaxVal, 100);
   const pct = max > min ? Math.min(100, Math.max(0, ((stat?.value ?? 0) - min) / (max - min) * 100)) : 0;
   return (
     <div className="h-full glass-card p-3 flex flex-col justify-center gap-1">
@@ -215,7 +290,9 @@ const ButtonWidget = ({ config, runtime }: WidgetProps) => {
   const s = config.settings ?? {};
   const combined = { ...runtime?.runtimeValues, ...runtime?.repeaterItemProps };
   const action = interpolateText((s.buttonAction as string) ?? "custom", combined);
-  const label = interpolateText((s.buttonLabel as string) ?? (action.split(":")[0].charAt(0).toUpperCase() + action.split(":")[0].slice(1)), combined);
+  const actionLabel = action.split(":")[0];
+  const defaultLabel = actionLabel ? actionLabel.charAt(0).toUpperCase() + actionLabel.slice(1) : "Button";
+  const label = interpolateText((s.buttonLabel as string) ?? defaultLabel, combined);
   return (
     <div className="h-full flex items-center justify-center p-2">
       <button onClick={() => runtime?.onButtonAction?.(action)}
@@ -230,31 +307,35 @@ const ButtonWidget = ({ config, runtime }: WidgetProps) => {
 const ChoiceListWidget = ({ config, runtime }: WidgetProps) => {
   const s = config.settings ?? {};
   const choices = runtime?.choices ?? [];
+  if (!runtime) {
+    return (
+      <div className="h-full glass-card p-3 flex items-center justify-center border-2 border-dashed border-indigo-400/30">
+        <span className="text-[9px] text-slate-500 italic">Choice List — choices appear here during playtest</span>
+      </div>
+    );
+  }
+  if (choices.length === 0) return null;
   return (
     <div className="h-full glass-card p-3 flex flex-col gap-2 overflow-y-auto">
       {(s.choiceListLabel as string) && (
         <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{interpolateText(s.choiceListLabel as string, { ...runtime?.runtimeValues, ...runtime?.repeaterItemProps })}</span>
       )}
-      {choices.length === 0 ? (
-        <span className="text-[9px] text-slate-500 italic m-auto">No choices available</span>
-      ) : (
-        choices.map(choice => (
-          <button key={choice.id}
-            disabled={!choice.passed}
-            onClick={() => runtime?.onSelectChoice?.(choice.id)}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-              choice.passed
-                ? "bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 hover:border-indigo-500"
-                : "bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed"
-            }`}>
-            <span>{choice.text}</span>
-            {choice.targetNodeTitle && (
-              <span className="text-[9px] text-slate-500 ml-2">→ {choice.targetNodeTitle}</span>
-            )}
-            {!choice.passed && <span className="text-[9px] text-rose-400 ml-2">Locked</span>}
-          </button>
-        ))
-      )}
+      {choices.map(choice => (
+        <button key={choice.id}
+          disabled={!choice.passed}
+          onClick={() => runtime?.onSelectChoice?.(choice.id)}
+          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+            choice.passed
+              ? "bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 hover:border-indigo-500"
+              : "bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed"
+          }`}>
+          <span>{choice.text}</span>
+          {choice.targetNodeTitle && (
+            <span className="text-[9px] text-slate-500 ml-2">→ {choice.targetNodeTitle}</span>
+          )}
+          {!choice.passed && <span className="text-[9px] text-rose-400 ml-2">Locked</span>}
+        </button>
+      ))}
     </div>
   );
 };
@@ -265,19 +346,17 @@ const PortraitWidget = ({ config, runtime }: WidgetProps) => {
   const shape = (s.portraitShape as string) ?? "rounded";
   const shapeClass = shape === "circle" ? "rounded-full" : shape === "square" ? "rounded-none" : "rounded-xl";
   const speaker = runtime?.dialogueSpeaker || "";
-  // Use portraitSrc if set, otherwise derive from speaker name
   const src = (s.portraitSrc as string) || (speaker ? `portraits/${speaker.toLowerCase().replace(/\s+/g, "_")}.png` : "");
+  const [imgError, setImgError] = React.useState(false);
+  const showImg = !!src && !imgError;
   return (
     <div className="h-full glass-card p-2 flex items-center justify-center">
-      {src ? (
+      {showImg ? (
         <img src={src} alt={speaker || "portrait"}
           className={`w-full h-full object-cover ${shapeClass}`}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-            (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-          }} />
+          onError={() => setImgError(true)} />
       ) : null}
-      <div className={`flex flex-col items-center gap-1 text-slate-500 ${src ? "hidden" : ""}`}>
+      <div className={`flex flex-col items-center gap-1 text-slate-500 ${showImg ? "hidden" : ""}`}>
         <UserCircle className="w-8 h-8" />
         <span className="text-[9px] italic">{speaker || "Portrait"}</span>
       </div>
@@ -300,7 +379,7 @@ const InventoryWidget = ({ project, config, runtime }: WidgetProps) => {
         inv.map((itemId, i) => {
           const item = project.inventory.find(it => it.id === itemId);
           return (
-            <div key={i} className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-2 py-1.5">
+            <div key={itemId} className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-2 py-1.5">
               <span className="text-[10px] font-mono text-indigo-300 font-bold">{item?.name || itemId}</span>
             </div>
           );
@@ -328,10 +407,11 @@ const BorderBoxWidget = ({ project, config, onSelectWidget, runtime }: WidgetPro
   const s = config.settings ?? {};
   const children = config.children ?? [];
   const hasImage = !!s.borderImage;
-  const top = parseInt(String(s.borderSliceTop ?? 12), 10) || 12;
-  const right = parseInt(String(s.borderSliceRight ?? 12), 10) || 12;
-  const bottom = parseInt(String(s.borderSliceBottom ?? 12), 10) || 12;
-  const left = parseInt(String(s.borderSliceLeft ?? 12), 10) || 12;
+  function sliceVal(v: unknown, def: number): number { const n = Number(v ?? def); return Number.isNaN(n) || n < 0 ? def : n; }
+  const top = sliceVal(s.borderSliceTop, 12);
+  const right = sliceVal(s.borderSliceRight, 12);
+  const bottom = sliceVal(s.borderSliceBottom, 12);
+  const left = sliceVal(s.borderSliceLeft, 12);
   const borderW = s.borderWidth ?? `${Math.max(top, right, bottom, left)}px`;
   const padding = s.borderPadding ?? "16px";
 
@@ -386,7 +466,7 @@ function resolveRepeaterSource(project: VNProject, source: string, runtime?: Wid
       return { items: project.entities, label: "Entities" };
     case "inventory": {
       const itemIds = runtime?.inventory ?? [];
-      const items = itemIds.map(id => project.inventory.find(i => i.id === id)).filter(Boolean);
+      const items = itemIds.map(id => project.inventory.find(i => i.id === id)).filter((x): x is VNItem => x !== undefined);
       return { items, label: "Inventory" };
     }
     default:
@@ -464,7 +544,7 @@ const RepeaterWidget = ({ project, config, onSelectWidget, runtime }: WidgetProp
         {items.map((item: any, idx: number) => {
           const itemProps = getRepeaterItemProps(item);
           return (
-            <div key={idx} className="border border-slate-700/50 rounded-lg p-2 bg-slate-900/30">
+            <div key={item.id ?? idx} className="border border-slate-700/50 rounded-lg p-2 bg-slate-900/30">
               {children.map(child => (
                 <div key={child.id}>
                   <WidgetRenderer
@@ -509,8 +589,9 @@ const InspectorWidget = ({ project, config, runtime }: WidgetProps) => {
       </div>
     );
   }
-  const mods = "statModifiers" in item && item.statModifiers ? Object.entries(item.statModifiers) : [];
-  const tags = "tags" in item && item.tags ? item.tags : [];
+  const iObj = item as any;
+  const mods: [string, any][] = iObj.statModifiers ? Object.entries(iObj.statModifiers) : [];
+  const tags: string[] = iObj.tags ?? [];
   return (
     <div className="h-full glass-card p-3 flex flex-col gap-2 overflow-y-auto">
       <h4 className="text-xs font-bold text-white">{(item as any).name || itemId}</h4>
@@ -525,8 +606,8 @@ const InspectorWidget = ({ project, config, runtime }: WidgetProps) => {
       </div>
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {tags.map((t: string, i: number) => (
-            <span key={i} className="text-[8px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded">{t}</span>
+          {tags.map((t: string) => (
+            <span key={t} className="text-[8px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded">{t}</span>
           ))}
         </div>
       )}
@@ -552,18 +633,18 @@ const InspectorWidget = ({ project, config, runtime }: WidgetProps) => {
 
 // ── Registry ─────────────────────────────────────────────────────
 export const REGISTRY: Record<WidgetType, WidgetDescriptor> = {
-  container:   { type: "container",   label: "Container",   icon: Square,              defaultW: 1, defaultH: 1, component: ContainerWidget },
+  container:   { type: "container",   label: "Container",   icon: LayoutGrid,        defaultW: 1, defaultH: 1, component: ContainerWidget },
   text:        { type: "text",        label: "Text",        icon: Type,               defaultW: 2, defaultH: 1, component: TextWidget },
   image:       { type: "image",       label: "Image",       icon: Image,              defaultW: 1, defaultH: 2, component: ImageWidget },
   statText:    { type: "statText",    label: "Stat Text",   icon: Hash,               defaultW: 1, defaultH: 1, component: StatTextWidget },
   statBar:     { type: "statBar",     label: "Stat Bar",    icon: BarChart3,          defaultW: 2, defaultH: 1, component: StatBarWidget },
   button:      { type: "button",      label: "Button",      icon: MousePointerClick,  defaultW: 1, defaultH: 1, component: ButtonWidget },
-  choiceList:  { type: "choiceList",  label: "Choice List", icon: ListChecks,         defaultW: 2, defaultH: 2, component: ChoiceListWidget },
+  choiceList:  { type: "choiceList",  label: "Choice List", icon: List,               defaultW: 2, defaultH: 2, component: ChoiceListWidget },
   portrait:    { type: "portrait",    label: "Portrait",    icon: UserCircle,         defaultW: 1, defaultH: 2, component: PortraitWidget },
   inventory:   { type: "inventory",   label: "Inventory",   icon: Backpack,           defaultW: 1, defaultH: 2, component: InventoryWidget },
   divider:     { type: "divider",     label: "Divider",     icon: SeparatorHorizontal, defaultW: 2, defaultH: 1, component: DividerWidget },
   borderBox:   { type: "borderBox",   label: "Border Box", icon: Square,              defaultW: 2, defaultH: 2, component: BorderBoxWidget },
-  repeater:    { type: "repeater",    label: "Repeater",    icon: ListChecks,         defaultW: 2, defaultH: 2, component: RepeaterWidget },
+  repeater:    { type: "repeater",    label: "Repeater",    icon: CopyPlus,           defaultW: 2, defaultH: 2, component: RepeaterWidget },
   inspector:   { type: "inspector",   label: "Inspector",   icon: Search,             defaultW: 1, defaultH: 2, component: InspectorWidget },
 };
 
@@ -571,19 +652,17 @@ export const REGISTRY: Record<WidgetType, WidgetDescriptor> = {
 function checkShowIf(settings: Record<string, any>, runtimeValues?: Record<string, number>): boolean {
   const source = settings.showIfSource as string | undefined;
   if (!source) return true;
+  // In editor mode (no runtime), always show so widgets don't disappear during design
+  if (runtimeValues === undefined) return true;
   const operator = (settings.showIfOperator as string) ?? "exists";
   const value = settings.showIfValue as string | undefined;
   const [kind, ...rest] = source.split(".");
   const key = rest.join(".");
-  let actual: number | boolean | undefined;
-  if (runtimeValues?.[key] !== undefined) {
-    actual = runtimeValues[key];
-  }
-  if (actual === undefined) {
-    // If there's a condition but the var doesn't exist, hide by default
-    return false;
-  }
+  const rv = isVarDefined(key, runtimeValues);
+  if (!rv.defined) return false;
+  const actual = rv.value;
   if (operator === "exists") return kind === "flag" ? Boolean(actual) : actual !== undefined;
+  if (value === undefined) return false;
   if (operator === "==") return String(actual) === String(value);
   if (operator === "!=") return String(actual) !== String(value);
   const numVal = Number(value);
@@ -592,7 +671,35 @@ function checkShowIf(settings: Record<string, any>, runtimeValues?: Record<strin
   if (operator === "<=") return numActual <= numVal;
   if (operator === ">") return numActual > numVal;
   if (operator === "<") return numActual < numVal;
-  return true;
+  return false;
+}
+
+function getStateFilterStyle(settings: Record<string, any>, runtimeValues?: Record<string, number>): React.CSSProperties {
+  const style = settings.stateFilterStyle as string;
+  if (!style || style === "none") return {};
+  const source = settings.stateFilterSource as string | undefined;
+  if (!source) return {};
+  const operator = (settings.stateFilterOperator as string) ?? "exists";
+  const value = settings.stateFilterValue as string | undefined;
+  const [kind, ...rest] = source.split(".");
+  const key = rest.join(".");
+  let actual: number | boolean | undefined;
+  if (runtimeValues?.[key] !== undefined) actual = runtimeValues[key];
+  if (actual === undefined) return {};
+  let matched = false;
+  if (operator === "exists") matched = kind === "flag" ? Boolean(actual) : actual !== undefined;
+  else if (operator === "==") matched = String(actual) === String(value);
+  else if (operator === "!=") matched = String(actual) !== String(value);
+  else {
+    const n = Number(actual); const v = Number(value);
+    if (operator === ">=") matched = n >= v; else if (operator === "<=") matched = n <= v;
+    else if (operator === ">") matched = n > v; else if (operator === "<") matched = n < v;
+  }
+  if (!matched) return {};
+  if (style === "grayscale") return { filter: "grayscale(1)", opacity: 0.7 };
+  if (style === "low-opacity") return { opacity: 0.4 };
+  if (style === "blur") return { filter: "blur(2px)", opacity: 0.6 };
+  return {};
 }
 
 // ── WidgetRenderer ───────────────────────────────────────────────
@@ -600,6 +707,20 @@ export const WidgetRenderer: React.FC<WidgetProps> = (props) => {
   const desc = REGISTRY[props.config.type];
   if (!desc) return <div className="glass-card p-4 text-xs text-slate-500">Unknown widget type</div>;
   if (!checkShowIf(props.config.settings ?? {}, props.runtime?.runtimeValues)) return null;
+  const s = props.config.settings ?? {};
+  const stateFilter = getStateFilterStyle(s, props.runtime?.runtimeValues);
+  const widgetStyle: React.CSSProperties = {
+    ...stateFilter,
+    opacity: s.widgetOpacity != null ? Number(s.widgetOpacity) / 100 : undefined,
+    borderRadius: (s.widgetBorderRadius as string) ?? undefined,
+    borderWidth: (s.widgetBorderWidth as string) ?? undefined,
+    borderColor: (s.widgetBorderColor as string) ?? undefined,
+    borderStyle: (s.widgetBorderStyle as string) ?? undefined,
+  };
   const C = desc.component;
-  return <C project={props.project} config={props.config} onSelectWidget={props.onSelectWidget} runtime={props.runtime} />;
+  return (
+    <div style={widgetStyle} className="h-full min-h-0">
+      <C project={props.project} config={props.config} onSelectWidget={props.onSelectWidget} runtime={props.runtime} selectedWidgetId={props.selectedWidgetId} />
+    </div>
+  );
 };

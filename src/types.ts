@@ -323,6 +323,7 @@ export interface WidgetConfig {
 export interface WidgetSettings {
   // container
   direction?: "row" | "column";
+  containerBorder?: boolean;
   padding?: string;
   bgColor?: string;
   borderColor?: string;
@@ -353,6 +354,7 @@ export interface WidgetSettings {
 
   // choiceList
   choiceListLabel?: string;
+  choiceListMode?: "auto" | "always";
 
   // portrait
   portraitSpeaker?: string;
@@ -382,10 +384,23 @@ export interface WidgetSettings {
   borderWidth?: string;
   borderPadding?: string;
 
+  // styling (all widget types)
+  widgetOpacity?: number;
+  widgetBorderRadius?: string;
+  widgetBorderWidth?: string;
+  widgetBorderColor?: string;
+  widgetBorderStyle?: "solid" | "dashed" | "dotted" | "none";
+
   // conditional visibility (all widget types)
   showIfSource?: string;    // "tracker.NAME" | "flag.NAME"
   showIfOperator?: "==" | "!=" | ">=" | "<=" | ">" | "<" | "exists";
   showIfValue?: string;
+
+  // visual state filter
+  stateFilterStyle?: "none" | "grayscale" | "low-opacity" | "blur";
+  stateFilterSource?: string;
+  stateFilterOperator?: "==" | "!=" | ">=" | "<=" | ">" | "<" | "exists";
+  stateFilterValue?: string;
 }
 
 export interface KeyMapping {
@@ -417,4 +432,7 @@ export interface SaveData {
   history: Array<{ nodeId: string; variables: Record<string, number> }>;
   logs: Array<{ text: string; type: "set" | "plus" | "minus" }>;
   nodeTitle?: string;
+  inspectedItemId?: string;
+  globalTimeTicks?: number;
+  activeOverlayId?: string | null;
 }

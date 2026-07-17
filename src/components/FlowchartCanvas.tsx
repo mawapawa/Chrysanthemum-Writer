@@ -846,7 +846,7 @@ export default function FlowchartCanvas({
                   </div>
                 </div>
 
-                <div className="card-body p-3">
+                <div className="card-body p-3 flex flex-col flex-1 min-h-0">
 
                   {isSelected ? (
                     <textarea
@@ -905,38 +905,7 @@ export default function FlowchartCanvas({
 
                   {/* Editor — shows in focus mode (inline expansion removed) */}
                   {isEditing && (
-                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-y-auto">
-                      {/* Narrative Intercept — only on story nodes */}
-                      {node.nodeType === "story" && (
-                        <div className="space-y-1.5 pb-2 border-b border-slate-700/30">
-                          <label className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Narrative Intercept</label>
-                          <p className="text-[8px] text-slate-500">Redirect to this node when entering a target location, if condition is met.</p>
-                          <select value={node.interceptFlag?.targetLocationId || ""}
-                            onChange={(e) => updateNode({ interceptFlag: e.target.value ? { targetLocationId: e.target.value, condition: { source: "flag", targetId: "" } } : undefined })}
-                            className="w-full bg-slate-950 border border-slate-700 text-[10px] text-slate-200 rounded p-1">
-                            <option value="">— No intercept —</option>
-                            {Object.values(project.nodes).filter((n: any) => n.nodeType === "location").map((n: any) => (
-                              <option key={n.id} value={n.id}>{n.title}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* Story Beat Trigger — on any non-location node */}
-                      {node.nodeType !== "location" && (
-                        <div className="space-y-1.5 pb-2 border-b border-slate-700/30">
-                          <label className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Beat Trigger</label>
-                          <p className="text-[8px] text-slate-500">Auto-navigate here when a variable condition is met during playtest.</p>
-                          <select value={node.trigger?.source || ""}
-                            onChange={(e) => updateNode({ trigger: e.target.value ? { source: e.target.value } : undefined })}
-                            className="w-full bg-slate-950 border border-slate-700 text-[10px] text-slate-200 rounded p-1">
-                            <option value="">— No trigger —</option>
-                            <option value="flag">Flag</option>
-                            <option value="tracker">Tracker</option>
-                          </select>
-                        </div>
-                      )}
-
+                    <div className="border-t border-slate-700/50 mt-2 pt-2 space-y-2 flex-1 flex flex-col overflow-y-auto min-h-0">
                       <BlockEditor
                         project={project}
                         blocks={editorBlocks}
