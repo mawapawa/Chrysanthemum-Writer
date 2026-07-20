@@ -19,7 +19,7 @@ function HierarchyPanel({ store, activeLayer, onLayerChange }: {
   store: ElementStore; activeLayer: string; onLayerChange: (l: string) => void;
 }) {
   const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 200); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 100); return () => clearInterval(id); }, []);
 
   // Collect unique layer names from elements, plus "default"
   const layers = useMemo(() => {
@@ -149,12 +149,18 @@ function CanvasV2({ store, assets, activeLayer }: {
   }, [store]);
 
   // ── Global mousemove / mouseup ──
+  const lastDragUpdate = useRef(0);
   useEffect(() => {
     const mm = (e: MouseEvent) => {
       const d = dragRef.current;
       if (!d) return;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
+
+      // Throttle store updates to every 50ms to avoid flooding React
+      const now = Date.now();
+      if (now - lastDragUpdate.current < 50 && (d.mode === 'move' || d.mode === 'resize')) return;
+      lastDragUpdate.current = now;
 
       if (d.mode === 'move') {
         const nx = SNAP(Math.max(0, d.orig.x + dx));
@@ -430,11 +436,10 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   }, [project, activeScreen, onUpdateProject]);
 
   const [store, setStore] = useState<ElementStore | null>(null);
-  const [, globalTick] = useState(0);
 
   // Initialize store once from project data — never rebuild
   useEffect(() => {
-    const s = createElementStore(elements, () => globalTick(n => n + 1));
+    const s = createElementStore(elements);
     // Sync store -> project without causing re-render loop
     const unsub = setInterval(() => {
       const current = s.elements;
