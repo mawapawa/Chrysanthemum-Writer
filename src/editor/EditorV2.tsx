@@ -245,14 +245,14 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
   screenNames?: string[];
 }) {
   const sel = store.selectedId ? store.getById(store.selectedId) : null;
-  const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 200); return () => clearInterval(id); }, []);
+  const [, force] = useState(0);
+  const flush = () => force(n => n + 1);
 
   if (!sel) return <div style={{ width: 260, padding: 12, color: "#475569", fontSize: 10, fontStyle: "italic" }}>Select an element</div>;
 
-  const sp = (k: string, v: any) => store.update(sel.id, { properties: { ...sel.properties, [k]: v } });
-  const sb = (k: string, v: any) => store.update(sel.id, { bindings: { ...sel.bindings, [k]: v } });
-  const ss = (k: string, v: any) => store.update(sel.id, { style: { ...sel.style, [k]: v } });
+  const sp = (k: string, v: any) => { store.update(sel.id, { properties: { ...sel.properties, [k]: v } }); flush(); };
+  const sb = (k: string, v: any) => { store.update(sel.id, { bindings: { ...sel.bindings, [k]: v } }); flush(); };
+  const ss = (k: string, v: any) => { store.update(sel.id, { style: { ...sel.style, [k]: v } }); flush(); };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
