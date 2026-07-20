@@ -57,59 +57,6 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
   );
 }
 
-// ─── Preview Context Panel ──────────────────────────────────────
-
-function PreviewPanel({ context, onChange }: {
-  context: BindingContext;
-  onChange: (ctx: BindingContext) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  const vars = context.vars ?? {};
-  const setVar = (k: string, v: any) => onChange({ ...context, vars: { ...vars, [k]: v } });
-  const setDialogue = (v: string) => onChange({ ...context, dialogueText: v });
-  const setSpeaker = (v: string) => onChange({ ...context, dialogueSpeaker: v });
-  const setChoices = (v: number) => {
-    const arr: { id: string; text: string; passed: boolean; targetNodeTitle?: string }[] = [];
-    for (let i = 0; i < v; i++) arr.push({ id: `preview_${i}`, text: `Choice ${i + 1}`, passed: true });
-    onChange({ ...context, vars: { ...vars, _hasChoices: v > 0 ? 1 : 0 } });
-  };
-
-  return (
-    <div style={{ borderBottom: "1px solid #1e293b" }}>
-      <button onClick={() => setOpen(o => !o)}
-        style={{ width: "100%", textAlign: "left", padding: "4px 12px", fontSize: 10, fontFamily: "monospace", fontWeight: 600, color: "#94a3b8", background: "#0f172a", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5 }}>
-        {open ? "▼" : "▶"} Preview State
-      </button>
-      {open && (
-        <div style={{ display: "flex", gap: 12, padding: "6px 12px", flexWrap: "wrap", background: "#0f172a" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 200 }}>
-            <span style={{ fontSize: 9, color: "#64748b" }}>Dialogue</span>
-            <input value={context.dialogueSpeaker ?? ""} onChange={e => setSpeaker(e.target.value)} placeholder="Speaker" style={inspInput} />
-            <input value={context.dialogueText ?? ""} onChange={e => setDialogue(e.target.value)} placeholder="Dialogue text" style={inspInput} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 120 }}>
-            <span style={{ fontSize: 9, color: "#64748b" }}>Choices</span>
-            <select value={context.vars?._hasChoices ?? 0} onChange={e => setChoices(Number(e.target.value))} style={inspInput}>
-              <option value={0}>No choices</option>
-              <option value={1}>1 choice</option>
-              <option value={2}>2 choices</option>
-              <option value={3}>3 choices</option>
-            </select>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 150 }}>
-            <span style={{ fontSize: 9, color: "#64748b" }}>Variables</span>
-            <div style={{ display: "flex", gap: 4 }}>
-              <input value={vars.gold ?? ""} onChange={e => setVar("gold", Number(e.target.value))} placeholder="gold" style={{ ...inspInput, width: 60 }} type="number" />
-              <input value={vars.hp ?? ""} onChange={e => setVar("hp", Number(e.target.value))} placeholder="hp" style={{ ...inspInput, width: 60 }} type="number" />
-              <input value={vars.maxHp ?? ""} onChange={e => setVar("maxHp", Number(e.target.value))} placeholder="maxHp" style={{ ...inspInput, width: 60 }} type="number" />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Selection overlay constants ─────────────────────────────────
 
 const HANDLE = 8;
@@ -128,8 +75,8 @@ const H_POS: Record<string, React.CSSProperties> = {
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
-function CanvasV2({ store, assets, context }: {
-  store: ElementStore; assets?: ProjectAsset[]; context?: BindingContext;
+function CanvasV2({ store, assets }: {
+  store: ElementStore; assets?: ProjectAsset[];
 }) {
   const [, tick] = useState(0);
   const dragRef = useRef<{
@@ -227,7 +174,7 @@ function CanvasV2({ store, assets, context }: {
         </svg>
 
         {/* Elements */}
-        {renderV2(store.elements, context, undefined, assets, 800, 600).map((node, i) => {
+        {renderV2(store.elements, undefined, undefined, assets, 800, 600).map((node, i) => {
           const el = store.elements[i];
           if (!el) return node;
           return (
@@ -419,15 +366,18 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   // Rebuild store when elements or screen changes
   useEffect(() => {
     const s = createElementStore(elements);
+    // Sync store changes back to project whenever elements are modified
+    const unsub = setInterval(() => {
+      const current = s.elements;
+      const stored = layouts.screens[activeScreen] ?? [];
+      if (current.length !== stored.length || current.some((e, i) => e.id !== stored[i]?.id)) {
+        const screens = { ...layouts.screens, [activeScreen]: current };
+        onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
+      }
+    }, 300);
     setStore(s);
+    return () => { clearInterval(unsub); setStore(null); };
   }, [project, activeScreen]);
-
-  // Preview state
-  const [previewCtx, setPreviewCtx] = useState<BindingContext>({
-    vars: { gold: 100, hp: 75, maxHp: 100, _hasChoices: 0 },
-    dialogueText: "Hello, adventurer. I was hoping you'd come.",
-    dialogueSpeaker: "Elder",
-  });
 
   // ── Screen selector ──
   const screenTabs = (
@@ -473,9 +423,6 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
         )}
       </div>
 
-      {/* Preview state panel */}
-      <PreviewPanel context={previewCtx} onChange={setPreviewCtx} />
-
       {/* Component palette — top toolbar */}
       <div style={{ display: "flex", gap: 4, padding: "5px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a", alignItems: "center" }}>
         <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginRight: 4 }}>Add</span>
@@ -499,7 +446,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
           <HierarchyPanel store={store} />
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <CanvasV2 store={store} assets={project.assets} context={previewCtx} />
+          <CanvasV2 store={store} assets={project.assets} />
         </div>
         <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} />
       </div>
