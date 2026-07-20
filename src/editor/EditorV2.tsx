@@ -13,29 +13,17 @@ interface EditorV2Props {
   onBack?: () => void;
 }
 
-// ─── Helper: build tree indent from parentId ─────────────────────
-
-function depthOf(id: string, store: ElementStore): number {
-  return store.getAncestors(id).length;
-}
-
-// ─── Hierarchy Panel ─────────────────────────────────────────────
+// ─── Hierarchy Panel ────────────────────────────────────────────
 
 function HierarchyPanel({ store }: { store: ElementStore }) {
   const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick(n => n + 1), 200);
-    return () => clearInterval(id);
-  }, []);
-
+  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 200); return () => clearInterval(id); }, []);
   const topLevel = useMemo(() => store.elements.filter(e => !e.parentId), [store, tick]);
 
   return (
-    <div style={{ padding: 8 }}>
+    <div style={{ padding: 8, overflow: "auto", height: "100%" }}>
       <div style={{ color: "#94a3b8", fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Elements</div>
-      {topLevel.length === 0 && (
-        <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 8 }}>No elements. Add one above.</div>
-      )}
+      {topLevel.length === 0 && <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 8 }}>No elements added yet.</div>}
       {topLevel.map(el => <HierarchyNode key={el.id} element={el} store={store} depth={0} />)}
     </div>
   );
@@ -48,15 +36,13 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
 
   return (
     <div>
-      <div
-        onClick={() => store.select(element.id)}
+      <div onClick={() => store.select(element.id)}
         style={{
           padding: "3px 6px", cursor: "pointer", borderRadius: 4, fontSize: 11, fontFamily: "monospace",
           marginLeft: depth * 16, display: "flex", alignItems: "center", gap: 4,
           background: isSelected ? "#6366f120" : "transparent",
           color: isSelected ? "#a5b4fc" : "#cbd5e1",
-        }}
-      >
+        }}>
         {children.length > 0 && (
           <span onClick={(e) => { e.stopPropagation(); setExpanded(e => !e); }} style={{ cursor: "pointer", width: 14, fontSize: 9, color: "#64748b" }}>
             {expanded ? "▼" : "▶"}
@@ -70,7 +56,6 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
     </div>
   );
 }
-
 
 // ─── Preview Context Panel ──────────────────────────────────────
 
@@ -470,9 +455,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
       {/* Title bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 12px", borderBottom: "1px solid #1e293b" }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
-          HUD Layout
-        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>UI Editor</span>
         {UI_SCREENS.map(name => (
           <button key={name} onClick={() => setActiveScreen(name)}
             style={{
@@ -481,9 +464,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
               background: activeScreen === name ? "#6366f1" : "transparent",
               color: activeScreen === name ? "#fff" : "#64748b",
               border: "none", cursor: "pointer",
-            }}>
-            {name}
-          </button>
+            }}>{name}</button>
         ))}
         {onBack && (
           <button onClick={onBack} style={{ marginLeft: "auto", padding: "3px 12px", fontSize: 10, fontFamily: "monospace", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>
@@ -495,38 +476,31 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
       {/* Preview state panel */}
       <PreviewPanel context={previewCtx} onChange={setPreviewCtx} />
 
-      {/* Content: canvas + inspector side by side */}
+      {/* Component palette — top toolbar */}
+      <div style={{ display: "flex", gap: 4, padding: "5px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a", alignItems: "center" }}>
+        <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginRight: 4 }}>Add</span>
+        {vnComponentList.map(c => (
+          <button key={c.type} onClick={() => { const els = c.create(30 + Math.random() * 100, 30 + Math.random() * 100); els.forEach(el => store.add(el)); }}
+            style={{ padding: "3px 10px", fontSize: 11, fontFamily: "monospace", background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 6, cursor: "pointer" }}>
+            {c.icon} {c.label}
+          </button>
+        ))}
+        {store.elements.length > 0 && (
+          <button onClick={() => { store.elements.forEach(e => store.remove(e.id)); }}
+            style={{ padding: "3px 10px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#f87171", border: "1px solid #334155", borderRadius: 6, cursor: "pointer" }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Main area: hierarchy | canvas | inspector */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Canvas area */}
+        <div style={{ width: 200, borderRight: "1px solid #1e293b", overflow: "auto" }}>
+          <HierarchyPanel store={store} />
+        </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <CanvasV2 store={store} assets={project.assets} context={previewCtx} />
-
-          {/* Component palette — VN semantic components + primitives */}
-          <div style={{ display: "flex", gap: 4, padding: "6px 12px", borderTop: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginRight: 4 }}>Components</span>
-            {vnComponentList.map(c => (
-              <button key={c.type} onClick={() => {
-                const els = c.create(30 + Math.random() * 100, 30 + Math.random() * 100);
-                els.forEach(el => store.add(el));
-              }}
-                style={{
-                  padding: "3px 10px", fontSize: 11, fontFamily: "monospace",
-                  background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155",
-                  borderRadius: 6, cursor: "pointer",
-                }}>
-                {c.icon} {c.label}
-              </button>
-            ))}
-            {store.elements.length > 0 && (
-              <button onClick={() => { store.elements.forEach(e => store.remove(e.id)); }}
-                style={{ padding: "3px 10px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#f87171", border: "1px solid #334155", borderRadius: 6, cursor: "pointer", marginLeft: "auto" }}>
-                Clear
-              </button>
-            )}
-          </div>
         </div>
-
-        {/* Inspector panel — right side */}
         <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} />
       </div>
     </div>
