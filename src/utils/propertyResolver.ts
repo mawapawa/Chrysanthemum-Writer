@@ -1,4 +1,4 @@
-import type { UIElementV2, ResolvedBindings, RenderProperties, BindingContext, TextStyleProps, ButtonStyleProps } from "../types";
+import type { UIElementV2, ResolvedBindings, RenderProperties, BindingContext, TextStyleProps, ButtonStyleProps, ContainerStyleProps } from "../types";
 
 function resolveTextProps(
   element: UIElementV2,
@@ -27,6 +27,13 @@ function resolveTextProps(
   };
 }
 
+function resolveContainerProps(element: UIElementV2): ContainerStyleProps {
+  return {
+    type: "container",
+    direction: (element.properties?.direction as "row" | "column") ?? undefined,
+  };
+}
+
 function resolveButtonProps(
   element: UIElementV2,
   bindings: ResolvedBindings
@@ -50,6 +57,8 @@ export function resolveProperties(
       return resolveTextProps(element, bindings, context);
     case "button":
       return resolveButtonProps(element, bindings);
+    case "container":
+      return resolveContainerProps(element);
     default:
       return {
         type: "text",

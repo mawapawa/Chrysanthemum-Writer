@@ -1,5 +1,5 @@
 import React from "react";
-import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ElementEvents } from "../types";
+import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ContainerStyleProps, ElementEvents } from "../types";
 
 // ─── TextWidgetV2 — pure renderer, receives only props ──
 
@@ -124,6 +124,8 @@ export function ElementRenderer({ computed, computedStyle, renderProps, events }
           />
         );
       }
+      case "container":
+        return null; // children rendered by pipeline via parentId
       default:
         return <div style={{ color: "#94a3b8", fontSize: "10px", padding: 4 }}>Unknown</div>;
     }

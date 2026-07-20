@@ -442,7 +442,12 @@ export interface ButtonStyleProps {
   disabled: boolean;
 }
 
-export type RenderProperties = TextStyleProps | ButtonStyleProps;
+export interface ContainerStyleProps {
+  type: 'container';
+  direction?: 'row' | 'column';
+}
+
+export type RenderProperties = TextStyleProps | ButtonStyleProps | ContainerStyleProps;
 
 // ─── Element Events ─────────────────────────────────────────────
 

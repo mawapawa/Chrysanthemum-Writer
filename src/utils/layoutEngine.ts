@@ -1,4 +1,4 @@
-import { UIElementV2, ComputedLayout, LayoutV2 } from "../types";
+import { UIElementV2, ComputedLayout } from "../types";
 
 // ─── Tree builder ───────────────────────────────────────────────
 function buildTree(elements: UIElementV2[]): Map<string, UIElementV2[]> {
@@ -9,6 +9,18 @@ function buildTree(elements: UIElementV2[]): Map<string, UIElementV2[]> {
     tree.get(pid)!.push(el);
   }
   return tree;
+}
+
+function parentGap(el: UIElementV2, elements: Map<string, UIElementV2>): number {
+  if (!el.parentId) return 0;
+  const parent = elements.get(el.parentId);
+  return (parent?.properties?.gap as number) ?? 0;
+}
+
+function parentPadding(el: UIElementV2, elements: Map<string, UIElementV2>): number {
+  if (!el.parentId) return 0;
+  const parent = elements.get(el.parentId);
+  return (parent?.properties?.padding as number) ?? 0;
 }
 
 // ─── Layout mode resolvers ──────────────────────────────────────
@@ -35,13 +47,17 @@ function resolveRow(
   el: UIElementV2,
   parentLayout: ComputedLayout,
   _tree: Map<string, UIElementV2[]>,
-  _elements: Map<string, UIElementV2>
+  elements: Map<string, UIElementV2>
 ): ComputedLayout {
+  const gap = parentGap(el, elements);
+  const pad = parentPadding(el, elements);
+  const basis = (el.layout as any).basis ?? 100;
+  const offset = (el as any)._rowOffset ?? 0;
   return {
-    x: parentLayout.x,
-    y: parentLayout.y,
-    width: (el.layout as any).basis ?? 100,
-    height: parentLayout.height,
+    x: parentLayout.x + pad + offset,
+    y: parentLayout.y + pad,
+    width: basis,
+    height: parentLayout.height - pad * 2,
     rotation: 0,
     zIndex: el.transform.zIndex,
     clip: false,
@@ -52,13 +68,17 @@ function resolveColumn(
   el: UIElementV2,
   parentLayout: ComputedLayout,
   _tree: Map<string, UIElementV2[]>,
-  _elements: Map<string, UIElementV2>
+  elements: Map<string, UIElementV2>
 ): ComputedLayout {
+  const gap = parentGap(el, elements);
+  const pad = parentPadding(el, elements);
+  const basis = (el.layout as any).basis ?? 100;
+  const offset = (el as any)._colOffset ?? 0;
   return {
-    x: parentLayout.x,
-    y: parentLayout.y,
-    width: parentLayout.width,
-    height: (el.layout as any).basis ?? 100,
+    x: parentLayout.x + pad,
+    y: parentLayout.y + pad + offset,
+    width: parentLayout.width - pad * 2,
+    height: basis,
     rotation: 0,
     zIndex: el.transform.zIndex,
     clip: false,
@@ -74,15 +94,17 @@ function resolveGrid(
   return {
     x: parentLayout.x,
     y: parentLayout.y,
-    width: (el.layout as any).columnSpan ?? 1 * 100,
-    height: (el.layout as any).rowSpan ?? 1 * 100,
+    width: (el.layout as any).columnSpan ?? 100,
+    height: (el.layout as any).rowSpan ?? 100,
     rotation: 0,
     zIndex: el.transform.zIndex,
     clip: false,
   };
 }
 
-const RESOLVERS: Record<string, (el: UIElementV2, parent: ComputedLayout, tree: Map<string, UIElementV2[]>, elements: Map<string, UIElementV2>) => ComputedLayout> = {
+type Resolver = (el: UIElementV2, parent: ComputedLayout, tree: Map<string, UIElementV2[]>, elements: Map<string, UIElementV2>) => ComputedLayout;
+
+const RESOLVERS: Record<string, Resolver> = {
   freeform: resolveFreeform,
   row: resolveRow,
   column: resolveColumn,
@@ -100,15 +122,13 @@ export function computeLayouts(
   const elMap = new Map(elements.map(e => [e.id, e]));
   const result = new Map<string, ComputedLayout>();
 
-  // Root canvas layout
   const rootLayout: ComputedLayout = {
     x: 0, y: 0,
     width: canvasWidth, height: canvasHeight,
     rotation: 0, zIndex: 0, clip: false,
   };
 
-  // Walk tree in parent-first order using a queue
-  const queue: Array<{ parentId: string; parentLayout: ComputedLayout }> = [
+  const queue: Array<{ parentId: string; parentLayout: ComputedLayout; parentMode?: string }> = [
     { parentId: "__root__", parentLayout: rootLayout },
   ];
 
@@ -118,27 +138,32 @@ export function computeLayouts(
 
   while (queue.length > 0) {
     const { parentId, parentLayout } = queue.shift()!;
+    const parentEl = elMap.get(parentId);
     const children = tree.get(parentId) ?? [];
 
     for (const child of children) {
       const resolver = RESOLVERS[child.layout.mode] ?? resolveFreeform;
 
-      // For row/column, compute running offset
-      if (child.layout.mode === "row") {
-        const offset = runningX.get(parentId) ?? 0;
-        (child as any)._rowOffset = offset;
-        runningX.set(parentId, offset + ((child.layout as any).basis ?? 100));
-      }
-      if (child.layout.mode === "column") {
-        const offset = runningY.get(parentId) ?? 0;
-        (child as any)._colOffset = offset;
-        runningY.set(parentId, offset + ((child.layout as any).basis ?? 100));
+      // For row/column, compute sequential offset from parent container
+      if (parentEl) {
+        const pMode = (parentEl.properties?.direction as string) || "";
+        const gap = (parentEl.properties?.gap as number) ?? 0;
+        if (pMode === "row") {
+          const offset = runningX.get(parentId) ?? 0;
+          (child as any)._rowOffset = offset;
+          const cw = (child.layout as any).basis ?? 100;
+          runningX.set(parentId, offset + cw + gap);
+        } else if (pMode === "column") {
+          const offset = runningY.get(parentId) ?? 0;
+          (child as any)._colOffset = offset;
+          const ch = (child.layout as any).basis ?? 100;
+          runningY.set(parentId, offset + ch + gap);
+        }
       }
 
       const computed = resolver(child, parentLayout, tree, elMap);
       result.set(child.id, computed);
 
-      // Queue children of this element
       if (tree.has(child.id)) {
         queue.push({ parentId: child.id, parentLayout: computed });
       }
