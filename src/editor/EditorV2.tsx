@@ -381,7 +381,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     const unsub = setInterval(() => {
       const current = s.elements;
       const stored = layouts.screens[activeScreen] ?? [];
-      if (current.length !== stored.length || current.some((e, i) => e.id !== stored[i]?.id)) {
+      if (current.length !== stored.length || current.some((e, i) => JSON.stringify(e) !== JSON.stringify(stored[i]))) {
         const screens = { ...layouts.screens, [activeScreen]: current };
         onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
       }
