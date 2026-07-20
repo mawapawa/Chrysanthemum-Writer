@@ -1041,7 +1041,7 @@ export default function PlaytestSimulator({
                     dialogueSpeaker: activeLine?.speaker,
                     runtimeValues: runtimeVars,
                     inventory: playerInventory,
-                    choices: choicesData,
+                    choices: widgetChoices,
                     onSelectChoice: (choiceId) => {
                       const choice = node.choices.find(c => c.id === choiceId);
                       if (choice) handleSelectChoice(choice);
@@ -1060,7 +1060,7 @@ export default function PlaytestSimulator({
                       if (next) { setCurrentNodeId(node.continueToNodeId!); setLineIdx(0); processNodeBlocks(next, vars, playerInventory); }
                     }
                   }}
-                  choices={choicesData}
+                  choices={widgetChoices}
                   onSelectChoice={(choiceId) => {
                     const choice = node.choices.find(c => c.id === choiceId);
                     if (choice) handleSelectChoice(choice);
