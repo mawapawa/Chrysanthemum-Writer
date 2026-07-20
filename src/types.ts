@@ -628,6 +628,7 @@ export interface UIElementV2 {
   constraints?: ConstraintsV2;
   bindings: BindingsV2;
   properties: Record<string, any>;  // widget-type-specific (renamed from "settings")
+  layer?: string;                    // layer name for grouping; defaults to "default"
 }
 
 // ComputedLayout — the pure output of the layout engine (geometry only)

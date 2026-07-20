@@ -13,18 +13,53 @@ interface EditorV2Props {
   onBack?: () => void;
 }
 
-// ─── Hierarchy Panel ────────────────────────────────────────────
+// ─── Hierarchy Panel (with layer management) ────────────────────
 
-function HierarchyPanel({ store }: { store: ElementStore }) {
+function HierarchyPanel({ store, activeLayer, onLayerChange }: {
+  store: ElementStore; activeLayer: string; onLayerChange: (l: string) => void;
+}) {
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 200); return () => clearInterval(id); }, []);
-  const topLevel = useMemo(() => store.elements.filter(e => !e.parentId), [store, tick]);
+
+  // Collect unique layer names from elements, plus "default"
+  const layers = useMemo(() => {
+    const s = new Set<string>(["default"]);
+    store.elements.forEach(e => { if (e.layer) s.add(e.layer); });
+    return [...s].sort();
+  }, [store, tick]);
+
+  const topLevel = useMemo(() => store.elements.filter(e => !e.parentId && (e.layer ?? "default") === activeLayer), [store, tick, activeLayer]);
 
   return (
-    <div style={{ padding: 8, overflow: "auto", height: "100%" }}>
-      <div style={{ color: "#94a3b8", fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Elements</div>
-      {topLevel.length === 0 && <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 8 }}>No elements added yet.</div>}
-      {topLevel.map(el => <HierarchyNode key={el.id} element={el} store={store} depth={0} />)}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Layer tabs */}
+      <div style={{ padding: "6px 8px", borderBottom: "1px solid #1e293b" }}>
+        <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Layers</div>
+        <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+          {layers.map(l => (
+            <button key={l} onClick={() => onLayerChange(l)}
+              style={{
+                padding: "2px 8px", fontSize: 9, fontFamily: "monospace", fontWeight: 600,
+                background: activeLayer === l ? "#6366f1" : "#1e293b",
+                color: activeLayer === l ? "#fff" : "#94a3b8",
+                border: "1px solid #334155", borderRadius: 4, cursor: "pointer",
+              }}>
+              {l}
+            </button>
+          ))}
+          <button onClick={() => { const n = prompt("Layer name:"); if (n) { store.elements.filter(e => !e.layer).forEach(e => store.update(e.id, { layer: n })); onLayerChange(n); } }}
+            style={{ padding: "2px 6px", fontSize: 8, fontFamily: "monospace", background: "transparent", color: "#64748b", border: "1px dashed #334155", borderRadius: 4, cursor: "pointer" }}>
+            + New
+          </button>
+        </div>
+      </div>
+
+      {/* Elements for active layer */}
+      <div style={{ flex: 1, padding: "6px 8px", overflow: "auto" }}>
+        <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Elements</div>
+        {topLevel.length === 0 && <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 4 }}>No elements on this layer.</div>}
+        {topLevel.map(el => <HierarchyNode key={el.id} element={el} store={store} depth={0} />)}
+      </div>
     </div>
   );
 }
@@ -64,8 +99,8 @@ const SNAP = (v: number) => Math.round(v / 10) * 10;
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
-function CanvasV2({ store, assets }: {
-  store: ElementStore; assets?: ProjectAsset[];
+function CanvasV2({ store, assets, activeLayer }: {
+  store: ElementStore; assets?: ProjectAsset[]; activeLayer?: string;
 }) {
   const [, tick] = useState(0);
   const dragRef = useRef<{
@@ -163,8 +198,10 @@ function CanvasV2({ store, assets }: {
         </svg>
 
         {/* Elements — rendered by pipeline, overlaid with transparent hit areas */}
-        {renderV2(store.elements, undefined, undefined, assets, 800, 600).map((node, i) => {
-          const el = store.elements[i];
+        {(() => {
+          const visibleElements = store.elements.filter(e => (e.layer ?? "default") === activeLayer);
+          return renderV2(visibleElements, undefined, undefined, assets, 800, 600).map((node, i) => {
+          const el = visibleElements[i];
           if (!el) return node;
           const l = layouts.get(el.id);
           return (
@@ -176,7 +213,8 @@ function CanvasV2({ store, assets }: {
               )}
             </div>
           );
-        })}
+        });
+        })()}
 
         {/* Selection overlay */}
         {selectedLayout && (
@@ -352,6 +390,10 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
 
       {/* Layers */}
       <InspectSection title="Layers">
+        <InspectField label="Layer">
+          <input value={sel.layer ?? "default"} onChange={e => store.update(sel.id, { layer: e.target.value || undefined })}
+            style={inspInput} placeholder="default" />
+        </InspectField>
         <InspectField label="Z-Index">
           <input value={sel.transform.zIndex} onChange={e => store.update(sel.id, { transform: { ...sel.transform, zIndex: Number(e.target.value) } })}
             style={{ ...inspInput, width: 60 }} type="number" />
@@ -379,6 +421,7 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
 export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   const layouts = project.uiLayouts ?? createEmptyLayouts();
   const [activeScreen, setActiveScreen] = useState(layouts.activeScreen ?? "dialogue");
+  const [activeLayer, setActiveLayer] = useState("default");
   const elements = layouts.screens[activeScreen] ?? [];
 
   const saveLayouts = useCallback((screens: Record<string, UIElementV2[]>, screen?: string) => {
@@ -505,10 +548,10 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
       {/* Main area: hierarchy | canvas | inspector */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div style={{ width: 200, borderRight: "1px solid #1e293b", overflow: "auto" }}>
-          <HierarchyPanel store={store} />
+          <HierarchyPanel store={store} activeLayer={activeLayer} onLayerChange={setActiveLayer} />
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <CanvasV2 store={store} assets={project.assets} />
+          <CanvasV2 store={store} assets={project.assets} activeLayer={activeLayer} />
         </div>
         <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} screenNames={Object.keys(layouts.screens)} />
       </div>
