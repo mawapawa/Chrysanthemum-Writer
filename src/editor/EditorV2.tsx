@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, ElementEvents, VNProject, UILayoutCollection } from "../types";
-import { UI_SCREENS } from "../types";
 import { createElementStore, ElementStore, createEmptyLayouts } from "./elementStore";
 import { renderV2 } from "../widgets/pipelineV2";
-import { vnComponentList } from "../factories/vnComponents";
+import { primitiveRegistry, createRootContainer } from "../factories/primitiveRegistry";
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -32,8 +31,15 @@ function HierarchyPanel({ store, activeLayer, onLayerChange }: {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Elements for active layer */}
+      <div style={{ flex: 1, padding: "6px 8px", overflow: "auto" }}>
+        <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Elements</div>
+        {topLevel.length === 0 && <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 4 }}>No elements on this layer.</div>}
+        {topLevel.map(el => <HierarchyNode key={el.id} element={el} store={store} depth={0} />)}
+      </div>
+
       {/* Layer tabs */}
-      <div style={{ padding: "6px 8px", borderBottom: "1px solid #1e293b" }}>
+      <div style={{ padding: "6px 8px", borderTop: "1px solid #1e293b" }}>
         <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Layers</div>
         <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
           {layers.map(l => (
@@ -52,13 +58,6 @@ function HierarchyPanel({ store, activeLayer, onLayerChange }: {
             + New
           </button>
         </div>
-      </div>
-
-      {/* Elements for active layer */}
-      <div style={{ flex: 1, padding: "6px 8px", overflow: "auto" }}>
-        <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Elements</div>
-        {topLevel.length === 0 && <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 4 }}>No elements on this layer.</div>}
-        {topLevel.map(el => <HierarchyNode key={el.id} element={el} store={store} depth={0} />)}
       </div>
     </div>
   );
@@ -96,6 +95,7 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
 
 const HANDLE = 8;
 const SNAP = (v: number) => Math.round(v / 10) * 10;
+const GRID = 10; // dot grid and snap spacing
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
@@ -105,8 +105,8 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
   const [, tick] = useState(0);
   const dragRef = useRef<{
     elId: string; startX: number; startY: number;
-    mode: 'move' | 'resize'; dir?: string;
-    orig: { x: number; y: number; w: number; h: number };
+    mode: 'move' | 'resize'; dir?: string; layoutMode?: string;
+    orig: { x: number; y: number; w: number; h: number; basis?: number };
   } | null>(null);
 
   // Force re-render periodically so layouts stay fresh
@@ -119,18 +119,18 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
 
   const selectedLayout = store.selectedId ? layouts.get(store.selectedId) : null;
 
-  // ── Mousedown: start drag or resize ──
+  // ── Mousedown: select element; start drag only for freeform ──
   const handleMouseDown = useCallback((e: React.MouseEvent, elId: string) => {
     if (e.button !== 0) return;
-    const el = store.getById(elId);
-    if (!el) return;
-    const l = el.layout;
-    if (l.mode !== "freeform") return;
+    e.stopPropagation();
     store.select(elId);
+    const el = store.getById(elId);
+    if (!el || el.layout.mode !== "freeform") return;
+    const l = el.layout as any;
     dragRef.current = {
       elId, startX: e.clientX, startY: e.clientY,
       mode: 'move',
-      orig: { x: (l as any).x ?? 0, y: (l as any).y ?? 0, w: (l as any).width ?? 100, h: (l as any).height ?? 100 },
+      orig: { x: l.x ?? 0, y: l.y ?? 0, w: l.width ?? 100, h: l.height ?? 100 },
     };
   }, [store]);
 
@@ -139,12 +139,15 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
     e.stopPropagation();
     const el = store.getById(elId);
     if (!el) return;
-    const l = el.layout;
-    if (l.mode !== "freeform") return;
+    // Block resize on root containers (no parentId)
+    if (!el.parentId && el.type === "container") return;
+    store.select(elId);
+    const l = el.layout as any;
+    const lm = l.mode ?? "freeform";
     dragRef.current = {
       elId, startX: e.clientX, startY: e.clientY,
-      mode: 'resize', dir,
-      orig: { x: (l as any).x ?? 0, y: (l as any).y ?? 0, w: (l as any).width ?? 100, h: (l as any).height ?? 100 },
+      mode: 'resize', dir, layoutMode: lm,
+      orig: { x: l.x ?? 0, y: l.y ?? 0, w: l.width ?? 100, h: l.height ?? 100, basis: l.basis },
     };
   }, [store]);
 
@@ -167,14 +170,30 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
         const ny = SNAP(Math.max(0, d.orig.y + dy));
         store.update(d.elId, { layout: { mode: "freeform", x: nx, y: ny, width: d.orig.w, height: d.orig.h } });
       } else if (d.mode === 'resize' && d.dir) {
-        let { x, y, w, h } = d.orig;
-        const sdx = SNAP(dx);
-        const sdy = SNAP(dy);
-        if (d.dir.includes('e')) w = Math.max(20, d.orig.w + sdx);
-        if (d.dir.includes('w')) { x = d.orig.x + sdx; w = Math.max(20, d.orig.w - sdx); }
-        if (d.dir.includes('s')) h = Math.max(20, d.orig.h + sdy);
-        if (d.dir.includes('n')) { y = d.orig.y + sdy; h = Math.max(20, d.orig.h - sdy); }
-        store.update(d.elId, { layout: { mode: "freeform", x, y, width: w, height: h } });
+        if (d.layoutMode === "freeform") {
+          let { x, y, w, h } = d.orig;
+          const sdx = SNAP(dx);
+          const sdy = SNAP(dy);
+          if (d.dir.includes('e')) w = Math.max(20, d.orig.w + sdx);
+          if (d.dir.includes('w')) { x = d.orig.x + sdx; w = Math.max(20, d.orig.w - sdx); }
+          if (d.dir.includes('s')) h = Math.max(20, d.orig.h + sdy);
+          if (d.dir.includes('n')) { y = d.orig.y + sdy; h = Math.max(20, d.orig.h - sdy); }
+          store.update(d.elId, { layout: { mode: "freeform", x, y, width: w, height: h } });
+        } else {
+          // Semantic resize: change basis (height in column, width in row)
+          const isColumn = d.layoutMode === "column";
+          const isVert = d.dir.includes('s') || d.dir.includes('n');
+          const isHoriz = d.dir.includes('e') || d.dir.includes('w');
+          if ((isColumn && isVert) || (!isColumn && isHoriz)) {
+            const delta = isVert ? SNAP(dy) : SNAP(dx);
+            const sign = (d.dir.startsWith('n') || d.dir.startsWith('w')) ? -1 : 1;
+            const cur = store.getById(d.elId);
+            const curLayout = cur?.layout as any;
+            const curBasis = curLayout.basis ?? 100;
+            const newBasis = Math.max(20, curBasis + delta * sign);
+            store.update(d.elId, { layout: { ...curLayout, basis: newBasis } as any });
+          }
+        }
       }
     };
 
@@ -198,8 +217,9 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
         {/* Dot grid */}
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width={cw} height={ch}>
           <defs>
-            <pattern id="editorv2-dots" x="0" y="0" width={24} height={24} patternUnits="userSpaceOnUse">
-              <circle cx={1.5} cy={1.5} r={1.5} fill="rgba(255,255,255,0.04)" />
+            <pattern id="editorv2-dots" x="0" y="0" width={GRID * 2} height={GRID * 2} patternUnits="userSpaceOnUse">
+              <circle cx={1} cy={1} r={0.75} fill="rgba(255,255,255,0.04)" />
+              <circle cx={GRID} cy={GRID} r={0.75} fill="rgba(255,255,255,0.04)" />
             </pattern>
           </defs>
           <rect width={cw} height={ch} fill="url(#editorv2-dots)" />
@@ -208,20 +228,41 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
         {/* Elements — rendered by pipeline, overlaid with transparent hit areas */}
         {(() => {
           const visibleElements = store.elements.filter(e => (e.layer ?? "default") === activeLayer);
-          return renderV2(visibleElements, undefined, undefined, assets, cw, ch).map((node, i) => {
-          const el = visibleElements[i];
-          if (!el) return node;
-          const l = layouts.get(el.id);
-          return (
-            <div key={el.id}>
-              {node}
-              {l && (
-                <div onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, el.id); }}
-                  style={{ position: "absolute", left: l.x, top: l.y, width: l.width, height: l.height, cursor: "move", zIndex: 900 }} />
-              )}
-            </div>
-          );
-        });
+          const renderedNodes = renderV2(visibleElements, undefined, undefined, assets, cw, ch);
+          return visibleElements.map((el, i) => {
+            const node = renderedNodes[i];
+            const l = layouts.get(el.id);
+            if (!l) return null;
+            const isContainer = el.type === "container";
+            return (
+              <div key={el.id} style={{ position: "relative" }}>
+                {/* Visual: pipeline output for non-containers, placeholder box for containers */}
+                {!isContainer ? node : (
+                  <div style={{
+                    position: "absolute", left: l.x, top: l.y,
+                    width: l.width, height: l.height,
+                    border: "1px dashed #334155", borderRadius: 6,
+                    background: "rgba(15, 23, 42, 0.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, color: "#475569", fontFamily: "monospace",
+                    pointerEvents: "none",
+                  }}>
+                    {el.properties?.direction === "row" ? "Row" :
+                     el.properties?.direction === "column" ? "Column" :
+                     el.layout?.mode === "freeform" ? "Overlay" : "Grid"}
+                  </div>
+                )}
+                {/* Hit area: always rendered for click selection */}
+                <div onMouseDown={(e) => handleMouseDown(e, el.id)}
+                  style={{
+                    position: "absolute", left: l.x, top: l.y,
+                    width: l.width, height: l.height,
+                    cursor: el.layout.mode === "freeform" ? "move" : "pointer",
+                    zIndex: 900,
+                  }} />
+              </div>
+            );
+          });
         })()}
 
         {/* Selection overlay */}
@@ -448,9 +489,23 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
 
   const [store, setStore] = useState<ElementStore | null>(null);
 
-  // Initialize store once from project data — never rebuild
+  // Find the container to insert new elements into
+  const findContainerForAdd = useCallback((s: ElementStore): string | undefined => {
+    const sel = s.selectedId ? s.getById(s.selectedId) : undefined;
+    if (sel?.type === "container") return sel.id;
+    if (sel?.parentId) {
+      const parent = s.getById(sel.parentId);
+      if (parent?.type === "container") return parent.id;
+    }
+    return undefined;
+  }, []);
+
+  // Initialize store from project data — auto-create root container on empty screens
   useEffect(() => {
     const s = createElementStore(elements);
+    if (s.elements.length === 0) {
+      s.add(createRootContainer(canvasRes.w, canvasRes.h));
+    }
     // Sync store -> project without causing re-render loop
     const unsub = setInterval(() => {
       const current = s.elements;
@@ -463,6 +518,18 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     setStore(s);
     return () => { clearInterval(unsub); };
   }, [activeScreen]);
+
+  // Sync root container dimensions with canvas resolution
+  useEffect(() => {
+    if (!store) return;
+    const roots = store.elements.filter(e => !e.parentId);
+    for (const root of roots) {
+      const l = root.layout as { mode: string; width?: number; height?: number };
+      if (l.mode === "freeform" && (l.width !== canvasRes.w || l.height !== canvasRes.h)) {
+        store.update(root.id, { layout: { mode: "freeform", x: 0, y: 0, width: canvasRes.w, height: canvasRes.h } });
+      }
+    }
+  }, [canvasRes, store]);
 
   // Delete selected element via keyboard
   useEffect(() => {
@@ -477,23 +544,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     return () => window.removeEventListener("keydown", handler);
   }, [store]);
 
-  // ── Screen selector ──
-  const screenTabs = (
-    <div style={{ display: "flex", gap: 4, padding: "4px 8px", borderBottom: "1px solid #1e293b", flexWrap: "wrap" }}>
-      {UI_SCREENS.map(name => (
-        <button key={name} onClick={() => setActiveScreen(name)}
-          style={{
-            padding: "3px 12px", fontSize: 10, fontFamily: "monospace", fontWeight: 600,
-            textTransform: "uppercase", letterSpacing: 0.5,
-            background: activeScreen === name ? "#6366f1" : "#1e293b",
-            color: activeScreen === name ? "#fff" : "#94a3b8",
-            border: "1px solid #334155", borderRadius: 6, cursor: "pointer",
-          }}>
-          {name}
-        </button>
-      ))}
-    </div>
-  );
+  const allScreens = Object.keys(layouts.screens);
 
   if (!store) {
     return <div style={{ padding: 40, color: "#64748b" }}>Initializing...</div>;
@@ -501,19 +552,31 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
-      {/* Title bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 12px", borderBottom: "1px solid #1e293b" }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>UI Editor</span>
-        {UI_SCREENS.map(name => (
+      {/* Title bar: screen tabs + new screen + resolution + back */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginRight: 8 }}>Screens</span>
+        {allScreens.map(name => (
           <button key={name} onClick={() => setActiveScreen(name)}
             style={{
-              padding: "2px 10px", fontSize: 10, fontFamily: "monospace", fontWeight: 600,
-              textTransform: "uppercase", borderRadius: 6,
-              background: activeScreen === name ? "#6366f1" : "transparent",
-              color: activeScreen === name ? "#fff" : "#64748b",
-              border: "none", cursor: "pointer",
-            }}>{name}</button>
+              padding: "3px 10px", fontSize: 10, fontFamily: "monospace", fontWeight: 600,
+              textTransform: "capitalize", borderRadius: 6,
+              background: activeScreen === name ? "#6366f1" : "#1e293b",
+              color: activeScreen === name ? "#fff" : "#94a3b8",
+              border: "1px solid", borderColor: activeScreen === name ? "#6366f1" : "#334155",
+              cursor: "pointer",
+            }}>{name === "main" ? "Main" : name}</button>
         ))}
+        <button onClick={() => {
+          const name = prompt("Screen name:")?.trim().toLowerCase().replace(/\s+/g, "_");
+          if (name && !layouts.screens[name]) {
+            const screens = { ...layouts.screens, [name]: [] };
+            onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
+            setActiveScreen(name);
+          }
+        }}
+          style={{ padding: "3px 8px", fontSize: 10, fontFamily: "monospace", background: "transparent", color: "#64748b", border: "1px dashed #475569", borderRadius: 6, cursor: "pointer" }}>
+          + New
+        </button>
         {/* Resolution selector */}
         <select value={`${canvasRes.w}×${canvasRes.h}`} onChange={e => {
           const opt = RESOLUTIONS.find(r => `${r.w}×${r.h}` === e.target.value);
@@ -528,41 +591,34 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
         )}
       </div>
 
-      {/* New Screen button */}
-      <div style={{ display: "flex", gap: 4, padding: "2px 12px", borderBottom: "1px solid #1e293b", background: "#0f172a" }}>
-        <button onClick={() => {
-          const name = prompt("Screen name:")?.trim().toLowerCase().replace(/\s+/g, "_");
-          if (name && !layouts.screens[name]) {
-            const screens = { ...layouts.screens, [name]: [] };
-            onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
-            setActiveScreen(name);
-          }
-        }}
-          style={{ padding: "2px 10px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#94a3b8", border: "1px dashed #334155", borderRadius: 6, cursor: "pointer" }}>
-          + New Screen
-        </button>
-        {Object.keys(layouts.screens).filter(s => !UI_SCREENS.includes(s as any)).map(name => (
-          <button key={name} onClick={() => setActiveScreen(name)}
-            style={{
-              padding: "2px 8px", fontSize: 9, fontFamily: "monospace",
-              background: activeScreen === name ? "#6366f1" : "transparent",
-              color: activeScreen === name ? "#fff" : "#64748b",
-              border: "none", borderRadius: 4, cursor: "pointer",
-            }}>{name}</button>
-        ))}
-      </div>
-
-      {/* Component palette — top toolbar */}
+      {/* Primitive palette — top toolbar */}
       <div style={{ display: "flex", gap: 4, padding: "5px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a", alignItems: "center" }}>
         <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginRight: 4 }}>Add</span>
-        {vnComponentList.map(c => (
-          <button key={c.type} onClick={() => { const els = c.create(0, 0); els.forEach(el => store.add(el)); }}
-            style={{ padding: "3px 10px", fontSize: 11, fontFamily: "monospace", background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 6, cursor: "pointer" }}>
-            {c.icon} {c.label}
-          </button>
-        ))}
+        {primitiveRegistry.map(p => {
+          const canAdd = findContainerForAdd(store) !== undefined;
+          return (
+            <button key={p.label} onClick={() => {
+              if (!canAdd) return;
+              const containerId = findContainerForAdd(store)!;
+              const els = p.create().map(el => ({ ...el, parentId: containerId }));
+              els.forEach(el => store.add(el));
+            }}
+              style={{
+                padding: "3px 10px", fontSize: 11, fontFamily: "monospace",
+                background: canAdd ? "#1e293b" : "#0f172a",
+                color: canAdd ? "#e2e8f0" : "#475569",
+                border: "1px solid", borderColor: canAdd ? "#334155" : "#1e293b",
+                borderRadius: 6, cursor: canAdd ? "pointer" : "not-allowed",
+              }}>
+              {p.icon} {p.label}
+            </button>
+          );
+        })}
         {store.elements.length > 0 && (
-          <button onClick={() => { store.elements.forEach(e => store.remove(e.id)); }}
+          <button onClick={() => {
+            store.elements.forEach(e => store.remove(e.id));
+            store.add(createRootContainer());
+          }}
             style={{ padding: "3px 10px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#f87171", border: "1px solid #334155", borderRadius: 6, cursor: "pointer" }}>
             Clear
           </button>

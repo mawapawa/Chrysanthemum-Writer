@@ -1,12 +1,9 @@
 import type { UIElementV2, ComputedLayout, UILayoutCollection } from "../types";
-import { UI_SCREENS } from "../types";
 import { computeLayouts } from "../utils/layoutEngine";
 import { evaluateBindings } from "../utils/bindingEvaluator";
 
 export function createEmptyLayouts(): UILayoutCollection {
-  const screens: Record<string, UIElementV2[]> = {};
-  for (const name of UI_SCREENS) screens[name] = [];
-  return { screens, activeScreen: "dialogue" };
+  return { screens: { main: [] }, activeScreen: "main" };
 }
 
 export interface ElementStore {

@@ -1,8 +1,7 @@
 import type { UIElementV2 } from "../types";
 
-let _id = 1000;
 function id(prefix: string): string {
-  return `${prefix}_${_id++}`;
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 export interface VNComponent {
