@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
 import type { WidgetConfig } from "../types";
 import type { WidgetRuntimeProps } from "../widgets/index";
-import type { UIElementV2, BindingContext, ComputedLayout, RenderProperties, ResolvedBindings } from "../types";
+import type { UIElementV2, BindingContext, ComputedLayout, ComputedStyle, RenderProperties, ResolvedBindings } from "../types";
 import { WidgetRenderer, REGISTRY } from "../widgets/index";
 import { evaluateBindings } from "../utils/bindingEvaluator";
 import { resolveProperties } from "../utils/propertyResolver";
 import { computeLayouts } from "../utils/layoutEngine";
+import { resolveStyle } from "../utils/styleResolver";
 import { ElementRenderer } from "../widgets/elementRenderer";
 import { testCases, complexTestCase, generateStressTest } from "./testElements";
 
@@ -15,6 +16,7 @@ interface PipelineSnapshot {
   bindings: ResolvedBindings | null;
   renderProps: RenderProperties | null;
   layout: ComputedLayout | null;
+  style: ComputedStyle | null;
 }
 
 function capturePipeline(el: UIElementV2, allElements: UIElementV2[], context?: BindingContext): PipelineSnapshot {
@@ -22,7 +24,8 @@ function capturePipeline(el: UIElementV2, allElements: UIElementV2[], context?: 
   const renderProps = resolveProperties(el, bindings, context);
   const layouts = computeLayouts(allElements);
   const layout = layouts.get(el.id) ?? null;
-  return { bindings, renderProps, layout };
+  const style = resolveStyle(el.style);
+  return { bindings, renderProps, layout, style };
 }
 
 // ─── Comparison helpers ──────────────────────────────────────────
@@ -64,7 +67,7 @@ function TestCard({ name, legacyConfig, v2Elements, runtime, context }: {
   const v2TextEl = lastTextElement;
   const comparisons = v2TextEl ? shallowCompare(
     { x: legPos.left, y: legPos.top, w: legPos.width, h: legPos.height, opacity: 1 },
-    snapshot.layout ? { x: snapshot.layout.x - (v2Elements.find(e => e.id === v2TextEl.parentId)?.layout?.["x" as any] ?? 0), y: snapshot.layout.y - (v2Elements.find(e => e.id === v2TextEl.parentId)?.layout?.["y" as any] ?? 0), w: snapshot.layout.width, h: snapshot.layout.height, opacity: snapshot.layout.opacity } : {},
+    snapshot.layout ? { x: snapshot.layout.x - (v2Elements.find(e => e.id === v2TextEl.parentId)?.layout?.["x" as any] ?? 0), y: snapshot.layout.y - (v2Elements.find(e => e.id === v2TextEl.parentId)?.layout?.["y" as any] ?? 0), w: snapshot.layout.width, h: snapshot.layout.height, opacity: snapshot.style?.opacity ?? 1 } : {},
     ["x", "y", "w", "h", "opacity"]
   ) : [];
 
@@ -113,7 +116,8 @@ function TestCard({ name, legacyConfig, v2Elements, runtime, context }: {
               const bindings = evaluateBindings(el, context);
               if (!bindings.visible) return null;
               const rp = resolveProperties(el, bindings, context);
-              return <ElementRenderer key={el.id} computed={comp} renderProps={rp} />;
+              const cs = resolveStyle(el.style);
+              return <ElementRenderer key={el.id} computed={comp} computedStyle={cs} renderProps={rp} />;
             })}
             {snapshot.bindings?.visible === false && (
               <div style={{ padding: 8, color: "#64748b", fontStyle: "italic", fontSize: 11 }}>(hidden — showIf condition false)</div>
@@ -154,6 +158,7 @@ function TestCard({ name, legacyConfig, v2Elements, runtime, context }: {
         <div style={{ marginTop: 8, fontSize: 11, fontFamily: "monospace", color: "#cbd5e1", background: "#0f172a", padding: 12, borderRadius: 8 }}>
           <strong>Bindings:</strong> {JSON.stringify(snapshot.bindings, null, 2)}
           <br /><strong>Layout:</strong> {JSON.stringify(snapshot.layout, null, 2)}
+          <br /><strong>Style:</strong> {JSON.stringify(snapshot.style, null, 2)}
           <br /><strong>Props:</strong> {JSON.stringify({ ...snapshot.renderProps, type: undefined }, null, 2)}
         </div>
       )}
@@ -239,7 +244,8 @@ export function VerticalSlice() {
                 if (!comp) return null;
                 const b = evaluateBindings(el, { vars: {} });
                 const rp = resolveProperties(el, b, { vars: {} });
-                return <ElementRenderer key={el.id} computed={comp} renderProps={rp} />;
+                const cs = resolveStyle(el.style);
+                return <ElementRenderer key={el.id} computed={comp} computedStyle={cs} renderProps={rp} />;
               })}
             </div>
           </div>

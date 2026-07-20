@@ -27,11 +27,6 @@ function resolveFreeform(
     height: l.height ?? 100,
     rotation: l.rotation ?? 0,
     zIndex: el.transform.zIndex,
-    opacity: el.style.opacity ?? 1,
-    borderRadius: el.style.borderRadius ?? "",
-    borderWidth: el.style.borderWidth ?? "",
-    borderColor: el.style.borderColor ?? "",
-    borderStyle: el.style.borderStyle ?? "none",
     clip: false,
   };
 }
@@ -42,7 +37,6 @@ function resolveRow(
   _tree: Map<string, UIElementV2[]>,
   _elements: Map<string, UIElementV2>
 ): ComputedLayout {
-  // Placeholder — row layout uses sequential positioning
   return {
     x: parentLayout.x,
     y: parentLayout.y,
@@ -50,11 +44,6 @@ function resolveRow(
     height: parentLayout.height,
     rotation: 0,
     zIndex: el.transform.zIndex,
-    opacity: el.style.opacity ?? 1,
-    borderRadius: el.style.borderRadius ?? "",
-    borderWidth: el.style.borderWidth ?? "",
-    borderColor: el.style.borderColor ?? "",
-    borderStyle: el.style.borderStyle ?? "none",
     clip: false,
   };
 }
@@ -72,11 +61,6 @@ function resolveColumn(
     height: (el.layout as any).basis ?? 100,
     rotation: 0,
     zIndex: el.transform.zIndex,
-    opacity: el.style.opacity ?? 1,
-    borderRadius: el.style.borderRadius ?? "",
-    borderWidth: el.style.borderWidth ?? "",
-    borderColor: el.style.borderColor ?? "",
-    borderStyle: el.style.borderStyle ?? "none",
     clip: false,
   };
 }
@@ -94,11 +78,6 @@ function resolveGrid(
     height: (el.layout as any).rowSpan ?? 1 * 100,
     rotation: 0,
     zIndex: el.transform.zIndex,
-    opacity: el.style.opacity ?? 1,
-    borderRadius: el.style.borderRadius ?? "",
-    borderWidth: el.style.borderWidth ?? "",
-    borderColor: el.style.borderColor ?? "",
-    borderStyle: el.style.borderStyle ?? "none",
     clip: false,
   };
 }
@@ -123,18 +102,9 @@ export function computeLayouts(
 
   // Root canvas layout
   const rootLayout: ComputedLayout = {
-    x: 0,
-    y: 0,
-    width: canvasWidth,
-    height: canvasHeight,
-    rotation: 0,
-    zIndex: 0,
-    opacity: 1,
-    borderRadius: "",
-    borderWidth: "",
-    borderColor: "",
-    borderStyle: "none",
-    clip: false,
+    x: 0, y: 0,
+    width: canvasWidth, height: canvasHeight,
+    rotation: 0, zIndex: 0, clip: false,
   };
 
   // Walk tree in parent-first order using a queue

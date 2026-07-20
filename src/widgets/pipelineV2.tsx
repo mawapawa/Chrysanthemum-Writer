@@ -1,22 +1,25 @@
 import React from "react";
-import type { UIElementV2, BindingContext } from "../types";
+import type { UIElementV2, BindingContext, ElementEvents } from "../types";
 import { evaluateBindings } from "../utils/bindingEvaluator";
 import { resolveProperties } from "../utils/propertyResolver";
 import { computeLayouts } from "../utils/layoutEngine";
+import { resolveStyle } from "../utils/styleResolver";
 import { ElementRenderer } from "./elementRenderer";
 
 /**
  * Full rendering pipeline v2:
  *
- * UIElementV2[] + BindingContext
+ * UIElementV2[] + BindingContext + ElementEvents
  *   → Binding Evaluator  → ResolvedBindings
  *   → Property Resolver  → RenderProperties
  *   → Layout Engine      → ComputedLayout
+ *   → Style Resolver     → ComputedStyle
  *   → Element Renderer   → React element
  */
 export function renderV2(
   elements: UIElementV2[],
   context?: BindingContext,
+  events?: ElementEvents,
   canvasWidth?: number,
   canvasHeight?: number
 ) {
@@ -31,8 +34,9 @@ export function renderV2(
     if (!bindings.visible) continue;
 
     const renderProps = resolveProperties(el, bindings, context);
+    const computedStyle = resolveStyle(el.style);
     results.push(
-      <ElementRenderer key={el.id} computed={computed} renderProps={renderProps} />
+      <ElementRenderer key={el.id} computed={computed} computedStyle={computedStyle} renderProps={renderProps} events={events} />
     );
   }
 

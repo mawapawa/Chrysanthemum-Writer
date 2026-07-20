@@ -27,6 +27,39 @@ const baseContext: BindingContext = {
   vars: baseRuntimeVars,
 };
 
+// Helper: build a legacy button WidgetConfig
+function legacyButton(
+  id: string,
+  x: number, y: number, w: number, h: number,
+  overrides: Record<string, any> = {}
+): WidgetConfig {
+  return {
+    id, type: "button", x, y, w, h,
+    settings: {
+      buttonLabel: "Click Me",
+      buttonAction: "custom",
+      ...overrides,
+    },
+  };
+}
+
+// Helper: build a v2 button UIElementV2
+function v2Button(
+  id: string,
+  x: number, y: number, w: number, h: number,
+  overrides: Partial<UIElementV2> = {}
+): UIElementV2 {
+  return {
+    id, type: "button",
+    layout: { mode: "freeform", x, y, width: w, height: h },
+    transform: { zIndex: 0 },
+    style: {},
+    bindings: { textTemplate: "Click Me" },
+    properties: { buttonAction: "custom" },
+    ...overrides,
+  };
+}
+
 // Helper: build a legacy text WidgetConfig
 function legacyText(
   id: string,
@@ -255,6 +288,15 @@ export const testCases = Object.freeze([
     runtime: { runtimeValues: { gold: 500 } },
     context: { vars: { gold: 500 } },
   } satisfies TestCase),
+
+  // 12 — Button basic
+  Object.freeze({
+    name: "12 — Button basic",
+    legacyConfig: legacyButton("t12", 10, 10, 200, 50),
+    v2Elements: [v2Button("t12", 10, 10, 200, 50)],
+    runtime: baseRuntime,
+    context: baseContext,
+  } satisfies TestCase),
 ]);
 
 // ─── Complex mixed test ─────────────────────────────────────────
@@ -290,7 +332,7 @@ export const complexTestCase: TestCase = Object.freeze({
     } satisfies UIElementV2,
     { id: "comp_btn", type: "button",
       layout: { mode: "freeform", x: 20, y: 300, width: 200, height: 50 },
-      transform: { zIndex: 0 }, style: {}, bindings: {}, properties: { buttonLabel: "Test Button", buttonAction: "custom" },
+      transform: { zIndex: 0 }, style: {}, bindings: { textTemplate: "Test Button" }, properties: { buttonAction: "custom" },
       parentId: "complex_container",
     } satisfies UIElementV2,
   ],

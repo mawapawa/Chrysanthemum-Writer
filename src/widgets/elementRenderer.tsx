@@ -1,7 +1,7 @@
 import React from "react";
-import type { ComputedLayout, RenderProperties, TextStyleProps } from "../types";
+import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ElementEvents } from "../types";
 
-// ─── TextWidgetV2 — pure renderer, receives only TextRenderProps ──
+// ─── TextWidgetV2 — pure renderer, receives only props ──
 
 function TextWidgetV2(props: TextStyleProps) {
   const style: React.CSSProperties = {
@@ -38,52 +38,96 @@ function TextWidgetV2(props: TextStyleProps) {
           <span>{props.content}</span>
         )
       ) : (
-        props.isDialogueBox ? (
-          <span style={{ color: "#64748b", fontStyle: "italic", fontSize: "10px" }}>
-            Dialogue will appear here during playtest
-          </span>
-        ) : (
-          <span style={{ color: "#64748b", fontStyle: "italic", fontSize: "10px" }}>
-            Double-click to edit text
-          </span>
-        )
+        <span style={{ color: "#64748b", fontStyle: "italic", fontSize: "10px" }}>
+          {props.isDialogueBox
+            ? "Dialogue will appear here during playtest"
+            : "Double-click to edit text"}
+        </span>
       )}
     </div>
   );
 }
 
-// ─── Element Renderer ────────────────────────────────────────────
+// ─── ButtonWidgetV2 — pure renderer ─────────────────────────────
 
-export interface ElementRendererProps {
-  computed: ComputedLayout;
-  renderProps: RenderProperties;
+function ButtonWidgetV2(props: ButtonStyleProps & { onClick?: () => void }) {
+  return (
+    <button
+      onClick={props.onClick}
+      disabled={props.disabled}
+      style={{
+        width: "100%",
+        height: "100%",
+        background: props.disabled ? "#475569" : "#6366f1",
+        color: "#fff",
+        border: "none",
+        borderRadius: "8px",
+        cursor: props.disabled ? "not-allowed" : "pointer",
+        fontSize: "12px",
+        fontWeight: 700,
+        fontFamily: "inherit",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "8px 12px",
+      }}
+    >
+      {props.label}
+    </button>
+  );
 }
 
-export function ElementRenderer({ computed, renderProps }: ElementRendererProps) {
-  const wrapStyle: React.CSSProperties = {
+// ─── Universal CSS resolver ──────────────────────────────────────
+
+function wrapStyle(computed: ComputedLayout, vis: ComputedStyle): React.CSSProperties {
+  return {
     position: "absolute",
     left: computed.x,
     top: computed.y,
     width: computed.width,
     height: computed.height,
     zIndex: computed.zIndex,
-    opacity: computed.opacity,
-    borderRadius: computed.borderRadius || undefined,
-    borderWidth: computed.borderWidth || undefined,
-    borderColor: computed.borderColor || undefined,
-    borderStyle: (computed.borderStyle as any) || undefined,
+    opacity: vis.opacity,
+    padding: vis.padding || undefined,
+    margin: vis.margin || undefined,
+    background: vis.background || undefined,
+    boxShadow: vis.boxShadow || undefined,
+    borderRadius: vis.borderRadius || undefined,
+    borderWidth: vis.borderWidth || undefined,
+    borderColor: vis.borderColor || undefined,
+    borderStyle: (vis.borderStyle as any) || undefined,
     overflow: computed.clip ? "hidden" : undefined,
     transform: computed.rotation ? `rotate(${computed.rotation}deg)` : undefined,
   };
+}
 
+// ─── Element Renderer ────────────────────────────────────────────
+
+export interface ElementRendererProps {
+  computed: ComputedLayout;
+  computedStyle: ComputedStyle;
+  renderProps: RenderProperties;
+  events?: ElementEvents;
+}
+
+export function ElementRenderer({ computed, computedStyle, renderProps, events }: ElementRendererProps) {
   const content = (() => {
     switch (renderProps.type) {
       case "text":
         return <TextWidgetV2 {...renderProps} />;
+      case "button": {
+        const bp = renderProps as ButtonStyleProps;
+        return (
+          <ButtonWidgetV2
+            {...bp}
+            onClick={() => events?.onButtonAction?.(bp.action)}
+          />
+        );
+      }
       default:
         return <div style={{ color: "#94a3b8", fontSize: "10px", padding: 4 }}>Unknown</div>;
     }
   })();
 
-  return <div style={wrapStyle}>{content}</div>;
+  return <div style={wrapStyle(computed, computedStyle)}>{content}</div>;
 }

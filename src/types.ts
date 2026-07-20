@@ -435,7 +435,20 @@ export interface TextStyleProps {
   formattedText?: string;
 }
 
-export type RenderProperties = TextStyleProps;
+export interface ButtonStyleProps {
+  type: 'button';
+  label: string;
+  action: string;
+  disabled: boolean;
+}
+
+export type RenderProperties = TextStyleProps | ButtonStyleProps;
+
+// ─── Element Events ─────────────────────────────────────────────
+
+export interface ElementEvents {
+  onButtonAction?: (action: string) => void;
+}
 
 // ─── New Layout Engine Types (v2, alongside existing types) ─────
 
@@ -500,11 +513,15 @@ export interface BindingsV2 {
 
 export interface StyleV2 {
   opacity?: number;
+  padding?: string;       // CSS shorthand e.g. "8px" or "8px 12px"
+  margin?: string;        // CSS shorthand
+  background?: string;    // CSS background value e.g. "#1e293b" or "linear-gradient(...)"
+  boxShadow?: string;     // CSS box-shadow
   borderRadius?: string;
   borderWidth?: string;
   borderColor?: string;
   borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none';
-  bgColor?: string;
+  bgColor?: string;       // legacy shortcut for background color
 }
 
 export interface UIElementV2 {
@@ -519,7 +536,7 @@ export interface UIElementV2 {
   properties: Record<string, any>;  // widget-type-specific (renamed from "settings")
 }
 
-// ComputedLayout — the pure output of the layout engine, consumed by renderers
+// ComputedLayout — the pure output of the layout engine (geometry only)
 export interface ComputedLayout {
   x: number;
   y: number;
@@ -527,12 +544,20 @@ export interface ComputedLayout {
   height: number;
   rotation: number;
   zIndex: number;
+  clip: boolean;
+}
+
+// ComputedStyle — the pure output of the style resolver (visuals only)
+export interface ComputedStyle {
   opacity: number;
+  padding: string;
+  margin: string;
+  background: string;
+  boxShadow: string;
   borderRadius: string;
   borderWidth: string;
   borderColor: string;
   borderStyle: string;
-  clip: boolean;
 }
 
 export interface OverlayDefV2 {

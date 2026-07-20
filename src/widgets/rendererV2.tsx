@@ -1,20 +1,23 @@
 import React from "react";
-import type { UIElementV2, ComputedLayout, VNProject } from "../types";
+import type { UIElementV2, ComputedLayout, ComputedStyle, VNProject } from "../types";
 import type { WidgetRuntimeProps } from "./index";
 import { REGISTRY } from "./index";
+import { resolveStyle } from "../utils/styleResolver";
 
 export interface WidgetPropsV2 {
   element: UIElementV2;
   computed: ComputedLayout;
+  computedStyle?: ComputedStyle;
   project: VNProject;
   runtime?: WidgetRuntimeProps;
 }
 
-export function WidgetRendererV2({ element, computed, project, runtime }: WidgetPropsV2) {
+export function WidgetRendererV2({ element, computed, computedStyle, project, runtime }: WidgetPropsV2) {
   const desc = REGISTRY[element.type];
   if (!desc) return null;
 
   const C = desc.component;
+  const vis = computedStyle ?? resolveStyle(element.style);
   const oldConfig = {
     id: element.id,
     type: element.type,
@@ -35,11 +38,15 @@ export function WidgetRendererV2({ element, computed, project, runtime }: Widget
         width: computed.width,
         height: computed.height,
         zIndex: computed.zIndex,
-        opacity: computed.opacity,
-        borderRadius: computed.borderRadius || undefined,
-        borderWidth: computed.borderWidth || undefined,
-        borderColor: computed.borderColor || undefined,
-        borderStyle: (computed.borderStyle as any) || undefined,
+        opacity: vis.opacity,
+        padding: vis.padding || undefined,
+        margin: vis.margin || undefined,
+        background: vis.background || undefined,
+        boxShadow: vis.boxShadow || undefined,
+        borderRadius: vis.borderRadius || undefined,
+        borderWidth: vis.borderWidth || undefined,
+        borderColor: vis.borderColor || undefined,
+        borderStyle: (vis.borderStyle as any) || undefined,
         overflow: computed.clip ? "hidden" : undefined,
         pointerEvents: "auto",
         transform: computed.rotation ? `rotate(${computed.rotation}deg)` : undefined,
@@ -48,27 +55,4 @@ export function WidgetRendererV2({ element, computed, project, runtime }: Widget
       <C project={project} config={oldConfig as any} runtime={runtime} />
     </div>
   );
-}
-
-export function renderUITree(
-  elements: UIElementV2[],
-  layouts: Map<string, ComputedLayout>,
-  project: VNProject,
-  runtime?: WidgetRuntimeProps
-) {
-  // Render in z-order
-  const sorted = [...elements]
-    .map(el => ({ el, computed: layouts.get(el.id) }))
-    .filter((x): x is { el: UIElementV2; computed: ComputedLayout } => x.computed != null)
-    .sort((a, b) => a.computed.zIndex - b.computed.zIndex);
-
-  return sorted.map(({ el, computed }) => (
-    <WidgetRendererV2
-      key={el.id}
-      element={el}
-      computed={computed}
-      project={project}
-      runtime={runtime}
-    />
-  ));
 }

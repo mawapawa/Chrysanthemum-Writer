@@ -1,4 +1,4 @@
-import type { UIElementV2, ResolvedBindings, RenderProperties, BindingContext, TextStyleProps } from "../types";
+import type { UIElementV2, ResolvedBindings, RenderProperties, BindingContext, TextStyleProps, ButtonStyleProps } from "../types";
 
 function resolveTextProps(
   element: UIElementV2,
@@ -27,6 +27,19 @@ function resolveTextProps(
   };
 }
 
+function resolveButtonProps(
+  element: UIElementV2,
+  bindings: ResolvedBindings
+): ButtonStyleProps {
+  const p = element.properties;
+  return {
+    type: "button",
+    label: bindings.text || (p.buttonLabel as string) || "Button",
+    action: (p.buttonAction as string) ?? "custom",
+    disabled: (p.disabled as boolean) ?? false,
+  };
+}
+
 export function resolveProperties(
   element: UIElementV2,
   bindings: ResolvedBindings,
@@ -35,6 +48,8 @@ export function resolveProperties(
   switch (element.type) {
     case "text":
       return resolveTextProps(element, bindings, context);
+    case "button":
+      return resolveButtonProps(element, bindings);
     default:
       return {
         type: "text",
