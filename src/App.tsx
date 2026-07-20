@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { VerticalSlice } from "./dev/VerticalSlice";
+import { EditorV2 } from "./editor/EditorV2";
 import { useDriveSync } from "./hooks/useDriveSync";
 import { useAuth } from "./hooks/useAuth";
 import { tryHandleOAuthRedirect } from "./services/auth";
@@ -565,7 +566,12 @@ export default function App() {
     );
   }
 
-  const DEV_VERTICAL_SLICE = true;
+  const DEV_VERTICAL_SLICE = false;
+  const DEV_EDITOR_V2 = true;
+
+  if (DEV_EDITOR_V2) {
+    return <EditorV2 />;
+  }
 
   if (DEV_VERTICAL_SLICE) {
     return <VerticalSlice />;
