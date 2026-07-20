@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, ElementEvents } from "../types";
-import { createElementStore, ElementStore } from "./elementStore";
+import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, ElementEvents, VNProject, UILayoutCollection } from "../types";
+import { UI_SCREENS } from "../types";
+import { createElementStore, ElementStore, createEmptyLayouts } from "./elementStore";
 import { elementFactories, factoryList } from "../factories/elementFactories";
 import { renderV2 } from "../widgets/pipelineV2";
 
 // ─── Props ──────────────────────────────────────────────────────
 
 interface EditorV2Props {
-  initialElements?: UIElementV2[];
-  assets?: ProjectAsset[];
-  context?: BindingContext;
-  events?: ElementEvents;
+  project: VNProject;
+  onUpdateProject?: (project: VNProject) => void;
+  onBack?: () => void;
 }
 
 // ─── Helper: build tree indent from parentId ─────────────────────
@@ -131,8 +131,8 @@ const H_POS: Record<string, React.CSSProperties> = {
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
-function CanvasV2({ store, assets, context, events }: {
-  store: ElementStore; assets?: ProjectAsset[]; context?: BindingContext; events?: ElementEvents;
+function CanvasV2({ store, assets }: {
+  store: ElementStore; assets?: ProjectAsset[];
 }) {
   const [, tick] = useState(0);
   const dragRef = useRef<{
@@ -230,7 +230,7 @@ function CanvasV2({ store, assets, context, events }: {
         </svg>
 
         {/* Elements */}
-        {renderV2(store.elements, context, events, assets, 800, 600).map((node, i) => {
+        {renderV2(store.elements, undefined, undefined, assets, 800, 600).map((node, i) => {
           const el = store.elements[i];
           if (!el) return node;
           return (
@@ -272,7 +272,9 @@ function CanvasV2({ store, assets, context, events }: {
 
 // ─── InspectorV2 (placeholder) ───────────────────────────────────
 
-function InspectorV2({ store }: { store: ElementStore }) {
+function InspectorV2({ store, assets, project, onUpdateProject }: {
+  store: ElementStore; assets?: ProjectAsset[]; project?: VNProject; onUpdateProject?: (p: VNProject) => void;
+}) {
   const sel = store.selectedId ? store.getById(store.selectedId) : null;
   const [, tick] = useState(0);
   useEffect(() => {
@@ -363,24 +365,62 @@ const inputStyle: React.CSSProperties = {
 
 // ─── EditorV2 Main ───────────────────────────────────────────────
 
-export function EditorV2({ initialElements, assets, context, events, onBack }: EditorV2Props & { onBack?: () => void }) {
-  const [store] = useState(() => createElementStore(initialElements));
-  const [, tick] = useState(0);
+export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
+  const layouts = project.uiLayouts ?? createEmptyLayouts();
+  const [activeScreen, setActiveScreen] = useState(layouts.activeScreen ?? "dialogue");
+  const elements = layouts.screens[activeScreen] ?? [];
 
+  const saveLayouts = useCallback((screens: Record<string, UIElementV2[]>, screen?: string) => {
+    const next: UILayoutCollection = { screens, activeScreen: screen ?? activeScreen };
+    onUpdateProject?.({ ...project, uiLayouts: next, lastModified: Date.now() });
+  }, [project, activeScreen, onUpdateProject]);
+
+  const [store, setStore] = useState<ElementStore | null>(null);
+
+  // Rebuild store when elements or screen changes
   useEffect(() => {
-    const id = setInterval(() => tick(n => n + 1), 100);
-    return () => clearInterval(id);
-  }, []);
+    const s = createElementStore(elements);
+    setStore(s);
+  }, [project, activeScreen]);
+
+  // Sync store changes back to project
+  const onStoreChange = useCallback((newElements: UIElementV2[]) => {
+    const screens = { ...layouts.screens, [activeScreen]: newElements };
+    saveLayouts(screens);
+  }, [layouts, activeScreen, saveLayouts]);
+
+  // ── Screen selector ──
+  const screenTabs = (
+    <div style={{ display: "flex", gap: 4, padding: "4px 8px", borderBottom: "1px solid #1e293b", flexWrap: "wrap" }}>
+      {UI_SCREENS.map(name => (
+        <button key={name} onClick={() => setActiveScreen(name)}
+          style={{
+            padding: "3px 12px", fontSize: 10, fontFamily: "monospace", fontWeight: 600,
+            textTransform: "uppercase", letterSpacing: 0.5,
+            background: activeScreen === name ? "#6366f1" : "#1e293b",
+            color: activeScreen === name ? "#fff" : "#94a3b8",
+            border: "1px solid #334155", borderRadius: 6, cursor: "pointer",
+          }}>
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!store) {
+    return <div style={{ padding: 40, color: "#64748b" }}>Initializing...</div>;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
       <FactoryBar store={store} onBack={onBack} />
+      {screenTabs}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div style={{ width: 240, borderRight: "1px solid #1e293b", overflowY: "auto" }}>
           <HierarchyPanel store={store} />
         </div>
-        <CanvasV2 store={store} assets={assets} context={context} events={events} />
-        <InspectorV2 store={store} />
+        <CanvasV2 store={store} assets={project.assets} />
+        <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} />
       </div>
     </div>
   );

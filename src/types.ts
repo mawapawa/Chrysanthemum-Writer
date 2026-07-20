@@ -306,6 +306,7 @@ export interface VNProject {
   overlays?: OverlayDef[];
   keyMappings?: KeyMapping[];
   assets?: ProjectAsset[];
+  uiLayouts?: UILayoutCollection;
 }
 
 export type WidgetType = "container" | "text" | "image" | "statText" | "statBar" | "button" | "choiceList" | "portrait" | "inventory" | "divider" | "borderBox" | "repeater" | "inspector";
@@ -461,6 +462,16 @@ export type RenderProperties = TextStyleProps | ButtonStyleProps | ContainerStyl
 
 export interface ElementEvents {
   onButtonAction?: (action: string) => void;
+}
+
+// ─── UI Layout Collection (project-owned UI screens) ────────────
+
+export const UI_SCREENS = ["dialogue", "menu", "inventory", "status", "custom"] as const;
+export type UIScreen = (typeof UI_SCREENS)[number];
+
+export interface UILayoutCollection {
+  screens: Record<string, UIElementV2[]>;
+  activeScreen?: string;
 }
 
 // ─── New Layout Engine Types (v2, alongside existing types) ─────

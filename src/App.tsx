@@ -568,7 +568,7 @@ export default function App() {
   }
 
   if (showUIEditor) {
-    return <EditorV2 onBack={() => setShowUIEditor(false)} />;
+    return <EditorV2 project={project} onUpdateProject={handleUpdateProject} onBack={() => setShowUIEditor(false)} />;
   }
 
   return (
