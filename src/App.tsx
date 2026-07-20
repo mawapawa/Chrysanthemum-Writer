@@ -567,7 +567,7 @@ export default function App() {
   }
 
   const DEV_VERTICAL_SLICE = false;
-  const DEV_EDITOR_V2 = true;
+  const DEV_EDITOR_V2 = false;
 
   if (DEV_EDITOR_V2) {
     return <EditorV2 />;
