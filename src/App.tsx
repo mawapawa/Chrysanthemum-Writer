@@ -19,6 +19,7 @@ import {
   Package, Users, Layers, BookOpen, Settings, Pencil, Clock, BarChart3
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
+import { VerticalSlice } from "./dev/VerticalSlice";
 import { useDriveSync } from "./hooks/useDriveSync";
 import { useAuth } from "./hooks/useAuth";
 import { tryHandleOAuthRedirect } from "./services/auth";
@@ -562,6 +563,12 @@ export default function App() {
         <div className="text-slate-400 text-sm font-mono animate-pulse">Loading<span className="animate-pulse">...</span></div>
       </div>
     );
+  }
+
+  const DEV_VERTICAL_SLICE = true;
+
+  if (DEV_VERTICAL_SLICE) {
+    return <VerticalSlice />;
   }
 
   return (

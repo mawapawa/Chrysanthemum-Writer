@@ -403,6 +403,151 @@ export interface WidgetSettings {
   stateFilterValue?: string;
 }
 
+// ─── Binding Evaluator Types ────────────────────────────────────
+
+export interface ResolvedBindings {
+  visible: boolean;
+  stateFilter: Record<string, any>; // CSS filter properties
+  text: string;            // interpolated textTemplate
+}
+
+// ─── Binding Context ────────────────────────────────────────────
+
+export interface BindingContext {
+  vars?: Record<string, any>;       // tracker/flag values
+  dialogueText?: string;             // current line text
+  dialogueSpeaker?: string;
+  dialogueFormattedText?: string;
+}
+
+// ─── Render Properties ──────────────────────────────────────────
+
+export interface TextStyleProps {
+  type: 'text';
+  content: string;
+  fontSize: string;
+  color: string;
+  align: 'left' | 'center' | 'right';
+  fontStyle?: string;
+  fontWeight?: number;
+  lineHeight?: number;
+  isDialogueBox: boolean;
+  formattedText?: string;
+}
+
+export type RenderProperties = TextStyleProps;
+
+// ─── New Layout Engine Types (v2, alongside existing types) ─────
+
+export type LayoutModeV2 = 'freeform' | 'row' | 'column' | 'grid';
+
+export interface FreeformLayoutV2 {
+  mode: 'freeform';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
+}
+
+export interface RowLayoutV2 {
+  mode: 'row';
+  grow: number;
+  shrink: number;
+  basis: number;
+  align?: 'start' | 'center' | 'end' | 'stretch';
+}
+
+export interface ColumnLayoutV2 {
+  mode: 'column';
+  grow: number;
+  shrink: number;
+  basis: number;
+  align?: 'start' | 'center' | 'end' | 'stretch';
+}
+
+export interface GridLayoutV2 {
+  mode: 'grid';
+  column: number;
+  row: number;
+  columnSpan: number;
+  rowSpan: number;
+}
+
+export type LayoutV2 = FreeformLayoutV2 | RowLayoutV2 | ColumnLayoutV2 | GridLayoutV2;
+
+export interface TransformV2 {
+  zIndex: number;
+}
+
+export interface ConstraintsV2 {
+  horizontal?: 'stretch' | 'center';
+  vertical?: 'stretch' | 'center';
+}
+
+export interface BindingsV2 {
+  showIfSource?: string;
+  showIfOperator?: string;
+  showIfValue?: string;
+  stateFilterStyle?: 'none' | 'grayscale' | 'low-opacity' | 'blur';
+  stateFilterSource?: string;
+  stateFilterOperator?: string;
+  stateFilterValue?: string;
+  textTemplate?: string;
+}
+
+export interface StyleV2 {
+  opacity?: number;
+  borderRadius?: string;
+  borderWidth?: string;
+  borderColor?: string;
+  borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none';
+  bgColor?: string;
+}
+
+export interface UIElementV2 {
+  id: string;
+  parentId?: string;
+  type: WidgetType;
+  layout: LayoutV2;
+  transform: TransformV2;
+  style: StyleV2;
+  constraints?: ConstraintsV2;
+  bindings: BindingsV2;
+  properties: Record<string, any>;  // widget-type-specific (renamed from "settings")
+}
+
+// ComputedLayout — the pure output of the layout engine, consumed by renderers
+export interface ComputedLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  zIndex: number;
+  opacity: number;
+  borderRadius: string;
+  borderWidth: string;
+  borderColor: string;
+  borderStyle: string;
+  clip: boolean;
+}
+
+export interface OverlayDefV2 {
+  id: string;
+  name: string;
+  elements: UIElementV2[];
+  settings: {
+    closeOnClickOutside: boolean;
+    transition: 'fade' | 'slideUp' | 'none';
+    backgroundColor: string;
+  };
+}
+
+// ─── Existing types below ───────────────────────────────────────
+
 export interface KeyMapping {
   key: string;
   action: string;
