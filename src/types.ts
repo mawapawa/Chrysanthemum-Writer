@@ -448,7 +448,14 @@ export interface ContainerStyleProps {
   direction?: 'row' | 'column';
 }
 
-export type RenderProperties = TextStyleProps | ButtonStyleProps | ContainerStyleProps;
+export interface ImageStyleProps {
+  type: 'image';
+  assetId?: string;
+  source: string;
+  fit: 'contain' | 'cover' | 'stretch';
+}
+
+export type RenderProperties = TextStyleProps | ButtonStyleProps | ContainerStyleProps | ImageStyleProps;
 
 // ─── Element Events ─────────────────────────────────────────────
 

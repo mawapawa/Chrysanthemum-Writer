@@ -1,5 +1,5 @@
 import React from "react";
-import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ContainerStyleProps, ElementEvents } from "../types";
+import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ContainerStyleProps, ImageStyleProps, ElementEvents } from "../types";
 
 // ─── TextWidgetV2 — pure renderer, receives only props ──
 
@@ -45,6 +45,28 @@ function TextWidgetV2(props: TextStyleProps) {
         </span>
       )}
     </div>
+  );
+}
+
+// ─── ImageWidgetV2 — pure renderer ──────────────────────────────
+
+function ImageWidgetV2(props: ImageStyleProps) {
+  if (!props.source) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b", fontSize: 10, fontStyle: "italic" }}>
+        No image set
+      </div>
+    );
+  }
+  const bgSize = props.fit === "stretch" ? "100% 100%" : props.fit === "contain" ? "contain" : "cover";
+  return (
+    <div style={{
+      width: "100%", height: "100%",
+      backgroundImage: `url(${props.source})`,
+      backgroundSize: bgSize,
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    }} />
   );
 }
 
@@ -125,7 +147,9 @@ export function ElementRenderer({ computed, computedStyle, renderProps, events }
         );
       }
       case "container":
-        return null; // children rendered by pipeline via parentId
+        return null;
+      case "image":
+        return <ImageWidgetV2 {...(renderProps as ImageStyleProps)} />;
       default:
         return <div style={{ color: "#94a3b8", fontSize: "10px", padding: 4 }}>Unknown</div>;
     }

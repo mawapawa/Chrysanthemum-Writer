@@ -1,4 +1,4 @@
-import type { UIElementV2, ResolvedBindings, RenderProperties, BindingContext, TextStyleProps, ButtonStyleProps, ContainerStyleProps } from "../types";
+import type { UIElementV2, ResolvedBindings, RenderProperties, BindingContext, TextStyleProps, ButtonStyleProps, ContainerStyleProps, ImageStyleProps, ProjectAsset } from "../types";
 
 function resolveTextProps(
   element: UIElementV2,
@@ -34,6 +34,21 @@ function resolveContainerProps(element: UIElementV2): ContainerStyleProps {
   };
 }
 
+function resolveImageProps(
+  element: UIElementV2,
+  assets?: ProjectAsset[]
+): ImageStyleProps {
+  const p = element.properties;
+  const assetId = (p.assetId as string) || (p.src as string) || "";
+  const asset = assets?.find(a => a.id === assetId);
+  return {
+    type: "image",
+    assetId,
+    source: asset?.source ?? assetId,
+    fit: (p.fit as "contain" | "cover" | "stretch") ?? "cover",
+  };
+}
+
 function resolveButtonProps(
   element: UIElementV2,
   bindings: ResolvedBindings
@@ -50,7 +65,8 @@ function resolveButtonProps(
 export function resolveProperties(
   element: UIElementV2,
   bindings: ResolvedBindings,
-  context?: BindingContext
+  context?: BindingContext,
+  assets?: ProjectAsset[]
 ): RenderProperties {
   switch (element.type) {
     case "text":
@@ -59,6 +75,8 @@ export function resolveProperties(
       return resolveButtonProps(element, bindings);
     case "container":
       return resolveContainerProps(element);
+    case "image":
+      return resolveImageProps(element, assets);
     default:
       return {
         type: "text",

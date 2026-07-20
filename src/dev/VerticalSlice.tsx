@@ -116,7 +116,7 @@ function TestCard({ name, legacyConfig, v2Elements, runtime, context, assets }: 
               if (!comp) return null;
               const bindings = evaluateBindings(el, context);
               if (!bindings.visible) return null;
-              const rp = resolveProperties(el, bindings, context);
+              const rp = resolveProperties(el, bindings, context, assets);
               const cs = resolveStyle(el.style, assets);
               return <ElementRenderer key={el.id} computed={comp} computedStyle={cs} renderProps={rp} />;
             })}

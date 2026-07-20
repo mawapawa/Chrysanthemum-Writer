@@ -315,8 +315,21 @@ export const testCases = Object.freeze([
   } satisfies TestCase),
 
   // 14 — Image background appearance (asset reference)
+  // 14a — Image element (basic)
   Object.freeze({
-    name: "14 — Image background appearance",
+    name: "14a — Image element",
+    legacyConfig: { id: "t14a", type: "image", x: 10, y: 10, w: 200, h: 150, settings: { src: "test_portrait.png", fit: "cover" } },
+    v2Elements: [{ id: "t14a", type: "image",
+      layout: { mode: "freeform", x: 10, y: 10, width: 200, height: 150 },
+      transform: { zIndex: 0 }, style: {}, bindings: {},
+      properties: { assetId: "asset_portrait", fit: "cover" },
+    } satisfies UIElementV2],
+    runtime: baseRuntime, context: baseContext,
+    assets: [{ id: "asset_portrait", name: "portrait", type: "image", source: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", width: 1, height: 1 }],
+  } satisfies TestCase),
+
+  Object.freeze({
+    name: "14b — Image background appearance",
     legacyConfig: legacyText("t14", 10, 10, 300, 80, { content: "Image bg" }),
     v2Elements: [v2Text("t14", 10, 10, 300, 80, {
       properties: { textType: "custom", fontSize: "14px", color: "#fff", align: "left" },

@@ -34,7 +34,7 @@ export function renderV2(
     const bindings = evaluateBindings(el, context);
     if (!bindings.visible) continue;
 
-    const renderProps = resolveProperties(el, bindings, context);
+    const renderProps = resolveProperties(el, bindings, context, assets);
     const computedStyle = resolveStyle(el.style, assets);
     results.push(
       <ElementRenderer key={el.id} computed={computed} computedStyle={computedStyle} renderProps={renderProps} events={events} />
