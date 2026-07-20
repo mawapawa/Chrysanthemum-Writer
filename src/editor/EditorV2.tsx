@@ -556,7 +556,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
       <div style={{ display: "flex", gap: 4, padding: "5px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a", alignItems: "center" }}>
         <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginRight: 4 }}>Add</span>
         {vnComponentList.map(c => (
-          <button key={c.type} onClick={() => { const els = c.create(30 + Math.random() * 100, 30 + Math.random() * 100); els.forEach(el => store.add(el)); }}
+          <button key={c.type} onClick={() => { const els = c.create(0, 0); els.forEach(el => store.add(el)); }}
             style={{ padding: "3px 10px", fontSize: 11, fontFamily: "monospace", background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 6, cursor: "pointer" }}>
             {c.icon} {c.label}
           </button>
