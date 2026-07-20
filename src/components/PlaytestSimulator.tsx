@@ -630,8 +630,8 @@ export default function PlaytestSimulator({
   return (
     <div className="h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 divide-y md:divide-y-0 md:divide-x divide-slate-800" id="vn-player-screen">
       
-      {/* Left variables registry bar */}
-      <div className="md:w-72 glass-card p-5 flex flex-col overflow-y-auto" id="vn-player-sidebar">
+      {/* Left variables registry bar — hidden during UI edit */}
+      <div className={`${showUIEditor ? "hidden" : "md:w-72"} glass-card p-5 flex flex-col overflow-y-auto`} id="vn-player-sidebar">
         <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <Sliders className="w-4 h-4 text-emerald-400 animate-pulse" />
