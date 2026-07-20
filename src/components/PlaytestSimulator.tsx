@@ -20,6 +20,7 @@ import {
 import { dateToTicks, ticksToTime } from "../utils/timeEngine";
 import SaveLoadDialog from "./SaveLoadDialog";
 import type { SaveData } from "../types";
+import { GameUIRenderer } from "../widgets/renderGameUI";
 
 interface PlaytestSimulatorProps {
   project: VNProject;
@@ -1030,7 +1031,75 @@ export default function PlaytestSimulator({
             </div>
           ) : (
             <>
-            {project.dashboardLayout?.length && (
+            {(() => {
+              const v2Elements = project.uiLayouts?.screens?.dialogue;
+              if (v2Elements && v2Elements.length > 0) {
+                return (
+                  <GameUIRenderer
+                    screen="dialogue"
+                    project={project}
+                    ctx={{
+                      currentNodeId,
+                      dialogueText: activeLine?.text,
+                      dialogueSpeaker: activeLine?.speaker,
+                      dialogueFormattedText: activeLine?.formattedText ? expandWiggleSpans(activeLine.formattedText) : undefined,
+                      lineIdx, totalLines, hasDialogue,
+                      choices: widgetChoices,
+                      showContinue: !showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && !!node.continueToNodeId && !!project.nodes[node.continueToNodeId],
+                      vars: runtimeVars,
+                      inventory: playerInventory,
+                      onSelectChoice: (choiceId) => {
+                        const choice = node.choices.find(c => c.id === choiceId);
+                        if (choice) handleSelectChoice(choice);
+                      },
+                      onButtonAction: (action) => {
+                        const showContinue = !showEndingNow && (!hasDialogue || lineIdx === totalLines - 1) && availableChoices.length === 0 && !!node.continueToNodeId && !!project.nodes[node.continueToNodeId];
+                        if (action === "next" && hasDialogue && lineIdx < totalLines - 1) setLineIdx(lineIdx + 1);
+                        else if (action === "continue" && showContinue && node.continueToNodeId) {
+                          setHistory(prev => [...prev, { nodeId: currentNodeId, variables: { ...vars } }]);
+                          const next = project.nodes[node.continueToNodeId!];
+                          if (next) { setCurrentNodeId(node.continueToNodeId!); setLineIdx(0); processNodeBlocks(next, vars, playerInventory); }
+                        }
+                        else if (action === "save") setShowSaveDialog(true);
+                        else if (action === "load") setShowLoadDialog(true);
+                        else if (action === "rollback" && history.length > 0) handleBack();
+                        else if (action === "quit") onExit();
+                        else if (action.startsWith("goto_node:")) {
+                          const nid = action.slice("goto_node:".length);
+                          if (project.nodes[nid]) { setCurrentNodeId(nid); setLineIdx(0); }
+                        }
+                        else if (action.startsWith("open_overlay:")) setActiveOverlayId(action.slice("open_overlay:".length));
+                        else if (action === "close_overlay") setActiveOverlayId(null);
+                        else if (action.startsWith("use_item:")) handleUseItem(action.slice("use_item:".length));
+                        else if (action.startsWith("equip_item:")) handleEquipItem(action.slice("equip_item:".length));
+                        else if (action.startsWith("inspect_item:")) handleInspectItem(action.slice("inspect_item:".length));
+                      },
+                      onNextLine: () => { if (lineIdx < totalLines - 1) setLineIdx(lineIdx + 1); },
+                      onPrevLine: () => { if (lineIdx > 0) setLineIdx(lineIdx - 1); },
+                      onContinue: () => {
+                        if (node.continueToNodeId) {
+                          setHistory(prev => [...prev, { nodeId: currentNodeId, variables: { ...vars } }]);
+                          const next = project.nodes[node.continueToNodeId!];
+                          if (next) { setCurrentNodeId(node.continueToNodeId!); setLineIdx(0); processNodeBlocks(next, vars, playerInventory); }
+                        }
+                      },
+                      onOpenSave: () => setShowSaveDialog(true),
+                      onOpenLoad: () => setShowLoadDialog(true),
+                      onOpenOverlay: (oid) => setActiveOverlayId(oid),
+                      onCloseOverlay: () => setActiveOverlayId(null),
+                      onGoToNode: (nid) => { if (project.nodes[nid]) { setCurrentNodeId(nid); setLineIdx(0); } },
+                      onRollback: () => { if (history.length > 0) handleBack(); },
+                      onQuit: () => onExit(),
+                      onInspectItem: handleInspectItem,
+                      onUseItem: handleUseItem,
+                      onEquipItem: handleEquipItem,
+                    }}
+                  />
+                );
+              }
+              return null;
+            })()}
+            {project.dashboardLayout?.length && !(project.uiLayouts?.screens?.dialogue?.length) && (
               <div className="w-full">
                 <WidgetPlaytestView
                   project={project}

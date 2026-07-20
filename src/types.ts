@@ -458,6 +458,45 @@ export interface ImageStyleProps {
 
 export type RenderProperties = TextStyleProps | ButtonStyleProps | ContainerStyleProps | ImageStyleProps;
 
+// ─── UI Runtime Context (for playtest integration) ──────────────
+
+export interface ChoiceItem {
+  id: string;
+  text: string;
+  targetNodeTitle?: string;
+  passed: boolean;
+  statChanges?: { variableName: string; operation: string; value: string | number | boolean }[];
+}
+
+export interface UIRuntimeContext {
+  currentNodeId: string;
+  dialogueText?: string;
+  dialogueSpeaker?: string;
+  dialogueFormattedText?: string;
+  lineIdx: number;
+  totalLines: number;
+  hasDialogue: boolean;
+  choices: ChoiceItem[];
+  showContinue: boolean;
+  vars: Record<string, any>;
+  inventory: string[];
+  onSelectChoice?: (choiceId: string) => void;
+  onButtonAction?: (action: string) => void;
+  onNextLine?: () => void;
+  onPrevLine?: () => void;
+  onContinue?: () => void;
+  onOpenSave?: () => void;
+  onOpenLoad?: () => void;
+  onOpenOverlay?: (overlayId: string) => void;
+  onCloseOverlay?: () => void;
+  onGoToNode?: (nodeId: string) => void;
+  onInspectItem?: (itemId: string) => void;
+  onUseItem?: (itemId: string) => void;
+  onEquipItem?: (itemId: string) => void;
+  onRollback?: () => void;
+  onQuit?: () => void;
+}
+
 // ─── Element Events ─────────────────────────────────────────────
 
 export interface ElementEvents {
