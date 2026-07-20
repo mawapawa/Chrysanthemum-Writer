@@ -305,6 +305,7 @@ export interface VNProject {
   dashboardLayout?: WidgetConfig[];
   overlays?: OverlayDef[];
   keyMappings?: KeyMapping[];
+  assets?: ProjectAsset[];
 }
 
 export type WidgetType = "container" | "text" | "image" | "statText" | "statBar" | "button" | "choiceList" | "portrait" | "inventory" | "divider" | "borderBox" | "repeater" | "inspector";
@@ -457,6 +458,36 @@ export interface ElementEvents {
 
 // ─── New Layout Engine Types (v2, alongside existing types) ─────
 
+// ─── Asset Types ────────────────────────────────────────────────
+
+export interface ProjectAsset {
+  id: string;
+  name: string;
+  type: 'image';
+  source: string;
+  width?: number;
+  height?: number;
+}
+
+export type FitMode = 'stretch' | 'fit' | 'fill' | 'tile' | 'center';
+
+export interface NineSlice {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface AppearanceAsset {
+  type: 'default' | 'color' | 'image';
+  assetId?: string;
+  backgroundColor?: string;
+  fitMode?: FitMode;
+  nineSlice?: NineSlice;
+}
+
+// ─── Layout Types ───────────────────────────────────────────────
+
 export type LayoutModeV2 = 'freeform' | 'row' | 'column' | 'grid';
 
 export interface FreeformLayoutV2 {
@@ -518,15 +549,16 @@ export interface BindingsV2 {
 
 export interface StyleV2 {
   opacity?: number;
-  padding?: string;       // CSS shorthand e.g. "8px" or "8px 12px"
-  margin?: string;        // CSS shorthand
-  background?: string;    // CSS background value e.g. "#1e293b" or "linear-gradient(...)"
-  boxShadow?: string;     // CSS box-shadow
+  padding?: string;
+  margin?: string;
+  appearance?: AppearanceAsset;
+  background?: string;      // CSS shorthand — kept for direct overrides
+  boxShadow?: string;
   borderRadius?: string;
   borderWidth?: string;
   borderColor?: string;
   borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none';
-  bgColor?: string;       // legacy shortcut for background color
+  bgColor?: string;         // legacy shortcut
 }
 
 export interface UIElementV2 {

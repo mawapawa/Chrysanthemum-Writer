@@ -2,12 +2,15 @@ import type { WidgetConfig, WidgetType } from "../types";
 import type { UIElementV2, BindingContext } from "../types";
 import type { WidgetRuntimeProps } from "../widgets/index";
 
+import type { ProjectAsset } from "../types";
+
 export interface TestCase {
   name: string;
   legacyConfig: WidgetConfig;
   v2Elements: UIElementV2[];
   runtime?: WidgetRuntimeProps;
   context?: BindingContext;
+  assets?: ProjectAsset[];
 }
 
 // Shared runtime values used across test cases
@@ -296,6 +299,33 @@ export const testCases = Object.freeze([
     v2Elements: [v2Button("t12", 10, 10, 200, 50)],
     runtime: baseRuntime,
     context: baseContext,
+  } satisfies TestCase),
+
+  // 13 — Color background appearance
+  Object.freeze({
+    name: "13 — Color background appearance",
+    legacyConfig: legacyText("t13", 10, 10, 300, 80, { content: "Color bg", bgColor: "#1e293b" }),
+    v2Elements: [v2Text("t13", 10, 10, 300, 80, {
+      properties: { textType: "custom", fontSize: "14px", color: "#fff", align: "left" },
+      bindings: { textTemplate: "Color bg" },
+      style: { appearance: { type: "color", backgroundColor: "#1e293b" } },
+    })],
+    runtime: baseRuntime,
+    context: baseContext,
+  } satisfies TestCase),
+
+  // 14 — Image background appearance (asset reference)
+  Object.freeze({
+    name: "14 — Image background appearance",
+    legacyConfig: legacyText("t14", 10, 10, 300, 80, { content: "Image bg" }),
+    v2Elements: [v2Text("t14", 10, 10, 300, 80, {
+      properties: { textType: "custom", fontSize: "14px", color: "#fff", align: "left" },
+      bindings: { textTemplate: "Image bg" },
+      style: { appearance: { type: "image", assetId: "asset_panel", fitMode: "stretch" } },
+    })],
+    runtime: baseRuntime,
+    context: baseContext,
+    assets: [{ id: "asset_panel", name: "panel", type: "image", source: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", width: 1, height: 1 }],
   } satisfies TestCase),
 ]);
 

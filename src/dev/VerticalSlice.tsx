@@ -39,12 +39,13 @@ function shallowCompare(a: any, b: any, keys: string[]): { key: string; pass: bo
 
 // ─── Single test case card ───────────────────────────────────────
 
-function TestCard({ name, legacyConfig, v2Elements, runtime, context }: {
+function TestCard({ name, legacyConfig, v2Elements, runtime, context, assets }: {
   name: string;
   legacyConfig: WidgetConfig;
   v2Elements: UIElementV2[];
   runtime?: WidgetRuntimeProps;
   context?: BindingContext;
+  assets?: import("../types").ProjectAsset[];
 }) {
   const [showPipeline, setShowPipeline] = useState(false);
   const [showSources, setShowSources] = useState(false);
@@ -116,7 +117,7 @@ function TestCard({ name, legacyConfig, v2Elements, runtime, context }: {
               const bindings = evaluateBindings(el, context);
               if (!bindings.visible) return null;
               const rp = resolveProperties(el, bindings, context);
-              const cs = resolveStyle(el.style);
+              const cs = resolveStyle(el.style, assets);
               return <ElementRenderer key={el.id} computed={comp} computedStyle={cs} renderProps={rp} />;
             })}
             {snapshot.bindings?.visible === false && (
