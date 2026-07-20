@@ -40,6 +40,16 @@ function isVarDefined(key: string, runtimeValues?: Record<string, any>): { defin
   return { defined: false, value: undefined };
 }
 
+// Normalize comparison: handles boolean vs "1"/"0"/"true"/"false" mismatches
+function valuesMatch(a: any, b: any): boolean {
+  if (String(a) === String(b)) return true;
+  const na = Number(a); const nb = Number(b);
+  if (!Number.isNaN(na) && !Number.isNaN(nb) && na === nb) return true;
+  if (typeof a === "boolean" && (b === "true" || b === "1") && a) return true;
+  if (typeof a === "boolean" && (b === "false" || b === "0") && !a) return true;
+  return false;
+}
+
 function interpolateText(text: string, values?: Record<string, any>): string {
   return text.replace(/\[(\w+)\]/g, (_, name) => {
     if (values?.[name] !== undefined) return String(values[name]);
@@ -663,8 +673,8 @@ function checkShowIf(settings: Record<string, any>, runtimeValues?: Record<strin
   const actual = rv.value;
   if (operator === "exists") return kind === "flag" ? Boolean(actual) : actual !== undefined;
   if (value === undefined) return false;
-  if (operator === "==") return String(actual) === String(value);
-  if (operator === "!=") return String(actual) !== String(value);
+  if (operator === "==") return valuesMatch(actual, value);
+  if (operator === "!=") return !valuesMatch(actual, value);
   const numVal = Number(value);
   const numActual = Number(actual);
   if (operator === ">=") return numActual >= numVal;
@@ -688,8 +698,8 @@ function getStateFilterStyle(settings: Record<string, any>, runtimeValues?: Reco
   if (actual === undefined) return {};
   let matched = false;
   if (operator === "exists") matched = kind === "flag" ? Boolean(actual) : actual !== undefined;
-  else if (operator === "==") matched = String(actual) === String(value);
-  else if (operator === "!=") matched = String(actual) !== String(value);
+  else if (operator === "==") matched = valuesMatch(actual, value);
+  else if (operator === "!=") matched = !valuesMatch(actual, value);
   else {
     const n = Number(actual); const v = Number(value);
     if (operator === ">=") matched = n >= v; else if (operator === "<=") matched = n <= v;
