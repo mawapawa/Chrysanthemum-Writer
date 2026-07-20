@@ -270,98 +270,140 @@ function CanvasV2({ store, assets }: {
   );
 }
 
-// ─── InspectorV2 (placeholder) ───────────────────────────────────
+// ─── InspectorV2 ─────────────────────────────────────────────────
+
+const inspInput: React.CSSProperties = {
+  width: "100%", padding: "4px 6px", fontSize: 11, fontFamily: "monospace",
+  background: "#0f172a", color: "#e2e8f0", border: "1px solid #334155",
+  borderRadius: 4, outline: "none", boxSizing: "border-box",
+};
+
+function InspectSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, borderBottom: "1px solid #1e293b", paddingBottom: 4 }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function InspectField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ color: "#64748b", fontSize: 10, marginBottom: 2 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
 
 function InspectorV2({ store, assets, project, onUpdateProject }: {
   store: ElementStore; assets?: ProjectAsset[]; project?: VNProject; onUpdateProject?: (p: VNProject) => void;
 }) {
   const sel = store.selectedId ? store.getById(store.selectedId) : null;
   const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick(n => n + 1), 200);
-    return () => clearInterval(id);
-  }, []);
+  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 200); return () => clearInterval(id); }, []);
 
-  if (!sel) {
-    return (
-      <div style={{ width: 240, padding: 12, color: "#475569", fontSize: 10, fontStyle: "italic" }}>
-        Select an element to inspect
-      </div>
-    );
-  }
+  if (!sel) return <div style={{ width: 260, padding: 12, color: "#475569", fontSize: 10, fontStyle: "italic" }}>Select an element</div>;
 
-  const setProp = (key: string, value: any) => {
-    store.update(sel.id, { properties: { ...sel.properties, [key]: value } });
+  const sp = (k: string, v: any) => store.update(sel.id, { properties: { ...sel.properties, [k]: v } });
+  const sb = (k: string, v: any) => store.update(sel.id, { bindings: { ...sel.bindings, [k]: v } });
+  const ss = (k: string, v: any) => store.update(sel.id, { style: { ...sel.style, [k]: v } });
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !project || !onUpdateProject) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const id = `asset_${Date.now()}`;
+      onUpdateProject({ ...project, assets: [...(project.assets ?? []), { id, name: file.name, type: "image" as const, source: reader.result as string }], lastModified: Date.now() });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
-  const setBind = (key: string, value: any) => {
-    store.update(sel.id, { bindings: { ...sel.bindings, [key]: value } });
-  };
-
-  const bindProps: Record<string, React.ReactNode> = {};
-
-  // Content section — type-specific
-  if (sel.type === "text") {
-    bindProps["Content"] = (
-      <input value={sel.properties.textType ?? "custom"} onChange={e => setProp("textType", e.target.value)}
-        style={inputStyle} placeholder="textType" />
-    );
-    bindProps["Text"] = (
-      <input value={(sel.bindings.textTemplate ?? "") as string} onChange={e => setBind("textTemplate", e.target.value)}
-        style={inputStyle} placeholder="Text content" />
-    );
-    bindProps["Font Size"] = (
-      <input value={(sel.properties.fontSize ?? "") as string} onChange={e => setProp("fontSize", e.target.value)}
-        style={inputStyle} placeholder="e.g. 14px" />
-    );
-  } else if (sel.type === "button") {
-    bindProps["Label"] = (
-      <input value={(sel.bindings.textTemplate ?? "") as string} onChange={e => setBind("textTemplate", e.target.value)}
-        style={inputStyle} placeholder="Button label" />
-    );
-    bindProps["Action"] = (
-      <input value={(sel.properties.buttonAction ?? "") as string} onChange={e => setProp("buttonAction", e.target.value)}
-        style={inputStyle} placeholder="custom" />
-    );
-  } else if (sel.type === "image") {
-    bindProps["Asset ID"] = (
-      <input value={(sel.properties.assetId ?? "") as string} onChange={e => setProp("assetId", e.target.value)}
-        style={inputStyle} placeholder="asset_id" />
-    );
-  } else if (sel.type === "container") {
-    bindProps["Direction"] = (
-      <select value={(sel.properties.direction ?? "") as string} onChange={e => setProp("direction", e.target.value)}
-        style={inputStyle}>
-        <option value="">Freeform</option>
-        <option value="row">Row</option>
-        <option value="column">Column</option>
-      </select>
-    );
-    bindProps["Gap"] = (
-      <input value={(sel.properties.gap ?? "") as string} onChange={e => setProp("gap", Number(e.target.value))}
-        style={inputStyle} type="number" placeholder="0" />
-    );
-  }
 
   return (
-    <div style={{ width: 240, padding: 12, overflowY: "auto", borderLeft: "1px solid #1e293b" }}>
-      <div style={{ color: "#94a3b8", fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
-        {sel.type} <span style={{ color: "#64748b", fontWeight: 400 }}>{sel.id}</span>
-      </div>
-      {Object.entries(bindProps).map(([label, input]) => (
-        <div key={label} style={{ marginBottom: 8 }}>
-          <div style={{ color: "#64748b", fontSize: 10, marginBottom: 2 }}>{label}</div>
-          {input}
-        </div>
-      ))}
+    <div style={{ width: 260, padding: 12, overflowY: "auto", borderLeft: "1px solid #1e293b" }}>
+      <div style={{ color: "#94a3b8", fontSize: 11, fontWeight: 600, marginBottom: 8 }}>{sel.type} <span style={{ color: "#64748b", fontWeight: 400 }}>{sel.id}</span></div>
+
+      {/* Content */}
+      <InspectSection title="Content">
+        {sel.type === "text" && <>
+          <InspectField label="Text"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
+          <InspectField label="Font Size"><input value={sel.properties.fontSize ?? ""} onChange={e => sp("fontSize", e.target.value)} style={inspInput} placeholder="14px" /></InspectField>
+        </>}
+        {sel.type === "button" && <>
+          <InspectField label="Label"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
+          <InspectField label="Action"><input value={sel.properties.buttonAction ?? ""} onChange={e => sp("buttonAction", e.target.value)} style={inspInput} /></InspectField>
+        </>}
+        {sel.type === "image" && <>
+          <InspectField label="Asset ID"><input value={sel.properties.assetId ?? ""} onChange={e => sp("assetId", e.target.value)} style={inspInput} /></InspectField>
+          <InspectField label="Fit">
+            <select value={sel.properties.fit ?? "cover"} onChange={e => sp("fit", e.target.value)} style={inspInput}>
+              <option value="cover">Cover</option><option value="contain">Contain</option><option value="stretch">Stretch</option>
+            </select>
+          </InspectField>
+        </>}
+        {sel.type === "container" && <>
+          <InspectField label="Direction">
+            <select value={sel.properties.direction ?? ""} onChange={e => sp("direction", e.target.value)} style={inspInput}>
+              <option value="">Freeform</option><option value="row">Row</option><option value="column">Column</option>
+            </select>
+          </InspectField>
+          <InspectField label="Gap"><input value={sel.properties.gap ?? 0} onChange={e => sp("gap", Number(e.target.value))} style={inspInput} type="number" /></InspectField>
+        </>}
+      </InspectSection>
+
+      {/* Appearance */}
+      <InspectSection title="Appearance">
+        <InspectField label="Type">
+          <select value={sel.style.appearance?.type ?? "default"} onChange={e => {
+            const t = e.target.value as "default" | "color" | "image";
+            if (t === "default") ss("appearance", undefined);
+            else if (t === "color") ss("appearance", { type: "color", backgroundColor: "#1e293b" });
+            else ss("appearance", { type: "image", assetId: assets?.[0]?.id ?? "", fitMode: "stretch" });
+          }} style={inspInput}>
+            <option value="default">Default</option><option value="color">Color</option><option value="image">Image</option>
+          </select>
+        </InspectField>
+        {sel.style.appearance?.type === "color" && (
+          <InspectField label="Color"><input value={sel.style.appearance.backgroundColor ?? ""} onChange={e => ss("appearance", { ...sel.style.appearance, backgroundColor: e.target.value })} style={{ ...inspInput, width: 100 }} /></InspectField>
+        )}
+        {sel.style.appearance?.type === "image" && (
+          <>
+            <InspectField label="Asset">
+              <select value={sel.style.appearance.assetId ?? ""} onChange={e => ss("appearance", { ...sel.style.appearance, assetId: e.target.value })} style={inspInput}>
+                <option value="">— Select —</option>{(assets ?? []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </InspectField>
+            <InspectField label="Fit">
+              <select value={sel.style.appearance.fitMode ?? "stretch"} onChange={e => ss("appearance", { ...sel.style.appearance, fitMode: e.target.value as any })} style={inspInput}>
+                <option value="stretch">Stretch</option><option value="fit">Fit</option><option value="fill">Fill</option><option value="tile">Tile</option><option value="center">Center</option>
+              </select>
+            </InspectField>
+          </>
+        )}
+        <InspectField label="Border Radius"><input value={sel.style.borderRadius ?? ""} onChange={e => ss("borderRadius", e.target.value)} style={inspInput} placeholder="8px" /></InspectField>
+        <InspectField label="Box Shadow"><input value={sel.style.boxShadow ?? ""} onChange={e => ss("boxShadow", e.target.value)} style={inspInput} placeholder="0 4px 12px rgba(0,0,0,0.5)" /></InspectField>
+        <InspectField label="Opacity"><input value={sel.style.opacity ?? 1} onChange={e => ss("opacity", Number(e.target.value))} style={{ ...inspInput, width: 60 }} type="number" min={0} max={1} step={0.1} /></InspectField>
+      </InspectSection>
+
+      {/* Assets */}
+      {project && onUpdateProject && (
+        <InspectSection title="Project Assets">
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+            {(assets ?? []).map(a => <span key={a.id} style={{ fontSize: 9, padding: "2px 6px", background: "#1e293b", borderRadius: 4, color: "#94a3b8" }}>{a.name}</span>)}
+          </div>
+          <label style={{ display: "inline-block", padding: "4px 10px", fontSize: 10, fontFamily: "monospace", background: "#6366f1", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
+            + Upload
+            <input type="file" accept="image/*" onChange={handleUpload} style={{ display: "none" }} />
+          </label>
+        </InspectSection>
+      )}
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "4px 8px", fontSize: 11, fontFamily: "monospace",
-  background: "#0f172a", color: "#e2e8f0", border: "1px solid #334155",
-  borderRadius: 4, outline: "none", boxSizing: "border-box",
-};
 
 // ─── EditorV2 Main ───────────────────────────────────────────────
 
