@@ -62,17 +62,6 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
 const HANDLE = 8;
 const SNAP = (v: number) => Math.round(v / 10) * 10;
 
-const H_POS: Record<string, React.CSSProperties> = {
-  nw: { top: -HANDLE/2, left: -HANDLE/2, cursor: "nwse-resize" },
-  n:  { top: -HANDLE/2, left: "50%", marginLeft: -HANDLE/2, cursor: "ns-resize" },
-  ne: { top: -HANDLE/2, right: -HANDLE/2, cursor: "nesw-resize" },
-  w:  { top: "50%", marginTop: -HANDLE/2, left: -HANDLE/2, cursor: "ew-resize" },
-  e:  { top: "50%", marginTop: -HANDLE/2, right: -HANDLE/2, cursor: "ew-resize" },
-  sw: { bottom: -HANDLE/2, left: -HANDLE/2, cursor: "nesw-resize" },
-  s:  { bottom: -HANDLE/2, left: "50%", marginLeft: -HANDLE/2, cursor: "ns-resize" },
-  se: { bottom: -HANDLE/2, right: -HANDLE/2, cursor: "nwse-resize" },
-};
-
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
 function CanvasV2({ store, assets }: {
@@ -197,19 +186,23 @@ function CanvasV2({ store, assets }: {
               width: selectedLayout.width + 2, height: selectedLayout.height + 2,
               border: "1px solid #6366f1", borderRadius: 1, pointerEvents: "none", zIndex: 999,
             }} />
-            {["nw","n","ne","w","e","sw","s","se"].map(d => (
+            {([ 
+              { d: "nw", cx: 0, cy: 0, cur: "nwse-resize" },
+              { d: "n",  cx: 0.5, cy: 0, cur: "ns-resize" },
+              { d: "ne", cx: 1, cy: 0, cur: "nesw-resize" },
+              { d: "w",  cx: 0, cy: 0.5, cur: "ew-resize" },
+              { d: "e",  cx: 1, cy: 0.5, cur: "ew-resize" },
+              { d: "sw", cx: 0, cy: 1, cur: "nesw-resize" },
+              { d: "s",  cx: 0.5, cy: 1, cur: "ns-resize" },
+              { d: "se", cx: 1, cy: 1, cur: "nwse-resize" },
+            ] as const).map(({ d, cx, cy, cur }) => (
               <div key={d} onMouseDown={(e) => handleHandleMouseDown(e, store.selectedId!, d)}
                 style={{
-                  position: "absolute", zIndex: 1000,
+                  position: "absolute", zIndex: 1000, cursor: cur,
                   width: HANDLE, height: HANDLE, boxSizing: "border-box",
                   background: "#fff", border: "2px solid #6366f1", borderRadius: 2,
-                  left: selectedLayout.x + (H_POS[d].left as number ?? 0),
-                  top: selectedLayout.y + (H_POS[d].top as number ?? 0),
-                  right: H_POS[d].right as number ?? undefined,
-                  bottom: H_POS[d].bottom as number ?? undefined,
-                  marginLeft: H_POS[d].marginLeft as number ?? undefined,
-                  marginTop: H_POS[d].marginTop as number ?? undefined,
-                  cursor: H_POS[d].cursor,
+                  left: selectedLayout.x + cx * selectedLayout.width - HANDLE/2,
+                  top: selectedLayout.y + cy * selectedLayout.height - HANDLE/2,
                 }} />
             ))}
           </>
@@ -247,8 +240,9 @@ function InspectField({ label, children }: { label: string; children: React.Reac
   );
 }
 
-function InspectorV2({ store, assets, project, onUpdateProject }: {
+function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
   store: ElementStore; assets?: ProjectAsset[]; project?: VNProject; onUpdateProject?: (p: VNProject) => void;
+  screenNames?: string[];
 }) {
   const sel = store.selectedId ? store.getById(store.selectedId) : null;
   const [, tick] = useState(0);
@@ -290,7 +284,19 @@ function InspectorV2({ store, assets, project, onUpdateProject }: {
         </>}
         {sel.type === "button" && <>
           <InspectField label="Label"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
-          <InspectField label="Action"><input value={sel.properties.buttonAction ?? ""} onChange={e => sp("buttonAction", e.target.value)} style={inspInput} /></InspectField>
+          <InspectField label="Action">
+            <select value={sel.properties.buttonAction ?? "custom"} onChange={e => sp("buttonAction", e.target.value)} style={inspInput}>
+              <option value="custom">Custom</option>
+              <option value="save">Save</option>
+              <option value="load">Load</option>
+              <option value="rollback">Rollback</option>
+              <option value="quit">Quit</option>
+              <option value="close_overlay">Close Overlay</option>
+              {screenNames?.filter(s => !["dialogue","menu","inventory","status","custom"].includes(s)).map(s => (
+                <option key={s} value={`open_hud:${s}`}>Open HUD: {s}</option>
+              ))}
+            </select>
+          </InspectField>
         </>}
         {sel.type === "image" && <>
           <InspectField label="Asset ID"><input value={sel.properties.assetId ?? ""} onChange={e => sp("assetId", e.target.value)} style={inspInput} /></InspectField>
@@ -344,6 +350,14 @@ function InspectorV2({ store, assets, project, onUpdateProject }: {
         <InspectField label="Opacity"><input value={sel.style.opacity ?? 1} onChange={e => ss("opacity", Number(e.target.value))} style={{ ...inspInput, width: 60 }} type="number" min={0} max={1} step={0.1} /></InspectField>
       </InspectSection>
 
+      {/* Layers */}
+      <InspectSection title="Layers">
+        <InspectField label="Z-Index">
+          <input value={sel.transform.zIndex} onChange={e => store.update(sel.id, { transform: { ...sel.transform, zIndex: Number(e.target.value) } })}
+            style={{ ...inspInput, width: 60 }} type="number" />
+        </InspectField>
+      </InspectSection>
+
       {/* Assets */}
       {project && onUpdateProject && (
         <InspectSection title="Project Assets">
@@ -374,21 +388,21 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
 
   const [store, setStore] = useState<ElementStore | null>(null);
 
-  // Rebuild store when elements or screen changes
+  // Initialize store once from project data — never rebuild
   useEffect(() => {
     const s = createElementStore(elements);
-    // Sync store changes back to project whenever elements are modified
+    // Sync store -> project without causing re-render loop
     const unsub = setInterval(() => {
       const current = s.elements;
       const stored = layouts.screens[activeScreen] ?? [];
-      if (current.length !== stored.length || current.some((e, i) => JSON.stringify(e) !== JSON.stringify(stored[i]))) {
+      if (JSON.stringify(current) !== JSON.stringify(stored)) {
         const screens = { ...layouts.screens, [activeScreen]: current };
         onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
       }
-    }, 300);
+    }, 600); // slower sync, only for persistence
     setStore(s);
-    return () => { clearInterval(unsub); setStore(null); };
-  }, [project, activeScreen]);
+    return () => { clearInterval(unsub); };
+  }, [activeScreen]);
 
   // Delete selected element via keyboard
   useEffect(() => {
@@ -447,6 +461,30 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
         )}
       </div>
 
+      {/* New Screen button */}
+      <div style={{ display: "flex", gap: 4, padding: "2px 12px", borderBottom: "1px solid #1e293b", background: "#0f172a" }}>
+        <button onClick={() => {
+          const name = prompt("Screen name:")?.trim().toLowerCase().replace(/\s+/g, "_");
+          if (name && !layouts.screens[name]) {
+            const screens = { ...layouts.screens, [name]: [] };
+            onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
+            setActiveScreen(name);
+          }
+        }}
+          style={{ padding: "2px 10px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#94a3b8", border: "1px dashed #334155", borderRadius: 6, cursor: "pointer" }}>
+          + New Screen
+        </button>
+        {Object.keys(layouts.screens).filter(s => !UI_SCREENS.includes(s as any)).map(name => (
+          <button key={name} onClick={() => setActiveScreen(name)}
+            style={{
+              padding: "2px 8px", fontSize: 9, fontFamily: "monospace",
+              background: activeScreen === name ? "#6366f1" : "transparent",
+              color: activeScreen === name ? "#fff" : "#64748b",
+              border: "none", borderRadius: 4, cursor: "pointer",
+            }}>{name}</button>
+        ))}
+      </div>
+
       {/* Component palette — top toolbar */}
       <div style={{ display: "flex", gap: 4, padding: "5px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a", alignItems: "center" }}>
         <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginRight: 4 }}>Add</span>
@@ -472,7 +510,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <CanvasV2 store={store} assets={project.assets} />
         </div>
-        <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} />
+        <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} screenNames={Object.keys(layouts.screens)} />
       </div>
     </div>
   );
