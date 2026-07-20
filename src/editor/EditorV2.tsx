@@ -173,13 +173,18 @@ function CanvasV2({ store, assets }: {
           <rect width="100%" height="100%" fill="url(#editorv2-dots)" />
         </svg>
 
-        {/* Elements */}
+        {/* Elements — rendered by pipeline, overlaid with transparent hit areas */}
         {renderV2(store.elements, undefined, undefined, assets, 800, 600).map((node, i) => {
           const el = store.elements[i];
           if (!el) return node;
+          const l = layouts.get(el.id);
           return (
-            <div key={el.id} onMouseDown={(e) => handleMouseDown(e, el.id)} style={{ position: "absolute", inset: 0 }}>
+            <div key={el.id}>
               {node}
+              {l && (
+                <div onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, el.id); }}
+                  style={{ position: "absolute", left: l.x, top: l.y, width: l.width, height: l.height, cursor: "move", zIndex: 900 }} />
+              )}
             </div>
           );
         })}
