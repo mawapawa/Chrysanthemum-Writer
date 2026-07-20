@@ -24,31 +24,24 @@ const dialogueBox: VNComponent = {
     const panelId = id("panel");
     const speakerId = id("speaker");
     const textId = id("dialogue");
-    const btnId = id("continueBtn");
     return [
       { id: panelId, type: "container",
-        layout: { mode: "freeform", x, y, width: 500, height: 160 },
+        layout: { mode: "freeform", x, y, width: 500, height: 140 },
         transform: { zIndex: 0 },
         style: { appearance: { type: "color", backgroundColor: "#0f172ae0" }, borderRadius: "12px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
         bindings: {}, properties: {},
       },
       { id: speakerId, type: "text", parentId: panelId,
-        layout: { mode: "freeform", x: 16, y: 12, width: 200, height: 24 },
+        layout: { mode: "freeform", x: 16, y: 10, width: 200, height: 22 },
         transform: { zIndex: 1 },
         style: {}, bindings: { textTemplate: "Speaker" },
-        properties: { textType: "characterName", fontSize: "13px", color: "#818cf8" },
+        properties: { fontSize: "13px", color: "#818cf8" },
       },
       { id: textId, type: "text", parentId: panelId,
-        layout: { mode: "freeform", x: 16, y: 40, width: 468, height: 80 },
+        layout: { mode: "freeform", x: 16, y: 36, width: 468, height: 88 },
         transform: { zIndex: 1 },
-        style: {}, bindings: { textTemplate: "Dialogue text appears here..." },
-        properties: { textType: "dialogue", fontSize: "15px", color: "#e2e8f0" },
-      },
-      { id: btnId, type: "button", parentId: panelId,
-        layout: { mode: "freeform", x: 420, y: 128, width: 64, height: 24 },
-        transform: { zIndex: 1 },
-        style: {}, bindings: { textTemplate: "Next" },
-        properties: { buttonAction: "next" },
+        style: {}, bindings: { textTemplate: "Dialogue text..." },
+        properties: { fontSize: "15px", color: "#e2e8f0" },
       },
     ];
   },

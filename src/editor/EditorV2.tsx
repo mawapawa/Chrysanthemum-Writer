@@ -269,7 +269,13 @@ function InspectorV2({ store, assets, project, onUpdateProject }: {
 
   return (
     <div style={{ width: 260, padding: 12, overflowY: "auto", borderLeft: "1px solid #1e293b" }}>
-      <div style={{ color: "#94a3b8", fontSize: 11, fontWeight: 600, marginBottom: 8 }}>{sel.type} <span style={{ color: "#64748b", fontWeight: 400 }}>{sel.id}</span></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ color: "#94a3b8", fontSize: 11, fontWeight: 600 }}>{sel.type} <span style={{ color: "#64748b", fontWeight: 400 }}>{sel.id}</span></span>
+        <button onClick={() => store.remove(sel.id)}
+          style={{ marginLeft: "auto", padding: "2px 8px", fontSize: 9, fontFamily: "monospace", background: "#7f1d1d", color: "#fca5a5", border: "none", borderRadius: 4, cursor: "pointer" }}>
+          Delete
+        </button>
+      </div>
 
       {/* Content */}
       <InspectSection title="Content">
@@ -378,6 +384,19 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     setStore(s);
     return () => { clearInterval(unsub); setStore(null); };
   }, [project, activeScreen]);
+
+  // Delete selected element via keyboard
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (store && store.selectedId && e.target instanceof HTMLElement && !e.target.closest("input,select,textarea")) {
+          store.remove(store.selectedId);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [store]);
 
   // ── Screen selector ──
   const screenTabs = (
