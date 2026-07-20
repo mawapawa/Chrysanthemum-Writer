@@ -430,10 +430,11 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   }, [project, activeScreen, onUpdateProject]);
 
   const [store, setStore] = useState<ElementStore | null>(null);
+  const [, globalTick] = useState(0);
 
   // Initialize store once from project data — never rebuild
   useEffect(() => {
-    const s = createElementStore(elements);
+    const s = createElementStore(elements, () => globalTick(n => n + 1));
     // Sync store -> project without causing re-render loop
     const unsub = setInterval(() => {
       const current = s.elements;

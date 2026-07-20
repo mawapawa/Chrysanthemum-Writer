@@ -25,13 +25,14 @@ export interface ElementStore {
   moveBefore: (id: string, beforeId: string) => void;
 }
 
-export function createElementStore(initial: UIElementV2[] = []): ElementStore {
+export function createElementStore(initial: UIElementV2[] = [], onChange?: () => void): ElementStore {
   let elements = [...initial];
   let selectedId: string | null = null;
   const listeners = new Set<() => void>();
 
   function notify() {
     listeners.forEach(fn => fn());
+    onChange?.();
   }
 
   const store: ElementStore = {
