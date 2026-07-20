@@ -16,11 +16,11 @@ import { exportToCSV, importFromCSV } from "./utils/localization";
 import { listProjectFiles, loadProject, saveProject, deleteProjectFile, migrateFromLocalStorage, migrateFromOldPath } from "./services/fileStore";
 import { loadProjectFromDrive, scanDriveForProjects } from "./services/drive";
 import {
-  Package, Users, Layers, BookOpen, Settings, Pencil, Clock, BarChart3, Layout
+  Package, Users, Layers, BookOpen, Settings, Pencil, Clock, BarChart3
 } from "lucide-react";
 import SearchPalette from "./components/SearchPalette";
 import { VerticalSlice } from "./dev/VerticalSlice";
-import { EditorV2 } from "./editor/EditorV2";
+
 import { useDriveSync } from "./hooks/useDriveSync";
 import { useAuth } from "./hooks/useAuth";
 import { tryHandleOAuthRedirect } from "./services/auth";
@@ -125,7 +125,7 @@ export default function App() {
   const [centerNodeTrigger, setCenterNodeTrigger] = useState<{ id: string; timestamp: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showUIEditor, setShowUIEditor] = useState(false);
+
 
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -567,10 +567,6 @@ export default function App() {
     );
   }
 
-  if (showUIEditor) {
-    return <EditorV2 project={project} onUpdateProject={handleUpdateProject} onBack={() => setShowUIEditor(false)} />;
-  }
-
   return (
     <div className="h-screen flex flex-col bg-transparent overflow-hidden font-sans text-slate-200" id="app-root-container">
       <header className="glass-header shrink-0 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-20">
@@ -647,12 +643,6 @@ export default function App() {
           </button>
           <button onClick={() => setActiveTab("dashboard")} className={`flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "dashboard" ? "glass-button text-white shadow-xs" : "text-slate-400 hover:text-white"}`}>
             <BarChart3 className="w-4 h-4 text-amber-400" /> Dashboard
-          </button>
-          <div className="w-px h-5 bg-slate-700/50 mx-1" />
-          <button onClick={() => setShowUIEditor(true)}
-            className="flex items-center gap-2 py-1.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer text-indigo-300 hover:bg-indigo-500/10 border border-indigo-500/20"
-            title="Open the Carrd-inspired UI layout editor">
-            <Layout className="w-4 h-4" /> UI Editor
           </button>
         </div>
       </div>
