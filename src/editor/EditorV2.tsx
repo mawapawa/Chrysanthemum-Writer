@@ -99,8 +99,8 @@ const SNAP = (v: number) => Math.round(v / 10) * 10;
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
-function CanvasV2({ store, assets, activeLayer }: {
-  store: ElementStore; assets?: ProjectAsset[]; activeLayer?: string;
+function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
+  store: ElementStore; assets?: ProjectAsset[]; activeLayer?: string; canvasW?: number; canvasH?: number;
 }) {
   const [, tick] = useState(0);
   const dragRef = useRef<{
@@ -189,24 +189,26 @@ function CanvasV2({ store, assets, activeLayer }: {
     if (e.target === e.currentTarget) store.select(null);
   }, [store]);
 
+  const cw = canvasW ?? 1280;
+  const ch = canvasH ?? 720;
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 12, background: "#020617" }}>
-      <div style={{ position: "relative", width: 800, height: 600, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b", overflow: "hidden" }}
+      <div style={{ position: "relative", width: cw, height: ch, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b", overflow: "hidden" }}
         onClick={handleCanvasClick}>
         {/* Dot grid */}
-        <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width={800} height={600}>
+        <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width={cw} height={ch}>
           <defs>
             <pattern id="editorv2-dots" x="0" y="0" width={24} height={24} patternUnits="userSpaceOnUse">
               <circle cx={1.5} cy={1.5} r={1.5} fill="rgba(255,255,255,0.04)" />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#editorv2-dots)" />
+          <rect width={cw} height={ch} fill="url(#editorv2-dots)" />
         </svg>
 
         {/* Elements — rendered by pipeline, overlaid with transparent hit areas */}
         {(() => {
           const visibleElements = store.elements.filter(e => (e.layer ?? "default") === activeLayer);
-          return renderV2(visibleElements, undefined, undefined, assets, 800, 600).map((node, i) => {
+          return renderV2(visibleElements, undefined, undefined, assets, cw, ch).map((node, i) => {
           const el = visibleElements[i];
           if (!el) return node;
           const l = layouts.get(el.id);
@@ -425,9 +427,18 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
 // ─── EditorV2 Main ───────────────────────────────────────────────
 
 export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
+  const RESOLUTIONS = [
+    { label: "800×600 (SVGA)", w: 800, h: 600 },
+    { label: "1024×768 (XGA)", w: 1024, h: 768 },
+    { label: "1280×720 (HD)", w: 1280, h: 720 },
+    { label: "1366×768", w: 1366, h: 768 },
+    { label: "1920×1080 (Full HD)", w: 1920, h: 1080 },
+    { label: "2560×1440 (QHD)", w: 2560, h: 1440 },
+  ];
   const layouts = project.uiLayouts ?? createEmptyLayouts();
   const [activeScreen, setActiveScreen] = useState(layouts.activeScreen ?? "dialogue");
   const [activeLayer, setActiveLayer] = useState("default");
+  const [canvasRes, setCanvasRes] = useState(RESOLUTIONS[2]); // default 1280x720
   const elements = layouts.screens[activeScreen] ?? [];
 
   const saveLayouts = useCallback((screens: Record<string, UIElementV2[]>, screen?: string) => {
@@ -503,8 +514,15 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
               border: "none", cursor: "pointer",
             }}>{name}</button>
         ))}
+        {/* Resolution selector */}
+        <select value={`${canvasRes.w}×${canvasRes.h}`} onChange={e => {
+          const opt = RESOLUTIONS.find(r => `${r.w}×${r.h}` === e.target.value);
+          if (opt) setCanvasRes(opt);
+        }} style={{ marginLeft: "auto", padding: "2px 8px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", borderRadius: 4, cursor: "pointer" }}>
+          {RESOLUTIONS.map(r => <option key={`${r.w}×${r.h}`} value={`${r.w}×${r.h}`}>{r.label}</option>)}
+        </select>
         {onBack && (
-          <button onClick={onBack} style={{ marginLeft: "auto", padding: "3px 12px", fontSize: 10, fontFamily: "monospace", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>
+          <button onClick={onBack} style={{ padding: "3px 12px", fontSize: 10, fontFamily: "monospace", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>
             ← Back
           </button>
         )}
@@ -557,7 +575,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
           <HierarchyPanel store={store} activeLayer={activeLayer} onLayerChange={setActiveLayer} />
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <CanvasV2 store={store} assets={project.assets} activeLayer={activeLayer} />
+          <CanvasV2 store={store} assets={project.assets} activeLayer={activeLayer} canvasW={canvasRes.w} canvasH={canvasRes.h} />
         </div>
         <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} screenNames={Object.keys(layouts.screens)} />
       </div>

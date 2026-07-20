@@ -21,10 +21,10 @@ const container: VNComponent = {
   create(x, y) {
     return [{
       id: id("container"), type: "container",
-      layout: { mode: "freeform", x, y, width: 300, height: 200 },
+      layout: { mode: "column", grow: 1, shrink: 0, basis: 0 },
       transform: { zIndex: 0 },
       style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
-      bindings: {}, properties: {},
+      bindings: {}, properties: { direction: "column", gap: 8, padding: 12 },
     }];
   },
 };
@@ -158,12 +158,29 @@ const choiceList: VNComponent = {
   },
 };
 
+// ─── Freeform Container (opt-in for absolute positioning) ───────
+
+const freeformContainer: VNComponent = {
+  type: "freeformContainer",
+  label: "Freeform Container",
+  icon: "⊞",
+  create(x, y) {
+    return [{
+      id: id("freeform"), type: "container",
+      layout: { mode: "freeform", x, y, width: 400, height: 300 },
+      transform: { zIndex: 0 },
+      style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "dashed" },
+      bindings: {}, properties: {},
+    }];
+  },
+};
+
 // ─── Registry ───────────────────────────────────────────────────
 
 export const vnComponents: Record<string, VNComponent> = {
-  container, text, image, button, stat, dialogueBox, choiceList,
+  container, text, image, button, stat, dialogueBox, choiceList, freeformContainer,
 };
 
 export const vnComponentList: VNComponent[] = [
-  container, text, image, button, stat, dialogueBox, choiceList,
+  container, text, image, button, stat, dialogueBox, choiceList, freeformContainer,
 ];
