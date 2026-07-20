@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, ElementEvents } from "../types";
 import { createElementStore, ElementStore } from "./elementStore";
 import { elementFactories, factoryList } from "../factories/elementFactories";
@@ -102,26 +102,112 @@ function FactoryBar({ store }: { store: ElementStore }) {
   );
 }
 
+// ─── Selection overlay constants ─────────────────────────────────
+
+const HANDLE = 8;
+const SNAP = (v: number) => Math.round(v / 10) * 10;
+
+const H_POS: Record<string, React.CSSProperties> = {
+  nw: { top: -HANDLE/2, left: -HANDLE/2, cursor: "nwse-resize" },
+  n:  { top: -HANDLE/2, left: "50%", marginLeft: -HANDLE/2, cursor: "ns-resize" },
+  ne: { top: -HANDLE/2, right: -HANDLE/2, cursor: "nesw-resize" },
+  w:  { top: "50%", marginTop: -HANDLE/2, left: -HANDLE/2, cursor: "ew-resize" },
+  e:  { top: "50%", marginTop: -HANDLE/2, right: -HANDLE/2, cursor: "ew-resize" },
+  sw: { bottom: -HANDLE/2, left: -HANDLE/2, cursor: "nesw-resize" },
+  s:  { bottom: -HANDLE/2, left: "50%", marginLeft: -HANDLE/2, cursor: "ns-resize" },
+  se: { bottom: -HANDLE/2, right: -HANDLE/2, cursor: "nwse-resize" },
+};
+
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
 function CanvasV2({ store, assets, context, events }: {
   store: ElementStore; assets?: ProjectAsset[]; context?: BindingContext; events?: ElementEvents;
 }) {
   const [, tick] = useState(0);
+  const dragRef = useRef<{
+    elId: string; startX: number; startY: number;
+    mode: 'move' | 'resize'; dir?: string;
+    orig: { x: number; y: number; w: number; h: number };
+  } | null>(null);
+
+  // Force re-render periodically so layouts stay fresh
   useEffect(() => {
     const id = setInterval(() => tick(n => n + 1), 100);
     return () => clearInterval(id);
   }, []);
 
   const layouts = useMemo(() => store.getLayouts(), [store, tick]);
-  const handleClick = useCallback((e: React.MouseEvent) => {
+
+  const selectedLayout = store.selectedId ? layouts.get(store.selectedId) : null;
+
+  // ── Mousedown: start drag or resize ──
+  const handleMouseDown = useCallback((e: React.MouseEvent, elId: string) => {
+    if (e.button !== 0) return;
+    const el = store.getById(elId);
+    if (!el) return;
+    const l = el.layout;
+    if (l.mode !== "freeform") return;
+    store.select(elId);
+    dragRef.current = {
+      elId, startX: e.clientX, startY: e.clientY,
+      mode: 'move',
+      orig: { x: (l as any).x ?? 0, y: (l as any).y ?? 0, w: (l as any).width ?? 100, h: (l as any).height ?? 100 },
+    };
+  }, [store]);
+
+  const handleHandleMouseDown = useCallback((e: React.MouseEvent, elId: string, dir: string) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const el = store.getById(elId);
+    if (!el) return;
+    const l = el.layout;
+    if (l.mode !== "freeform") return;
+    dragRef.current = {
+      elId, startX: e.clientX, startY: e.clientY,
+      mode: 'resize', dir,
+      orig: { x: (l as any).x ?? 0, y: (l as any).y ?? 0, w: (l as any).width ?? 100, h: (l as any).height ?? 100 },
+    };
+  }, [store]);
+
+  // ── Global mousemove / mouseup ──
+  useEffect(() => {
+    const mm = (e: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+
+      if (d.mode === 'move') {
+        const nx = SNAP(Math.max(0, d.orig.x + dx));
+        const ny = SNAP(Math.max(0, d.orig.y + dy));
+        store.update(d.elId, { layout: { mode: "freeform", x: nx, y: ny, width: d.orig.w, height: d.orig.h } });
+      } else if (d.mode === 'resize' && d.dir) {
+        let { x, y, w, h } = d.orig;
+        const sdx = SNAP(dx);
+        const sdy = SNAP(dy);
+        if (d.dir.includes('e')) w = Math.max(20, d.orig.w + sdx);
+        if (d.dir.includes('w')) { x = d.orig.x + sdx; w = Math.max(20, d.orig.w - sdx); }
+        if (d.dir.includes('s')) h = Math.max(20, d.orig.h + sdy);
+        if (d.dir.includes('n')) { y = d.orig.y + sdy; h = Math.max(20, d.orig.h - sdy); }
+        store.update(d.elId, { layout: { mode: "freeform", x, y, width: w, height: h } });
+      }
+    };
+
+    const mu = () => { dragRef.current = null; };
+
+    window.addEventListener("mousemove", mm);
+    window.addEventListener("mouseup", mu);
+    return () => { window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", mu); };
+  }, [store]);
+
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) store.select(null);
   }, [store]);
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 12, background: "#020617" }}>
       <div style={{ position: "relative", width: 800, height: 600, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b", overflow: "hidden" }}
-        onClick={handleClick}>
+        onClick={handleCanvasClick}>
         {/* Dot grid */}
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width={800} height={600}>
           <defs>
@@ -131,7 +217,43 @@ function CanvasV2({ store, assets, context, events }: {
           </defs>
           <rect width="100%" height="100%" fill="url(#editorv2-dots)" />
         </svg>
-        {renderV2(store.elements, context, events, assets, 800, 600)}
+
+        {/* Elements */}
+        {renderV2(store.elements, context, events, assets, 800, 600).map((node, i) => {
+          const el = store.elements[i];
+          if (!el) return node;
+          return (
+            <div key={el.id} onMouseDown={(e) => handleMouseDown(e, el.id)} style={{ position: "absolute", inset: 0 }}>
+              {node}
+            </div>
+          );
+        })}
+
+        {/* Selection overlay */}
+        {selectedLayout && (
+          <>
+            <div style={{
+              position: "absolute", left: selectedLayout.x - 1, top: selectedLayout.y - 1,
+              width: selectedLayout.width + 2, height: selectedLayout.height + 2,
+              border: "1px solid #6366f1", borderRadius: 1, pointerEvents: "none", zIndex: 999,
+            }} />
+            {["nw","n","ne","w","e","sw","s","se"].map(d => (
+              <div key={d} onMouseDown={(e) => handleHandleMouseDown(e, store.selectedId!, d)}
+                style={{
+                  position: "absolute", zIndex: 1000,
+                  width: HANDLE, height: HANDLE, boxSizing: "border-box",
+                  background: "#fff", border: "2px solid #6366f1", borderRadius: 2,
+                  left: selectedLayout.x + (H_POS[d].left as number ?? 0),
+                  top: selectedLayout.y + (H_POS[d].top as number ?? 0),
+                  right: H_POS[d].right as number ?? undefined,
+                  bottom: H_POS[d].bottom as number ?? undefined,
+                  marginLeft: H_POS[d].marginLeft as number ?? undefined,
+                  marginTop: H_POS[d].marginTop as number ?? undefined,
+                  cursor: H_POS[d].cursor,
+                }} />
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
