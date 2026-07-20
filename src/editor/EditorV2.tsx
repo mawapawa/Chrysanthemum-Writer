@@ -73,9 +73,9 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
 
 // ─── Factory Bar ─────────────────────────────────────────────────
 
-function FactoryBar({ store }: { store: ElementStore }) {
+function FactoryBar({ store, onBack }: { store: ElementStore; onBack?: () => void }) {
   return (
-    <div style={{ display: "flex", gap: 6, padding: "6px 8px", borderBottom: "1px solid #1e293b", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 6, padding: "6px 8px", borderBottom: "1px solid #1e293b", flexWrap: "wrap", alignItems: "center" }}>
       {factoryList.map(f => (
         <button key={f.type} onClick={() => store.add(f.create())}
           style={{
@@ -92,10 +92,21 @@ function FactoryBar({ store }: { store: ElementStore }) {
           style={{
             padding: "4px 12px", fontSize: 11, fontFamily: "monospace",
             background: "#1e293b", color: "#f87171", border: "1px solid #334155",
-            borderRadius: 6, cursor: "pointer", marginLeft: "auto",
+            borderRadius: 6, cursor: "pointer",
           }}
         >
           Clear All
+        </button>
+      )}
+      {onBack && (
+        <button onClick={onBack}
+          style={{
+            padding: "4px 12px", fontSize: 11, fontFamily: "monospace",
+            background: "#6366f1", color: "#fff", border: "none",
+            borderRadius: 6, cursor: "pointer", marginLeft: "auto",
+          }}
+        >
+          ← Back
         </button>
       )}
     </div>
@@ -352,7 +363,7 @@ const inputStyle: React.CSSProperties = {
 
 // ─── EditorV2 Main ───────────────────────────────────────────────
 
-export function EditorV2({ initialElements, assets, context, events }: EditorV2Props) {
+export function EditorV2({ initialElements, assets, context, events, onBack }: EditorV2Props & { onBack?: () => void }) {
   const [store] = useState(() => createElementStore(initialElements));
   const [, tick] = useState(0);
 
@@ -363,7 +374,7 @@ export function EditorV2({ initialElements, assets, context, events }: EditorV2P
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
-      <FactoryBar store={store} />
+      <FactoryBar store={store} onBack={onBack} />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div style={{ width: 240, borderRight: "1px solid #1e293b", overflowY: "auto" }}>
           <HierarchyPanel store={store} />
