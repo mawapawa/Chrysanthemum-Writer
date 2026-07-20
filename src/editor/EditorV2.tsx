@@ -455,13 +455,58 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
-      <FactoryBar store={store} onBack={onBack} />
-      {screenTabs}
+      {/* Title bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 12px", borderBottom: "1px solid #1e293b" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          HUD Layout
+        </span>
+        {UI_SCREENS.map(name => (
+          <button key={name} onClick={() => setActiveScreen(name)}
+            style={{
+              padding: "2px 10px", fontSize: 10, fontFamily: "monospace", fontWeight: 600,
+              textTransform: "uppercase", borderRadius: 6,
+              background: activeScreen === name ? "#6366f1" : "transparent",
+              color: activeScreen === name ? "#fff" : "#64748b",
+              border: "none", cursor: "pointer",
+            }}>
+            {name}
+          </button>
+        ))}
+        {onBack && (
+          <button onClick={onBack} style={{ marginLeft: "auto", padding: "3px 12px", fontSize: 10, fontFamily: "monospace", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>
+            ← Back
+          </button>
+        )}
+      </div>
+
+      {/* Content: canvas + inspector side by side */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <div style={{ width: 240, borderRight: "1px solid #1e293b", overflowY: "auto" }}>
-          <HierarchyPanel store={store} />
+        {/* Canvas area */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <CanvasV2 store={store} assets={project.assets} />
+
+          {/* Factory bar (palette) — below canvas, matches V1 position */}
+          <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderTop: "1px solid #1e293b", flexWrap: "wrap", background: "#0f172a" }}>
+            {factoryList.map(f => (
+              <button key={f.type} onClick={() => store.add(f.create())}
+                style={{
+                  padding: "4px 12px", fontSize: 11, fontFamily: "monospace", fontWeight: 600,
+                  background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155",
+                  borderRadius: 6, cursor: "pointer",
+                }}>
+                + {f.label}
+              </button>
+            ))}
+            {store.elements.length > 0 && (
+              <button onClick={() => { store.elements.forEach(e => store.remove(e.id)); }}
+                style={{ padding: "4px 12px", fontSize: 11, fontFamily: "monospace", background: "#1e293b", color: "#f87171", border: "1px solid #334155", borderRadius: 6, cursor: "pointer", marginLeft: "auto" }}>
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
-        <CanvasV2 store={store} assets={project.assets} />
+
+        {/* Inspector panel — right side */}
         <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} />
       </div>
     </div>
