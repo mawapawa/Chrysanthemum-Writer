@@ -178,7 +178,7 @@ function CanvasV2({ store, assets, activeLayer }: {
       }
     };
 
-    const mu = () => { dragRef.current = null; };
+    const mu = () => { dragRef.current = null; lastDragUpdate.current = 0; };
 
     window.addEventListener("mousemove", mm);
     window.addEventListener("mouseup", mu);
