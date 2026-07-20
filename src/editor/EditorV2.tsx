@@ -454,7 +454,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
       <FactoryBar store={store} onBack={onBack} />
       {screenTabs}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

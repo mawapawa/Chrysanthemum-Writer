@@ -21,6 +21,7 @@ import { dateToTicks, ticksToTime } from "../utils/timeEngine";
 import SaveLoadDialog from "./SaveLoadDialog";
 import type { SaveData } from "../types";
 import { GameUIRenderer } from "../widgets/renderGameUI";
+import { EditorV2 } from "../editor/EditorV2";
 
 interface PlaytestSimulatorProps {
   project: VNProject;
@@ -823,7 +824,7 @@ export default function PlaytestSimulator({
         {/* Narrative / Script stage visualization area */}
         <div className="flex-1 flex flex-col justify-start py-4 overflow-y-auto relative" id="vn-player-expressive-stage">
           {showUIEditor ? (
-            <WidgetEditor project={project} onUpdateProject={onUpdateProject} />
+            <EditorV2 project={project} onUpdateProject={onUpdateProject} onBack={() => setShowUIEditor(false)} />
           ) : (
           // If ending node is active (sequential), show giant beautiful ending splashes
            showEndingNow ? (
