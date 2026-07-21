@@ -33,7 +33,7 @@ export function blocksToNode(blocks: SceneBlock[], _existing: StoryNode): Partia
       case "narrative":
         dialogueLines.push({
           id: crypto.randomUUID(),
-          speaker: "Narrator",
+          speaker: "",
           text: block.text,
           formattedText: block.text ? `<p>${block.text}</p>` : undefined,
         });
@@ -122,7 +122,7 @@ export function nodeToBlocks(node: StoryNode): SceneBlock[] {
 
   // Build from dialogueLines and narrative text
   for (const line of node.dialogueLines || []) {
-    if (line.speaker === "Narrator" || !line.speaker) {
+    if (!line.speaker) {
       blocks.push({ type: "narrative", text: line.text });
     } else {
       blocks.push({ type: "dialogue", speaker: line.speaker, expression: line.expression, text: line.text });

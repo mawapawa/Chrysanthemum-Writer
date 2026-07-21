@@ -42,10 +42,21 @@ function evalCondition(
   return false;
 }
 
+function resolvePath(obj: any, path: string): any {
+  const parts = path.split(".");
+  let val = obj;
+  for (const part of parts) {
+    if (val && typeof val === "object" && part in val) val = val[part];
+    else return undefined;
+  }
+  return val;
+}
+
 function interpolate(template: string | undefined, vars?: Record<string, any>): string {
   if (!template) return "";
-  return template.replace(/\[(\w+)\]/g, (_, name) => {
-    if (vars && name in vars) return String(vars[name]);
+  return template.replace(/\[([\w.]+)\]/g, (_, name) => {
+    const val = resolvePath(vars, name);
+    if (val !== undefined) return String(val);
     return `[${name}]`;
   });
 }
@@ -69,14 +80,35 @@ function computeStateFilter(
 
 export function evaluateBindings(
   element: UIElementV2,
-  context?: BindingContext
+  context?: BindingContext,
+  elementMap?: Map<string, UIElementV2>
 ): ResolvedBindings {
   const merged = { ...context?.vars, _dialogueText: context?.dialogueText, _dialogueSpeaker: context?.dialogueSpeaker };
   const b = element.bindings;
-  const visible = evalCondition(b.showIfSource, b.showIfOperator, b.showIfValue, merged);
+
+  // visibleDuring — applies to ALL elements in runtime via ancestor cascade
+  let invisible = false;
+  if (context?.interactionState) {
+    if (b.visibleDuring) {
+      invisible = !b.visibleDuring.includes(context.interactionState);
+    }
+    // Cascade: check ancestors regardless of own visibleDuring
+    if (!invisible && elementMap && element.parentId) {
+      let cur = elementMap.get(element.parentId);
+      while (cur) {
+        const cb = cur.bindings;
+        if (cb.visibleDuring && !cb.visibleDuring.includes(context.interactionState!)) { invisible = true; break; }
+        cur = cur.parentId ? elementMap.get(cur.parentId) : undefined;
+      }
+    }
+  }
+
+  const visible = !invisible && evalCondition(b.showIfSource, b.showIfOperator, b.showIfValue, merged);
   const stateFilter = computeStateFilter(
     b.stateFilterStyle, b.stateFilterSource, b.stateFilterOperator, b.stateFilterValue, merged
   );
   const text = interpolate(b.textTemplate, merged);
-  return { visible, stateFilter, text };
+  const repeat = b.repeat ? resolvePath(merged, b.repeat) : undefined;
+  const action = interpolate(b.actionTemplate, merged);
+  return { visible, stateFilter, text, repeat: Array.isArray(repeat) ? repeat : undefined, action: action || undefined, invisible };
 }

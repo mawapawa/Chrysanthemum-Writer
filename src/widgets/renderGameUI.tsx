@@ -17,22 +17,23 @@ export function renderGameUI(
   if (!elements || elements.length === 0) return null;
 
   const context: BindingContext = {
-    vars: ctx.vars,
+    vars: { ...ctx.vars, _choices: ctx.choices },
     dialogueText: ctx.dialogueText,
     dialogueSpeaker: ctx.dialogueSpeaker,
     dialogueFormattedText: ctx.dialogueFormattedText,
+    interactionState: ctx.interactionState,
   };
 
   const events: ElementEvents = {
     onButtonAction: ctx.onButtonAction,
   };
 
-  return renderV2(elements, context, events, project.assets);
+  const nodeMap = renderV2(elements, context, events, project.assets);
+  return [...nodeMap.values()];
 }
 
 /**
  * React component wrapper around renderGameUI.
- * Renders nothing (null) when no V2 layout exists — caller falls back.
  */
 export function GameUIRenderer({ screen, project, ctx, fallback }: {
   screen: string;
@@ -42,7 +43,17 @@ export function GameUIRenderer({ screen, project, ctx, fallback }: {
 }): React.ReactNode {
   const nodes = renderGameUI(screen, project, ctx);
   if (nodes && nodes.length > 0) {
-    return <div className="v2-ui-layer" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>{nodes}</div>;
+    const hasNextLine = ctx.hasDialogue && ctx.lineIdx < ctx.totalLines - 1;
+    return (
+      <div className="v2-ui-layer" style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}
+        onClick={() => {
+          if (hasNextLine) ctx.onNextLine?.();
+          else if (ctx.showContinue) ctx.onContinue?.();
+        }}
+      >
+        {nodes}
+      </div>
+    );
   }
   return fallback ?? null;
 }

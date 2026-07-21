@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, ElementEvents, VNProject, UILayoutCollection } from "../types";
+import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, ElementEvents, VNProject, UILayoutCollection, UILayer } from "../types";
 import { createElementStore, ElementStore, createEmptyLayouts } from "./elementStore";
 import { renderV2 } from "../widgets/pipelineV2";
 import { primitiveRegistry, createRootContainer } from "../factories/primitiveRegistry";
@@ -14,49 +14,89 @@ interface EditorV2Props {
 
 // ─── Hierarchy Panel (with layer management) ────────────────────
 
-function HierarchyPanel({ store, activeLayer, onLayerChange }: {
+function id(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function HierarchyPanel({ store, activeLayer, onLayerChange, layers, onAddLayer, onToggleLayer, onToggleLock, onDeleteLayer, onRenameLayer, onReorderLayers }: {
   store: ElementStore; activeLayer: string; onLayerChange: (l: string) => void;
+  layers: UILayer[];
+  onAddLayer?: (id: string, name: string) => void; onToggleLayer?: (id: string) => void; onToggleLock?: (id: string) => void;
+  onDeleteLayer?: (id: string) => void; onRenameLayer?: (id: string, newName: string) => void;
+  onReorderLayers?: (fromIdx: number, toIdx: number) => void;
 }) {
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 100); return () => clearInterval(id); }, []);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
-  // Collect unique layer names from elements, plus "default"
-  const layers = useMemo(() => {
-    const s = new Set<string>(["default"]);
-    store.elements.forEach(e => { if (e.layer) s.add(e.layer); });
-    return [...s].sort();
-  }, [store, tick]);
+  const sorted = useMemo(() => [...layers].sort((a, b) => a.order - b.order), [layers]);
 
-  const topLevel = useMemo(() => store.elements.filter(e => !e.parentId && (e.layer ?? "default") === activeLayer), [store, tick, activeLayer]);
+  const topLevel = useMemo(() => store.elements.filter(e => !e.parentId && e.type !== "container" && (e.layerId ?? e.layer ?? "default") === activeLayer), [store, tick, activeLayer]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Elements for active layer */}
       <div style={{ flex: 1, padding: "6px 8px", overflow: "auto" }}>
         <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Elements</div>
         {topLevel.length === 0 && <div style={{ color: "#475569", fontSize: 10, fontStyle: "italic", padding: 4 }}>No elements on this layer.</div>}
         {topLevel.map(el => <HierarchyNode key={el.id} element={el} store={store} depth={0} />)}
       </div>
 
-      {/* Layer tabs */}
-      <div style={{ padding: "6px 8px", borderTop: "1px solid #1e293b" }}>
-        <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Layers</div>
-        <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-          {layers.map(l => (
-            <button key={l} onClick={() => onLayerChange(l)}
-              style={{
-                padding: "2px 8px", fontSize: 9, fontFamily: "monospace", fontWeight: 600,
-                background: activeLayer === l ? "#6366f1" : "#1e293b",
-                color: activeLayer === l ? "#fff" : "#94a3b8",
-                border: "1px solid #334155", borderRadius: 4, cursor: "pointer",
-              }}>
-              {l}
-            </button>
-          ))}
-          <button onClick={() => { const n = prompt("Layer name:"); if (n) { store.elements.filter(e => !e.layer).forEach(e => store.update(e.id, { layer: n })); onLayerChange(n); } }}
-            style={{ padding: "2px 6px", fontSize: 8, fontFamily: "monospace", background: "transparent", color: "#64748b", border: "1px dashed #334155", borderRadius: 4, cursor: "pointer" }}>
-            + New
-          </button>
+      <div style={{ padding: "6px 8px", borderTop: "1px solid #1e293b", maxHeight: 240, overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ color: "#94a3b8", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Layers</span>
+          <button onClick={() => {
+            const n = prompt("Layer name:");
+            if (n && !layers.some(l => l.name === n)) { const lid = id("lyr"); onAddLayer?.(lid, n); onLayerChange(lid); }
+          }} style={{ padding: "1px 6px", fontSize: 9, fontFamily: "monospace", background: "transparent", color: "#64748b", border: "1px dashed #475569", borderRadius: 4, cursor: "pointer" }}>+ New</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {sorted.map((layer, idx) => {
+            const isActive = activeLayer === layer.id;
+            const isEditing = editingId === layer.id;
+            const isDefault = layer.id === "default";
+            return (
+              <div key={layer.id}
+                draggable
+                onDragStart={() => setDragIdx(idx)}
+                onDragOver={(e) => { e.preventDefault(); if (dragIdx !== null && dragIdx !== idx) { onReorderLayers?.(dragIdx, idx); setDragIdx(idx); } }}
+                onDragEnd={() => setDragIdx(null)}
+                onClick={() => onLayerChange(layer.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4, padding: "4px 6px", borderRadius: 4, cursor: "pointer", userSelect: "none",
+                  background: isActive ? "#6366f120" : "transparent",
+                  border: isActive ? "1px solid #6366f140" : "1px solid transparent",
+                }}>
+                <span style={{ fontSize: 10, color: "#475569", cursor: "grab" }}>⠿</span>
+                <span onClick={(e) => { e.stopPropagation(); onToggleLayer?.(layer.id); }} style={{ fontSize: 11, cursor: "pointer", color: layer.visible ? "#94a3b8" : "#334155" }}>
+                  {layer.visible ? "◉" : "◌"}
+                </span>
+                <span onClick={(e) => { e.stopPropagation(); onToggleLock?.(layer.id); }} style={{ fontSize: 10, cursor: "pointer", color: layer.locked ? "#f87171" : "#475569" }}>
+                  {layer.locked ? "🔒" : "🔓"}
+                </span>
+                {isEditing ? (
+                  <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => { if (editValue) onRenameLayer?.(layer.id, editValue); setEditingId(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { if (editValue) onRenameLayer?.(layer.id, editValue); setEditingId(null); } if (e.key === "Escape") setEditingId(null); }}
+                    style={{ flex: 1, padding: "1px 4px", fontSize: 10, fontFamily: "monospace", background: "#0f172a", color: "#e2e8f0", border: "1px solid #6366f1", borderRadius: 2, outline: "none" }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span style={{ flex: 1, fontSize: 10, color: isActive ? "#a5b4fc" : layer.locked ? "#64748b" : "#cbd5e1", fontFamily: "monospace" }}
+                    onDoubleClick={(e) => { e.stopPropagation(); setEditingId(layer.id); setEditValue(layer.name); }}>
+                    {layer.name}
+                  </span>
+                )}
+                {!isDefault && (
+                  <button onClick={(e) => { e.stopPropagation(); onDeleteLayer?.(layer.id); }}
+                    style={{ padding: 0, fontSize: 10, background: "transparent", color: "#475569", border: "none", cursor: "pointer", opacity: 0.5 }}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -99,68 +139,128 @@ const GRID = 10; // dot grid and snap spacing
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
-function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
-  store: ElementStore; assets?: ProjectAsset[]; activeLayer?: string; canvasW?: number; canvasH?: number;
+function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, hiddenLayerIds, layers }: {
+  store: ElementStore; assets?: ProjectAsset[]; activeLayer?: string; canvasW?: number; canvasH?: number; storeVersion?: number; hiddenLayerIds?: Set<string>; layers?: UILayer[];
 }) {
   const [, tick] = useState(0);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const dragRef = useRef<{
     elId: string; startX: number; startY: number;
-    mode: 'move' | 'resize'; dir?: string; layoutMode?: string;
-    orig: { x: number; y: number; w: number; h: number; basis?: number };
+    mode: 'move' | 'resize' | 'reparent' | 'pegboard-move' | 'pegboard-resize';
+    dir?: string; layoutMode?: string; parentDir?: string;
+    orig: { x?: number; y?: number; w?: number; h?: number; basis?: number;
+            row?: number; col?: number; rowSpan?: number; colSpan?: number };
+    dropTargetId?: string;
+    dropIndex?: number;
   } | null>(null);
+  const clickRef = useRef<{ elId: string; x: number; y: number } | null>(null);
 
-  // Force re-render periodically so layouts stay fresh
   useEffect(() => {
     const id = setInterval(() => tick(n => n + 1), 100);
     return () => clearInterval(id);
   }, []);
 
-  const layouts = useMemo(() => store.getLayouts(), [store, tick]);
+  const layouts = useMemo(() => store.getLayouts(), [store, tick, storeVersion]);
+  const layoutsRef = useRef(layouts);
+  layoutsRef.current = layouts;
+  const hiddenRef = useRef(hiddenLayerIds ?? new Set());
+  hiddenRef.current = hiddenLayerIds ?? new Set();
 
   const selectedLayout = store.selectedId ? layouts.get(store.selectedId) : null;
 
-  // ── Mousedown: select element; start drag only for freeform ──
+  // ── Mousedown: select element; start drag ──
   const handleMouseDown = useCallback((e: React.MouseEvent, elId: string) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    store.select(elId);
     const el = store.getById(elId);
-    if (!el || el.layout.mode !== "freeform") return;
+    if (!el || (!el.parentId && el.type === "container")) return;
+    const elLayerId = el.layerId ?? el.layer ?? "default";
+    if (layers?.some(l => l.id === elLayerId && l.locked)) return;
+    store.select(elId);
+    tick(n => n + 1);
     const l = el.layout as any;
+    clickRef.current = null;
+    if (l.mode === "pegboard") {
+      dragRef.current = {
+        elId, startX: e.clientX, startY: e.clientY,
+        mode: 'pegboard-move',
+        orig: { row: l.row ?? 1, col: l.col ?? 1, rowSpan: l.rowSpan ?? 1, colSpan: l.colSpan ?? 1 },
+      };
+      return;
+    }
+    if (l.mode === "freeform") {
+      dragRef.current = {
+        elId, startX: e.clientX, startY: e.clientY,
+        mode: 'move',
+        orig: { x: l.x ?? 0, y: l.y ?? 0, w: l.width ?? 100, h: l.height ?? 100 },
+      };
+      return;
+    }
     dragRef.current = {
       elId, startX: e.clientX, startY: e.clientY,
-      mode: 'move',
-      orig: { x: l.x ?? 0, y: l.y ?? 0, w: l.width ?? 100, h: l.height ?? 100 },
+      mode: 'reparent',
+      orig: { x: 0, y: 0, w: 0, h: 0 },
+      dropTargetId: undefined,
     };
-  }, [store]);
+  }, [store, layers]);
 
   const handleHandleMouseDown = useCallback((e: React.MouseEvent, elId: string, dir: string) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     const el = store.getById(elId);
     if (!el) return;
-    // Block resize on root containers (no parentId)
     if (!el.parentId && el.type === "container") return;
+    const elLayerId = el.layerId ?? el.layer ?? "default";
+    if (layers?.some(l => l.id === elLayerId && l.locked)) return;
     store.select(elId);
+    tick(n => n + 1);
     const l = el.layout as any;
-    const lm = l.mode ?? "freeform";
+    if (l.mode === "pegboard") {
+      dragRef.current = {
+        elId, startX: e.clientX, startY: e.clientY,
+        mode: 'pegboard-resize', dir,
+        orig: { row: l.row ?? 1, col: l.col ?? 1, rowSpan: l.rowSpan ?? 1, colSpan: l.colSpan ?? 1 },
+      };
+      return;
+    }
+    const parent = el.parentId ? store.getById(el.parentId) : undefined;
+    const parentDir = (parent?.properties?.direction as string) || "column";
     dragRef.current = {
       elId, startX: e.clientX, startY: e.clientY,
-      mode: 'resize', dir, layoutMode: lm,
+      mode: 'resize', dir, layoutMode: l.mode ?? "freeform", parentDir,
       orig: { x: l.x ?? 0, y: l.y ?? 0, w: l.width ?? 100, h: l.height ?? 100, basis: l.basis },
     };
-  }, [store]);
+  }, [store, layers]);
 
   // ── Global mousemove / mouseup ──
   const lastDragUpdate = useRef(0);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    // Compute pegboard grid info from an element's parent container
+    const parentGrid = (elId: string) => {
+      const el = store.getById(elId);
+      if (!el || !el.parentId) return null;
+      const parent = store.getById(el.parentId);
+      if (!parent) return null;
+      const pp = (parent.properties ?? {}) as any;
+      const cols = pp.pegboardColumns ?? 12;
+      const rows = pp.pegboardRows ?? 12;
+      const gap = pp.gap ?? 0;
+      const pad = pp.padding ?? 0;
+      const pl = layoutsRef.current.get(parent.id);
+      if (!pl) return null;
+      const cw = ((pl.width - pad * 2) - gap * (cols - 1)) / cols;
+      const ch = ((pl.height - pad * 2) - gap * (rows - 1)) / rows;
+      if (cw <= 0 || ch <= 0) return null;
+      return { cols, rows, gap, pad, cw, ch, stepX: cw + gap, stepY: ch + gap };
+    };
+
     const mm = (e: MouseEvent) => {
       const d = dragRef.current;
       if (!d) return;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
 
-      // Throttle store updates to every 50ms to avoid flooding React
       const now = Date.now();
       if (now - lastDragUpdate.current < 50 && (d.mode === 'move' || d.mode === 'resize')) return;
       lastDragUpdate.current = now;
@@ -169,6 +269,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
         const nx = SNAP(Math.max(0, d.orig.x + dx));
         const ny = SNAP(Math.max(0, d.orig.y + dy));
         store.update(d.elId, { layout: { mode: "freeform", x: nx, y: ny, width: d.orig.w, height: d.orig.h } });
+        tick(n => n + 1);
       } else if (d.mode === 'resize' && d.dir) {
         if (d.layoutMode === "freeform") {
           let { x, y, w, h } = d.orig;
@@ -179,30 +280,117 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
           if (d.dir.includes('s')) h = Math.max(20, d.orig.h + sdy);
           if (d.dir.includes('n')) { y = d.orig.y + sdy; h = Math.max(20, d.orig.h - sdy); }
           store.update(d.elId, { layout: { mode: "freeform", x, y, width: w, height: h } });
+          tick(n => n + 1);
         } else {
-          // Semantic resize: change basis (height in column, width in row)
-          const isColumn = d.layoutMode === "column";
+          // Only the layout-appropriate handles resize: vertical in column, horizontal in row
+          const parentDir = d.parentDir ?? "column";
           const isVert = d.dir.includes('s') || d.dir.includes('n');
           const isHoriz = d.dir.includes('e') || d.dir.includes('w');
-          if ((isColumn && isVert) || (!isColumn && isHoriz)) {
-            const delta = isVert ? SNAP(dy) : SNAP(dx);
-            const sign = (d.dir.startsWith('n') || d.dir.startsWith('w')) ? -1 : 1;
-            const cur = store.getById(d.elId);
-            const curLayout = cur?.layout as any;
-            const curBasis = curLayout.basis ?? 100;
-            const newBasis = Math.max(20, curBasis + delta * sign);
-            store.update(d.elId, { layout: { ...curLayout, basis: newBasis } as any });
+          const canResize = (parentDir === "column" && isVert) || (parentDir === "row" && isHoriz);
+          if (!canResize) return;
+          const isEastSouth = d.dir.includes('e') || d.dir.includes('s');
+          const eff = isVert ? dy : dx;
+          const raw = eff < 0 ? -Math.round(-eff / 5) * 5 : Math.round(eff / 5) * 5;
+          const change = isEastSouth ? raw : -raw;
+          if (change === 0) return;
+          const cur = store.getById(d.elId);
+          const curLayout = cur?.layout as any;
+          const curBasis = curLayout.basis ?? 100;
+          const newBasis = Math.max(20, curBasis + change);
+          store.update(d.elId, { layout: { ...curLayout, basis: newBasis } as any });
+          tick(n => n + 1);
+        }
+      } else if (d.mode === 'pegboard-move') {
+        const pg = parentGrid(d.elId);
+        if (!pg) return;
+        const colDelta = Math.round(dx / pg.stepX);
+        const rowDelta = Math.round(dy / pg.stepY);
+        const newCol = Math.max(1, Math.min(pg.cols - (d.orig.colSpan ?? 1) + 1, (d.orig.col ?? 1) + colDelta));
+        const newRow = Math.max(1, Math.min(pg.rows - (d.orig.rowSpan ?? 1) + 1, (d.orig.row ?? 1) + rowDelta));
+        const cur = store.getById(d.elId);
+        const curLayout = cur?.layout as any;
+        if (newCol !== curLayout.col || newRow !== curLayout.row) {
+          store.update(d.elId, { layout: { ...curLayout, row: newRow, col: newCol } as any });
+          tick(n => n + 1);
+        }
+      } else if (d.mode === 'pegboard-resize' && d.dir) {
+        const pg = parentGrid(d.elId);
+        if (!pg) return;
+        let row = d.orig.row ?? 1, col = d.orig.col ?? 1;
+        let rowSpan = d.orig.rowSpan ?? 1, colSpan = d.orig.colSpan ?? 1;
+        if (d.dir.includes('e')) {
+          const delta = Math.round(dx / pg.stepX);
+          colSpan = Math.max(1, Math.min(pg.cols - col + 1, colSpan + delta));
+        }
+        if (d.dir.includes('w')) {
+          const delta = Math.round(dx / pg.stepX);
+          const newSpan = Math.max(1, Math.min(pg.cols - col + 1, colSpan - delta));
+          col = col + (colSpan - newSpan);
+          colSpan = newSpan;
+        }
+        if (d.dir.includes('s')) {
+          const delta = Math.round(dy / pg.stepY);
+          rowSpan = Math.max(1, Math.min(pg.rows - row + 1, rowSpan + delta));
+        }
+        if (d.dir.includes('n')) {
+          const delta = Math.round(dy / pg.stepY);
+          const newSpan = Math.max(1, Math.min(pg.rows - row + 1, rowSpan - delta));
+          row = row + (rowSpan - newSpan);
+          rowSpan = newSpan;
+        }
+        const cur = store.getById(d.elId);
+        const curLayout = cur?.layout as any;
+        if (rowSpan !== curLayout.rowSpan || colSpan !== curLayout.colSpan || row !== curLayout.row || col !== curLayout.col) {
+          store.update(d.elId, { layout: { ...curLayout, row, col, rowSpan, colSpan } as any });
+          tick(n => n + 1);
+        }
+      } else if (d.mode === 'reparent') {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        let targetId: string | undefined;
+        const el = store.getById(d.elId);
+        for (const other of store.elements) {
+          if (!other.parentId && other.type === "container") continue;
+          if (other.id === d.elId) continue;
+          if (other.type !== "container") continue;
+          if (hiddenRef.current.has(other.layerId ?? other.layer ?? "default")) continue;
+          const ol = layoutsRef.current.get(other.id);
+          if (!ol) continue;
+          if (mx >= ol.x && mx <= ol.x + ol.width && my >= ol.y && my <= ol.y + ol.height) {
+            if (el && (el.parentId === other.id || store.getAncestors(other.id).some(a => a.id === d.elId))) continue;
+            targetId = other.id;
+            break;
           }
+        }
+        if (d.dropTargetId !== targetId) {
+          d.dropTargetId = targetId;
+          tick(n => n + 1);
         }
       }
     };
 
-    const mu = () => { dragRef.current = null; lastDragUpdate.current = 0; };
+    const mu = () => {
+      const d = dragRef.current;
+      if (d?.mode === 'reparent' && d.dropTargetId) {
+        const el = store.getById(d.elId);
+        if (el && el.parentId !== d.dropTargetId) {
+          store.reparent(d.elId, d.dropTargetId);
+          tick(n => n + 1);
+        }
+      }
+      dragRef.current = null;
+      clickRef.current = null;
+      lastDragUpdate.current = 0;
+      setHoveredId(null);
+    };
 
     window.addEventListener("mousemove", mm);
     window.addEventListener("mouseup", mu);
     return () => { window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", mu); };
-  }, [store]);
+  }, [store, activeLayer]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) store.select(null);
@@ -212,7 +400,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
   const ch = canvasH ?? 720;
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 12, background: "#020617" }}>
-      <div style={{ position: "relative", width: cw, height: ch, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b", overflow: "hidden" }}
+      <div ref={canvasRef} style={{ position: "relative", width: cw, height: ch, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}
         onClick={handleCanvasClick}>
         {/* Dot grid */}
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width={cw} height={ch}>
@@ -225,39 +413,118 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
           <rect width={cw} height={ch} fill="url(#editorv2-dots)" />
         </svg>
 
-        {/* Elements — rendered by pipeline, overlaid with transparent hit areas */}
+        {/* Elements — containers render as regions, elements render from pipeline */}
         {(() => {
-          const visibleElements = store.elements.filter(e => (e.layer ?? "default") === activeLayer);
+          const visibleElements = store.elements.filter(e => !(hiddenLayerIds ?? new Set()).has(e.layerId ?? e.layer ?? "default"));
           const renderedNodes = renderV2(visibleElements, undefined, undefined, assets, cw, ch);
-          return visibleElements.map((el, i) => {
-            const node = renderedNodes[i];
+          const isRootEl = (el: UIElementV2) => !el.parentId && el.type === "container";
+          const childCount = new Map<string, number>();
+          store.elements.forEach(e => { if (e.parentId) childCount.set(e.parentId, (childCount.get(e.parentId) ?? 0) + 1); });
+          const isDragging = dragRef.current?.mode === 'reparent';
+          const dropTarget = isDragging ? dragRef.current?.dropTargetId : undefined;
+          return visibleElements.map((el) => {
+            if (isRootEl(el)) return null;
+            const node = renderedNodes.get(el.id);
             const l = layouts.get(el.id);
             if (!l) return null;
             const isContainer = el.type === "container";
-            return (
-              <div key={el.id} style={{ position: "relative" }}>
-                {/* Visual: pipeline output for non-containers, placeholder box for containers */}
-                {!isContainer ? node : (
+            const isEmpty = isContainer && (childCount.get(el.id) ?? 0) === 0;
+            const isHovered = hoveredId === el.id;
+            const isDropTarget = dropTarget === el.id;
+
+            if (isContainer) {
+              const lm = el.layout?.mode;
+              const label = lm === "pegboard" ? `Peg ${(el.layout as any).col},${(el.layout as any).row}` :
+                            el.properties?.direction === "row" ? "Row" :
+                            el.properties?.direction === "column" ? "Column" :
+                            lm === "freeform" ? "Overlay" : "Grid";
+              return (
+                <div key={el.id}>
+                  {/* Region background + outline */}
                   <div style={{
                     position: "absolute", left: l.x, top: l.y,
                     width: l.width, height: l.height,
-                    border: "1px dashed #334155", borderRadius: 6,
-                    background: "rgba(15, 23, 42, 0.3)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 9, color: "#475569", fontFamily: "monospace",
-                    pointerEvents: "none",
+                    border: isDropTarget ? "2px solid #6366f1" :
+                             isHovered ? "1px solid #818cf8" :
+                             isEmpty ? "1px dashed #475569" :
+                             "1px solid #334155",
+                    borderRadius: 6,
+                    background: isDropTarget ? "rgba(99, 102, 241, 0.08)" :
+                                 isEmpty ? "rgba(15, 23, 42, 0.3)" :
+                                 "rgba(15, 23, 42, 0.08)",
+                    pointerEvents: "none", zIndex: 0,
                   }}>
-                    {el.properties?.direction === "row" ? "Row" :
-                     el.properties?.direction === "column" ? "Column" :
-                     el.layout?.mode === "freeform" ? "Overlay" : "Grid"}
+                    <div style={{
+                      position: "absolute", top: 2, left: 4,
+                      fontSize: 9, color: "#94a3b8", fontFamily: "monospace",
+                    }}>
+                      {label}
+                    </div>
                   </div>
-                )}
-                {/* Hit area: always rendered for click selection */}
+                  {/* Hit area + empty placeholder */}
+                  <div onMouseDown={(e) => handleMouseDown(e, el.id)}
+                    onMouseEnter={() => setHoveredId(el.id)}
+                    onMouseLeave={() => setHoveredId(prev => prev === el.id ? null : prev)}
+                    style={{
+                      position: "absolute", left: l.x, top: l.y,
+                      width: l.width, height: l.height,
+                      cursor: "pointer", zIndex: 1,
+                    }}>
+                    {isEmpty && !isDragging && (
+                      <div style={{
+                        width: "100%", height: "100%",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <span style={{
+                          fontSize: 10, color: "#6366f1", fontFamily: "monospace",
+                          padding: "4px 12px", background: "rgba(99, 102, 241, 0.12)",
+                          borderRadius: 4, border: "1px dashed #6366f1", cursor: "pointer",
+                          pointerEvents: "auto",
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          const txt = primitiveRegistry.find(p => p.type === "text");
+                          if (txt) {
+                            const els = txt.create().map(e2 => ({ ...e2, parentId: el.id }));
+                            els.forEach(e2 => store.add(e2));
+                          }
+                          tick(n => n + 1);
+                        }}>
+                          + Add Element
+                        </span>
+                      </div>
+                    )}
+                    {isDropTarget && (
+                      <div style={{
+                        width: "100%", height: "100%",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        pointerEvents: "none",
+                      }}>
+                        <span style={{
+                          fontSize: 10, color: "#e2e8f0", fontFamily: "monospace",
+                          padding: "4px 12px", background: "rgba(99, 102, 241, 0.25)",
+                          borderRadius: 4, border: "1px solid #6366f1",
+                        }}>
+                          Drop here
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            // Non-container: pipeline output + hit area
+            return (
+              <div key={el.id} style={{ position: "relative" }}>
+                {node}
                 <div onMouseDown={(e) => handleMouseDown(e, el.id)}
+                  onMouseEnter={() => setHoveredId(el.id)}
+                  onMouseLeave={() => setHoveredId(prev => prev === el.id ? null : prev)}
                   style={{
                     position: "absolute", left: l.x, top: l.y,
                     width: l.width, height: l.height,
-                    cursor: el.layout.mode === "freeform" ? "move" : "pointer",
+                    cursor: el.layout.mode === "freeform" ? "move" : "grab",
                     zIndex: 900,
                   }} />
               </div>
@@ -265,9 +532,11 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
           });
         })()}
 
-        {/* Selection overlay */}
-        {selectedLayout && (
-          <>
+        {/* Selection overlay — hidden for root container */}
+        {selectedLayout && store.selectedId && (() => {
+          const selEl = store.getById(store.selectedId);
+          if (selEl && !selEl.parentId && selEl.type === "container") return null;
+          return <>
             <div style={{
               position: "absolute", left: selectedLayout.x - 1, top: selectedLayout.y - 1,
               width: selectedLayout.width + 2, height: selectedLayout.height + 2,
@@ -292,8 +561,24 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH }: {
                   top: selectedLayout.y + cy * selectedLayout.height - HANDLE/2,
                 }} />
             ))}
-          </>
-        )}
+          </>;
+        })()}
+
+        {/* Drop indicator for reparent drag */}
+        {(() => {
+          const dr = dragRef.current;
+          if (!dr || dr.mode !== 'reparent' || !dr.dropTargetId) return null;
+          const tl = layoutsRef.current.get(dr.dropTargetId);
+          if (!tl) return null;
+          const tgt = store.getById(dr.dropTargetId);
+          const isRow = tgt?.properties?.direction === "row";
+          if (isRow) {
+            const x = tl.x + tl.width - 2;
+            return <div style={{ position: "absolute", left: x, top: tl.y + 2, width: 4, height: tl.height - 4, background: "#818cf8", borderRadius: 2, boxShadow: "0 0 8px rgba(129,140,248,0.5)", zIndex: 1001, pointerEvents: "none" }} />;
+          }
+          const y = tl.y + tl.height - 2;
+          return <div style={{ position: "absolute", left: tl.x + 2, top: y, width: tl.width - 4, height: 4, background: "#818cf8", borderRadius: 2, boxShadow: "0 0 8px rgba(129,140,248,0.5)", zIndex: 1001, pointerEvents: "none" }} />;
+        })()}
       </div>
     </div>
   );
@@ -335,7 +620,7 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
   const [, force] = useState(0);
   const flush = () => force(n => n + 1);
 
-  if (!sel) return <div style={{ width: 260, padding: 12, color: "#475569", fontSize: 10, fontStyle: "italic" }}>Select an element</div>;
+  if (!sel || (!sel.parentId && sel.type === "container")) return <div style={{ width: 260, padding: 12, color: "#475569", fontSize: 10, fontStyle: "italic" }}>Select an element</div>;
 
   const sp = (k: string, v: any) => { store.update(sel.id, { properties: { ...sel.properties, [k]: v } }); flush(); };
   const sb = (k: string, v: any) => { store.update(sel.id, { bindings: { ...sel.bindings, [k]: v } }); flush(); };
@@ -440,7 +725,7 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
       {/* Layers */}
       <InspectSection title="Layers">
         <InspectField label="Layer">
-          <input value={sel.layer ?? "default"} onChange={e => store.update(sel.id, { layer: e.target.value || undefined })}
+          <input value={sel.layerId ?? sel.layer ?? "default"} onChange={e => store.update(sel.id, { layerId: e.target.value || undefined })}
             style={inspInput} placeholder="default" />
         </InspectField>
         <InspectField label="Z-Index">
@@ -482,12 +767,27 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   const [canvasRes, setCanvasRes] = useState(RESOLUTIONS[2]); // default 1280x720
   const elements = layouts.screens[activeScreen] ?? [];
 
-  const saveLayouts = useCallback((screens: Record<string, UIElementV2[]>, screen?: string) => {
-    const next: UILayoutCollection = { screens, activeScreen: screen ?? activeScreen };
-    onUpdateProject?.({ ...project, uiLayouts: next, lastModified: Date.now() });
-  }, [project, activeScreen, onUpdateProject]);
-
   const [store, setStore] = useState<ElementStore | null>(null);
+  const [storeVersion, setStoreVersion] = useState(0);
+  const [editorLayers, setEditorLayers] = useState<UILayer[]>(
+    () => layouts.layers ?? [{ id: "default", name: "Default", visible: true, locked: false, order: 0 }]
+  );
+
+  // Sync local layers when project changes (e.g. on mount / screen switch)
+  useEffect(() => {
+    setEditorLayers(layouts.layers ?? [{ id: "default", name: "Default", visible: true, locked: false, order: 0 }]);
+  }, [layouts.layers]);
+
+  const persistLayers = useCallback((layers: UILayer[]) => {
+    onUpdateProject?.({ ...project, uiLayouts: { ...layouts, layers }, lastModified: Date.now() });
+  }, [project, layouts, onUpdateProject]);
+
+  const saveLayouts = useCallback((screens: Record<string, UIElementV2[]>, screen?: string) => {
+    const next: UILayoutCollection = { screens, activeScreen: screen ?? activeScreen, layers: editorLayers };
+    onUpdateProject?.({ ...project, uiLayouts: next, lastModified: Date.now() });
+  }, [project, activeScreen, onUpdateProject, editorLayers]);
+
+  const hiddenLayerIds = new Set(editorLayers.filter(l => !l.visible).map(l => l.id));
 
   // Find the container to insert new elements into
   const findContainerForAdd = useCallback((s: ElementStore): string | undefined => {
@@ -497,14 +797,17 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
       const parent = s.getById(sel.parentId);
       if (parent?.type === "container") return parent.id;
     }
-    return undefined;
+    // Fallback to root container when nothing is selected
+    const root = s.elements.find(e => !e.parentId && e.type === "container");
+    return root?.id;
   }, []);
 
   // Initialize store from project data — auto-create root container on empty screens
   useEffect(() => {
-    const s = createElementStore(elements);
+    const s = createElementStore(elements, () => setStoreVersion(n => n + 1));
     if (s.elements.length === 0) {
       s.add(createRootContainer(canvasRes.w, canvasRes.h));
+      s.select(null); // root is infrastructure, don't leave it selected
     }
     // Sync store -> project without causing re-render loop
     const unsub = setInterval(() => {
@@ -512,7 +815,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
       const stored = layouts.screens[activeScreen] ?? [];
       if (JSON.stringify(current) !== JSON.stringify(stored)) {
         const screens = { ...layouts.screens, [activeScreen]: current };
-        onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
+        onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen, layers: editorLayers }, lastModified: Date.now() });
       }
     }, 600); // slower sync, only for persistence
     setStore(s);
@@ -536,6 +839,8 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Delete" || e.key === "Backspace") {
         if (store && store.selectedId && e.target instanceof HTMLElement && !e.target.closest("input,select,textarea")) {
+          const sel = store.getById(store.selectedId);
+          if (sel && !sel.parentId && sel.type === "container") return; // cannot delete root
           store.remove(store.selectedId);
         }
       }
@@ -554,7 +859,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#020617", color: "#e2e8f0", fontFamily: "monospace" }}>
       {/* Title bar: screen tabs + new screen + resolution + back */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderBottom: "1px solid #1e293b", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginRight: 8 }}>Screens</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginRight: 8 }}>Menu Layouts</span>
         {allScreens.map(name => (
           <button key={name} onClick={() => setActiveScreen(name)}
             style={{
@@ -600,7 +905,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
             <button key={p.label} onClick={() => {
               if (!canAdd) return;
               const containerId = findContainerForAdd(store)!;
-              const els = p.create().map(el => ({ ...el, parentId: containerId }));
+              const els = p.create().map(el => ({ ...el, parentId: el.parentId ?? containerId }));
               els.forEach(el => store.add(el));
             }}
               style={{
@@ -614,24 +919,44 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
             </button>
           );
         })}
-        {store.elements.length > 0 && (
-          <button onClick={() => {
-            store.elements.forEach(e => store.remove(e.id));
-            store.add(createRootContainer());
-          }}
-            style={{ padding: "3px 10px", fontSize: 10, fontFamily: "monospace", background: "#1e293b", color: "#f87171", border: "1px solid #334155", borderRadius: 6, cursor: "pointer" }}>
-            Clear
-          </button>
-        )}
       </div>
 
       {/* Main area: hierarchy | canvas | inspector */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div style={{ width: 200, borderRight: "1px solid #1e293b", overflow: "auto" }}>
-          <HierarchyPanel store={store} activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+          <HierarchyPanel store={store} activeLayer={activeLayer} onLayerChange={setActiveLayer}
+            layers={editorLayers}
+            onAddLayer={(id, name) => {
+              const next = [...editorLayers, { id, name, visible: true, locked: false, order: editorLayers.length }];
+              setEditorLayers(next); persistLayers(next);
+            }}
+            onToggleLayer={(id) => {
+              const next = editorLayers.map(l => l.id === id ? { ...l, visible: !l.visible } : l);
+              setEditorLayers(next); persistLayers(next);
+            }}
+            onToggleLock={(id) => {
+              const next = editorLayers.map(l => l.id === id ? { ...l, locked: !l.locked } : l);
+              setEditorLayers(next); persistLayers(next);
+            }}
+            onDeleteLayer={(id) => {
+              store.elements.filter(e => (e.layerId ?? e.layer ?? "default") === id).forEach(e => store.remove(e.id));
+              const next = editorLayers.filter(l => l.id !== id);
+              setEditorLayers(next); persistLayers(next);
+              if (activeLayer === id) setActiveLayer("default");
+            }}
+            onRenameLayer={(id, newName) => {
+              const next = editorLayers.map(l => l.id === id ? { ...l, name: newName } : l);
+              setEditorLayers(next); persistLayers(next);
+            }}
+            onReorderLayers={(from, to) => {
+              const arr = [...editorLayers]; const [item] = arr.splice(from, 1); arr.splice(to, 0, item);
+              const next = arr.map((l, i) => ({ ...l, order: i }));
+              setEditorLayers(next); persistLayers(next);
+            }}
+          />
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <CanvasV2 store={store} assets={project.assets} activeLayer={activeLayer} canvasW={canvasRes.w} canvasH={canvasRes.h} />
+          <CanvasV2 store={store} assets={project.assets} activeLayer={activeLayer} canvasW={canvasRes.w} canvasH={canvasRes.h} storeVersion={storeVersion} hiddenLayerIds={hiddenLayerIds} layers={editorLayers} />
         </div>
         <InspectorV2 store={store} assets={project.assets} project={project} onUpdateProject={onUpdateProject} screenNames={Object.keys(layouts.screens)} />
       </div>

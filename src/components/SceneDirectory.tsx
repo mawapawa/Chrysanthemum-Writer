@@ -149,7 +149,7 @@ export default function SceneDirectory({
     const newNode: StoryNode = {
       id: newId, displayId: generateDisplayId("SCN"), title: "New Scene Point",
       description: "Brief plot summary outlines what occurs in this branching point...",
-      speaker: "Narrator", dialogueLines: [], choices: [], statChanges: [],
+      speaker: "", dialogueLines: [], choices: [], statChanges: [],
       position: { x: 200 + Math.random() * 50, y: 250 + Math.random() * 50 },
       isEnding: false, nodeType: "story", sceneId, order: folderNodes.length,
     };

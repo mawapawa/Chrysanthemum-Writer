@@ -1,9 +1,15 @@
-import type { UIElementV2, ComputedLayout, UILayoutCollection } from "../types";
+import type { UIElementV2, ComputedLayout, UILayoutCollection, UILayer } from "../types";
 import { computeLayouts } from "../utils/layoutEngine";
 import { evaluateBindings } from "../utils/bindingEvaluator";
 
 export function createEmptyLayouts(): UILayoutCollection {
-  return { screens: { main: [] }, activeScreen: "main" };
+  return { screens: { main: [] }, activeScreen: "main", layers: defaultLayers() };
+}
+
+function defaultLayers(): UILayer[] {
+  return [
+    { id: "default", name: "Default", visible: true, locked: false, order: 0 },
+  ];
 }
 
 export interface ElementStore {

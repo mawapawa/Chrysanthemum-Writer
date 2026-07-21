@@ -102,6 +102,41 @@ function resolveGrid(
   };
 }
 
+function resolvePegboard(
+  el: UIElementV2,
+  parentLayout: ComputedLayout,
+  _tree: Map<string, UIElementV2[]>,
+  elements: Map<string, UIElementV2>
+): ComputedLayout {
+  const l = el.layout as any;
+  const row = l.row ?? 1;
+  const col = l.col ?? 1;
+  const rowSpan = l.rowSpan ?? 1;
+  const colSpan = l.colSpan ?? 1;
+
+  const parentEl = elements.get(el.parentId ?? "");
+  const pProps = (parentEl?.properties ?? {}) as any;
+  const pegCols = pProps.pegboardColumns ?? 12;
+  const pegRows = pProps.pegboardRows ?? 12;
+  const gap = (pProps.gap as number) ?? 0;
+  const pad = (pProps.padding as number) ?? 0;
+
+  const gridW = parentLayout.width - pad * 2;
+  const gridH = parentLayout.height - pad * 2;
+  const cellW = (gridW - gap * (pegCols - 1)) / pegCols;
+  const cellH = (gridH - gap * (pegRows - 1)) / pegRows;
+
+  return {
+    x: parentLayout.x + pad + (col - 1) * (cellW + gap),
+    y: parentLayout.y + pad + (row - 1) * (cellH + gap),
+    width: colSpan * cellW + (colSpan - 1) * gap,
+    height: rowSpan * cellH + (rowSpan - 1) * gap,
+    rotation: 0,
+    zIndex: el.transform.zIndex,
+    clip: false,
+  };
+}
+
 type Resolver = (el: UIElementV2, parent: ComputedLayout, tree: Map<string, UIElementV2[]>, elements: Map<string, UIElementV2>) => ComputedLayout;
 
 const RESOLVERS: Record<string, Resolver> = {
@@ -109,6 +144,7 @@ const RESOLVERS: Record<string, Resolver> = {
   row: resolveRow,
   column: resolveColumn,
   grid: resolveGrid,
+  pegboard: resolvePegboard,
 };
 
 // ─── Main layout engine ─────────────────────────────────────────
@@ -142,10 +178,16 @@ export function computeLayouts(
     const children = tree.get(parentId) ?? [];
 
     for (const child of children) {
-      const resolver = RESOLVERS[child.layout.mode] ?? resolveFreeform;
+      // Use parent direction to select resolver for children, not child's mode
+      let resolver = RESOLVERS[child.layout.mode] ?? resolveFreeform;
+      if (parentEl && child.layout.mode !== "freeform" && child.layout.mode !== "pegboard") {
+        const pMode = (parentEl.properties?.direction as string) || "";
+        if (pMode === "row") resolver = resolveRow;
+        else if (pMode === "column") resolver = resolveColumn;
+      }
 
-      // For row/column, compute sequential offset from parent container
-      if (parentEl) {
+      // For row/column, compute sequential offset — skip pegboard/freeform children
+      if (parentEl && child.layout.mode !== "pegboard" && child.layout.mode !== "freeform") {
         const pMode = (parentEl.properties?.direction as string) || "";
         const gap = (parentEl.properties?.gap as number) ?? 0;
         if (pMode === "row") {

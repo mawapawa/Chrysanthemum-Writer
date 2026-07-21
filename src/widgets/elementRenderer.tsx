@@ -72,7 +72,7 @@ function ImageWidgetV2(props: ImageStyleProps) {
 
 // ─── ButtonWidgetV2 — pure renderer ─────────────────────────────
 
-function ButtonWidgetV2(props: ButtonStyleProps & { onClick?: () => void }) {
+function ButtonWidgetV2(props: ButtonStyleProps & { onClick?: (e: React.MouseEvent) => void }) {
   return (
     <button
       onClick={props.onClick}
@@ -142,7 +142,7 @@ export function ElementRenderer({ computed, computedStyle, renderProps, events }
         return (
           <ButtonWidgetV2
             {...bp}
-            onClick={() => events?.onButtonAction?.(bp.action)}
+            onClick={(e) => { e.stopPropagation(); events?.onButtonAction?.(bp.action); }}
           />
         );
       }

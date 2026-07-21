@@ -636,7 +636,7 @@ function buildBlockData(type: string, values: string[]): string {
     case "flag": block.flagName = values[0] ? `${values[0]}.${values[1] || ""}` : values[1] || ""; block.flagValue = values[2] === "Active" || values[2] === undefined; break;
     case "link":
     case "choice": block.type = "choice"; block.text = values[0] || ""; block.targetNodeId = values[1] || ""; break;
-    case "dialogue": block.speaker = values[0] || "Narrator"; block.expression = values[1] || "Neutral"; block.text = values[2] || ""; break;
+    case "dialogue": block.speaker = values[0] || ""; block.expression = values[1] || "Neutral"; block.text = values[2] || ""; break;
     case "effect": block.variableName = values[0] || ""; block.operation = values[1] || "+"; block.value = parseInt(values[2]) || 0; break;
     case "condition": block.source = "tracker"; block.targetId = values[0] || ""; block.operator = values[1] || ">="; block.compareValue = parseInt(values[2]) || 1; break;
     case "redirect":

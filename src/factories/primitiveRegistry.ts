@@ -21,7 +21,7 @@ export function createRootContainer(w = 1280, h = 720): UIElementV2 {
     transform: { zIndex: 0 },
     style: {},
     bindings: {},
-    properties: { direction: "column", gap: 8, padding: 12 },
+    properties: { direction: "column", gap: 8, padding: 12, pegboardColumns: 12, pegboardRows: 12 },
   };
 }
 
@@ -34,10 +34,10 @@ const rowContainer: PrimitiveType = {
   create() {
     return [{
       id: id("container"), type: "container",
-      layout: { mode: "column", grow: 0, shrink: 0, basis: 120 },
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 2, colSpan: 12 },
       transform: { zIndex: 0 },
       style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
-      bindings: {}, properties: { direction: "row", gap: 8, padding: 12 },
+      bindings: {}, properties: { direction: "row", gap: 8, padding: 12, pegboardColumns: 12, pegboardRows: 12 },
     }];
   },
 };
@@ -49,10 +49,10 @@ const columnContainer: PrimitiveType = {
   create() {
     return [{
       id: id("container"), type: "container",
-      layout: { mode: "column", grow: 0, shrink: 0, basis: 200 },
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 12, colSpan: 4 },
       transform: { zIndex: 0 },
       style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
-      bindings: {}, properties: { direction: "column", gap: 8, padding: 12 },
+      bindings: {}, properties: { direction: "column", gap: 8, padding: 12, pegboardColumns: 12, pegboardRows: 12 },
     }];
   },
 };
@@ -64,10 +64,10 @@ const gridContainer: PrimitiveType = {
   create() {
     return [{
       id: id("container"), type: "container",
-      layout: { mode: "column", grow: 0, shrink: 0, basis: 200 },
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 12, colSpan: 12 },
       transform: { zIndex: 0 },
       style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
-      bindings: {}, properties: { direction: "grid", gap: 4, padding: 8, gridColumns: 3 },
+      bindings: {}, properties: { direction: "grid", gap: 4, padding: 8, gridColumns: 3, pegboardColumns: 12, pegboardRows: 12 },
     }];
   },
 };
@@ -87,6 +87,67 @@ const overlayContainer: PrimitiveType = {
   },
 };
 
+// ─── Game UI Templates (expand to primitives at create time) ────
+
+const choiceListTemplate: PrimitiveType = {
+  type: "container",
+  label: "Choice List",
+  icon: "☰",
+  create() {
+    const containerId = id("container");
+    return [
+      {
+        id: containerId, type: "container",
+        layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 6, colSpan: 12 },
+        transform: { zIndex: 0 },
+        style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
+        bindings: { repeat: "_choices", visibleDuring: ["choice"] },
+        properties: { direction: "column", gap: 8, padding: 12, pegboardColumns: 12, pegboardRows: 12 },
+      },
+      {
+        id: id("button"), type: "button", parentId: containerId,
+        layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 2, colSpan: 12 },
+        transform: { zIndex: 0 }, style: {},
+        bindings: { textTemplate: "[choice.text]", actionTemplate: "select:[choice.id]" },
+        properties: {},
+      },
+    ];
+  },
+};
+
+const dialogueBoxTemplate: PrimitiveType = {
+  type: "container",
+  label: "Dialogue Box",
+  icon: "💬",
+  create() {
+    const containerId = id("container");
+    return [
+      {
+        id: containerId, type: "container",
+        layout: { mode: "pegboard", row: 10, col: 1, rowSpan: 3, colSpan: 12 },
+        transform: { zIndex: 0 },
+        style: { borderRadius: "12px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid", background: "linear-gradient(to bottom, #1e293b, #0f172a)" },
+        bindings: { visibleDuring: ["dialogue"] },
+        properties: { direction: "column", gap: 4, padding: 16, pegboardColumns: 12, pegboardRows: 12 },
+      },
+      {
+        id: id("text"), type: "text", parentId: containerId,
+        layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 },
+        transform: { zIndex: 0 }, style: {},
+        bindings: { textTemplate: "[_dialogueSpeaker]" },
+        properties: { fontSize: "12px", color: "#94a3b8" },
+      },
+      {
+        id: id("text"), type: "text", parentId: containerId,
+        layout: { mode: "pegboard", row: 2, col: 1, rowSpan: 1, colSpan: 12 },
+        transform: { zIndex: 0 }, style: {},
+        bindings: { textTemplate: "[_dialogueText]" },
+        properties: { fontSize: "15px", color: "#e2e8f0" },
+      },
+    ];
+  },
+};
+
 // ─── Element primitives ──────────────────────────────────────────
 
 const textPrimitive: PrimitiveType = {
@@ -96,7 +157,7 @@ const textPrimitive: PrimitiveType = {
   create() {
     return [{
       id: id("text"), type: "text",
-      layout: { mode: "column", grow: 0, shrink: 0, basis: 30 },
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 },
       transform: { zIndex: 0 }, style: {},
       bindings: { textTemplate: "Text" },
       properties: { fontSize: "14px", color: "#e2e8f0" },
@@ -111,7 +172,7 @@ const imagePrimitive: PrimitiveType = {
   create() {
     return [{
       id: id("image"), type: "image",
-      layout: { mode: "column", grow: 0, shrink: 0, basis: 160 },
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 2, colSpan: 12 },
       transform: { zIndex: 0 }, style: {}, bindings: {},
       properties: { fit: "cover" },
     }];
@@ -125,7 +186,7 @@ const buttonPrimitive: PrimitiveType = {
   create() {
     return [{
       id: id("button"), type: "button",
-      layout: { mode: "column", grow: 0, shrink: 0, basis: 40 },
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 },
       transform: { zIndex: 0 }, style: {},
       bindings: { textTemplate: "Button" },
       properties: { buttonAction: "custom" },
@@ -136,11 +197,16 @@ const buttonPrimitive: PrimitiveType = {
 // ─── Registry ────────────────────────────────────────────────────
 
 export const primitiveRegistry: PrimitiveType[] = [
+  // Containers
   columnContainer,
   rowContainer,
   gridContainer,
   overlayContainer,
+  // Elements
   textPrimitive,
   imagePrimitive,
   buttonPrimitive,
+  // Templates (expand to primitives)
+  dialogueBoxTemplate,
+  choiceListTemplate,
 ];

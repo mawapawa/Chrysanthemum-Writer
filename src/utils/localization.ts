@@ -38,7 +38,7 @@ export function exportToCSV(project: VNProject): string {
           nodeId: node.id,
           nodeTitle: node.title,
           blockIdx: idx,
-          speaker: line.speaker || "Narrator",
+          speaker: line.speaker || "",
           sourceText: line.text,
           targetTranslation: "",
           toneNotes: `expression: ${line.expression || "neutral"}`,
@@ -60,18 +60,18 @@ export function exportToCSV(project: VNProject): string {
 
 function extractRow(nodeId: string, nodeTitle: string, idx: number, block: SceneBlock): LocRow | null {
   let text = "";
-  let speaker = "Narrator";
+  let speaker = "";
   let toneNotes = "";
 
   switch (block.type) {
     case "dialogue":
       text = block.text;
-      speaker = block.speaker;
+      speaker = block.speaker || "";
       toneNotes = `expression: ${block.expression || "neutral"}`;
       break;
     case "narrative":
       text = block.text;
-      speaker = "Narrator";
+      speaker = "";
       break;
     case "choice":
       text = block.text;

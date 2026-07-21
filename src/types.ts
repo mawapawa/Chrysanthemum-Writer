@@ -409,17 +409,21 @@ export interface WidgetSettings {
 
 export interface ResolvedBindings {
   visible: boolean;
-  stateFilter: Record<string, any>; // CSS filter properties
-  text: string;            // interpolated textTemplate
+  stateFilter: Record<string, any>;
+  text: string;
+  repeat?: any[];
+  action?: string;
+  invisible?: boolean;
 }
 
 // ─── Binding Context ────────────────────────────────────────────
 
 export interface BindingContext {
-  vars?: Record<string, any>;       // tracker/flag values
-  dialogueText?: string;             // current line text
+  vars?: Record<string, any>;
+  dialogueText?: string;
   dialogueSpeaker?: string;
   dialogueFormattedText?: string;
+  interactionState?: string;         // "dialogue" | "choice" | "input" | "inventory" | "cutscene"
 }
 
 // ─── Render Properties ──────────────────────────────────────────
@@ -470,6 +474,7 @@ export interface ChoiceItem {
 
 export interface UIRuntimeContext {
   currentNodeId: string;
+  interactionState?: string;
   dialogueText?: string;
   dialogueSpeaker?: string;
   dialogueFormattedText?: string;
@@ -508,9 +513,18 @@ export interface ElementEvents {
 export const UI_SCREENS = ["dialogue", "menu", "inventory", "status", "custom"] as const;
 export type UIScreen = (typeof UI_SCREENS)[number];
 
+export interface UILayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  order: number;
+}
+
 export interface UILayoutCollection {
   screens: Record<string, UIElementV2[]>;
   activeScreen?: string;
+  layers?: UILayer[];
 }
 
 // ─── New Layout Engine Types (v2, alongside existing types) ─────
@@ -545,7 +559,7 @@ export interface AppearanceAsset {
 
 // ─── Layout Types ───────────────────────────────────────────────
 
-export type LayoutModeV2 = 'freeform' | 'row' | 'column' | 'grid';
+export type LayoutModeV2 = 'freeform' | 'row' | 'column' | 'grid' | 'pegboard';
 
 export interface FreeformLayoutV2 {
   mode: 'freeform';
@@ -582,7 +596,15 @@ export interface GridLayoutV2 {
   rowSpan: number;
 }
 
-export type LayoutV2 = FreeformLayoutV2 | RowLayoutV2 | ColumnLayoutV2 | GridLayoutV2;
+export interface PegboardLayoutV2 {
+  mode: 'pegboard';
+  row: number;
+  col: number;
+  rowSpan: number;
+  colSpan: number;
+}
+
+export type LayoutV2 = FreeformLayoutV2 | RowLayoutV2 | ColumnLayoutV2 | GridLayoutV2 | PegboardLayoutV2;
 
 export interface TransformV2 {
   zIndex: number;
@@ -602,6 +624,9 @@ export interface BindingsV2 {
   stateFilterOperator?: string;
   stateFilterValue?: string;
   textTemplate?: string;
+  repeat?: string;
+  actionTemplate?: string;
+  visibleDuring?: string[];
 }
 
 export interface StyleV2 {
@@ -628,7 +653,8 @@ export interface UIElementV2 {
   constraints?: ConstraintsV2;
   bindings: BindingsV2;
   properties: Record<string, any>;  // widget-type-specific (renamed from "settings")
-  layer?: string;                    // layer name for grouping; defaults to "default"
+  layer?: string;                    // legacy: layer name; use layerId
+  layerId?: string;                  // references UILayer.id
 }
 
 // ComputedLayout — the pure output of the layout engine (geometry only)

@@ -57,7 +57,7 @@ function resolveButtonProps(
   return {
     type: "button",
     label: bindings.text || (p.buttonLabel as string) || "Button",
-    action: (p.buttonAction as string) ?? "custom",
+    action: bindings.action || (p.buttonAction as string) || "custom",
     disabled: (p.disabled as boolean) ?? false,
   };
 }
