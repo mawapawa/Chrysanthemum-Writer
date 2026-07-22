@@ -77,10 +77,20 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
                 {user.email && (
                   <p className="text-xs text-slate-500 font-mono">{user.email}</p>
                 )}
-                <button onClick={signOut}
+                <button onClick={async () => { try { await signOut(); } catch (e) { console.error("Sign out failed:", e); alert("Sign out failed"); } }}
                   className="mt-2 flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-rose-300 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors cursor-pointer">
                   <LogOut className="w-3.5 h-3.5" />
                   Sign Out
+                </button>
+                <button onClick={() => {
+                  localStorage.removeItem("chrysanthemum_tokens");
+                  localStorage.removeItem("chrysanthemum_user");
+                  localStorage.removeItem("chrysanthemum_auth_scope");
+                  localStorage.removeItem("chrysanthemum_drive_meta");
+                  alert("Drive data cleared. Restart the app and sign in again.");
+                }}
+                  className="mt-1 text-[10px] font-mono text-slate-500 hover:text-slate-400 underline cursor-pointer">
+                  Reset Drive Data
                 </button>
               </>
             ) : (
