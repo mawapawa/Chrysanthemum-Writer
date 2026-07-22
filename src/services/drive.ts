@@ -120,7 +120,12 @@ export async function scanDriveForProjects(folderId?: string): Promise<Array<{ f
     }
     const params = new URLSearchParams({ q, fields: "files(id,name,modifiedTime)", orderBy: "modifiedTime desc", supportsAllDrives: "true", includeItemsFromAllDrives: "true" });
     const resp = await apiFetch(`/files?${params}`);
-    return (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name, modifiedTime: f.modifiedTime }));
+    const files = (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name, modifiedTime: f.modifiedTime }));
+    console.log("[DRIVE] scanDriveForProjects found", files.length, "files for query:", q, "folderId:", folderId);
+    if (files.length === 0) {
+      console.warn("[DRIVE] No files found. Token scope may be wrong. Try: Settings → Reset Drive Data → Restart → Sign in again.");
+    }
+    return files;
   } catch (e) {
     console.error("[DRIVE] scanDriveForProjects failed", e);
     return [];
