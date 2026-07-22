@@ -28,13 +28,37 @@ function HierarchyPanel({ store, activeLayer, onLayerChange, layers, onAddLayer,
 }) {
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 100); return () => clearInterval(id); }, []);
+
+  // Scene graph integrity checks
+  useEffect(() => {
+    const els = store.elements;
+    const ids = new Set(els.map(e => e.id));
+    for (const e of els) {
+      if (e.parentId && !ids.has(e.parentId)) {
+        console.warn("Scene graph: orphaned element", e.id, "parentId", e.parentId, "not found");
+      }
+    }
+    const roots = els.filter(e => !e.parentId);
+    const children = els.filter(e => e.parentId);
+    if (roots.length > 1) {
+      console.warn("Scene graph: multiple roots", roots.map(r => r.id));
+    }
+  }, [store, tick]);
+
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
   const sorted = useMemo(() => [...layers].sort((a, b) => a.order - b.order), [layers]);
 
-  const topLevel = useMemo(() => store.elements.filter(e => !e.parentId && e.type !== "container" && (e.layerId ?? e.layer ?? "default") === activeLayer), [store, tick, activeLayer]);
+  const topLevel = useMemo(() => {
+    const root = store.elements.find(e => !e.parentId && e.type === "container");
+    const rootId = root?.id;
+    return store.elements.filter(e => {
+      if (!e.parentId && e.type === "container") return false;
+      return e.parentId === rootId;
+    }).filter(e => (e.layerId ?? e.layer ?? "default") === activeLayer);
+  }, [store, tick, activeLayer]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
