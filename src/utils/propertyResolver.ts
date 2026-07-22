@@ -68,6 +68,7 @@ export function resolveProperties(
   context?: BindingContext,
   assets?: ProjectAsset[]
 ): RenderProperties {
+  const RUNTIME_WIDGETS = new Set(["dialogueBox", "choiceList", "nameBox", "portrait", "historyLog"]);
   switch (element.type) {
     case "text":
       return resolveTextProps(element, bindings, context);
@@ -76,8 +77,12 @@ export function resolveProperties(
     case "container":
       return resolveContainerProps(element);
     case "image":
+    case "portrait":
       return resolveImageProps(element, assets);
     default:
+      if (RUNTIME_WIDGETS.has(element.type)) {
+        return resolveContainerProps(element);
+      }
       return {
         type: "text",
         content: bindings.text || "Unknown widget",

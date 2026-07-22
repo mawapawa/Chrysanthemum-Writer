@@ -31,36 +31,53 @@ export function renderV2(
   const elMap = new Map(elements.map(e => [e.id, e]));
 
   const results = new Map<string, React.ReactNode>();
+  const skipIds = new Set<string>();
 
-  // In runtime, skip template containers with empty repeat arrays
-  const templateParents = new Set<string>();
+  // Pass 1: inject registry auto-bindings so all evaluation sees them
+  if (context) {
+    for (const el of elements) {
+      const def = runtimeWidgetRegistry[el.type];
+      if (def) {
+        for (const ab of def.autoBindings) {
+          if (!(el.bindings as any)[ab.target]) {
+            (el.bindings as any)[ab.target] = ab.source;
+          }
+        }
+      }
+    }
+  }
+
+  // Helper: check if an element is a choice/action template (has runtime bindings)
+  const isTemplate = (el: UIElementV2) => {
+    const b = el.bindings;
+    return (b.textTemplate && b.textTemplate.includes("[choice.")) ||
+           (b.actionTemplate && b.actionTemplate.includes("[choice.")) ||
+           (el as any).properties?._role === "choice-button";
+  };
+
+  // Pass 2: pre-evaluate repeat containers — skip templates, keep regular children
   if (context) {
     for (const el of elements) {
       if (el.type === "container" && el.bindings.repeat) {
         const b = evaluateBindings(el, context, elMap);
-        if (b.repeat && b.repeat.length === 0) {
-          templateParents.add(el.id);
+        if (b.repeat) {
+          if (b.repeat.length === 0) {
+            skipIds.add(el.id); // empty: hide container completely
+          }
+          // Always skip template children (they're only used for repeat expansion)
+          for (const other of elements) {
+            if (other.parentId === el.id && isTemplate(other)) skipIds.add(other.id);
+          }
         }
       }
     }
   }
 
   for (const el of elements) {
-    if (templateParents.has(el.parentId ?? "")) continue;
-    if (templateParents.has(el.id)) continue;
+    if (skipIds.has(el.id)) continue;
 
     const computed = layouts.get(el.id);
     if (!computed) continue;
-
-    // Apply auto-bindings from runtime widget registry
-    const widgetDef = runtimeWidgetRegistry[el.type];
-    if (widgetDef && context) {
-      for (const ab of widgetDef.autoBindings) {
-        if (!(el.bindings as any)[ab.target]) {
-          (el.bindings as any)[ab.target] = ab.source;
-        }
-      }
-    }
 
     const bindings = evaluateBindings(el, context, elMap);
     if (!bindings.visible) continue;
@@ -72,9 +89,14 @@ export function renderV2(
         <ElementRenderer key={el.id} computed={computed} computedStyle={computedStyle} renderProps={renderProps} events={events} />
       );
 
-      const children = elements.filter(e => e.parentId === el.id);
+      const children = elements.filter(e => e.parentId === el.id && isTemplate(e));
+      if (children.length === 0) continue;
+
       const pMode = (el.properties?.direction as string) || "column";
       const gap = (el.properties?.gap as number) ?? 0;
+      const pad = (el.properties?.padding as number) ?? 0;
+      const layoutMode = (el.properties as any)?.layoutMode || "automaticStack";
+      const pl = layouts.get(el.id);
 
       bindings.repeat.forEach((item: any, idx: number) => {
         const itemCtx: BindingContext = {
@@ -92,13 +114,21 @@ export function renderV2(
           const ch = layouts.get(child.id);
           if (!ch) return;
 
-          const offset = pMode === "row"
-            ? (ch.width + gap) * idx
-            : (ch.height + gap) * idx;
-
-          const instanceLayout = pMode === "row"
-            ? { ...ch, x: ch.x + offset }
-            : { ...ch, y: ch.y + offset };
+          let instanceLayout;
+          if (layoutMode === "manualPlacement" || !pl) {
+            // Manual: preserve template position, just update bindings
+            instanceLayout = { ...ch };
+          } else {
+            // Automatic stack: position within parent's content area
+            const baseX = pl.x + pad;
+            const baseY = pl.y + pad;
+            const contentW = pl.width - pad * 2;
+            if (pMode === "row") {
+              instanceLayout = { ...ch, x: baseX + (ch.width + gap) * idx, y: baseY, width: ch.width, height: pl.height - pad * 2 };
+            } else {
+              instanceLayout = { ...ch, x: baseX, y: baseY + (ch.height + gap) * idx, width: contentW, height: ch.height };
+            }
+          }
 
           const childProps = resolveProperties(child, childBindings, itemCtx, assets);
           const childStyle = resolveStyle(child.style, assets);

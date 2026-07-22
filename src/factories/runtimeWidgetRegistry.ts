@@ -80,24 +80,25 @@ const choiceList: RuntimeWidgetDefinition = {
   description: "Displays available story choices. Automatically shows during choice states.",
   supportsAdvancedMode: false,
   defaultLayout: { mode: "pegboard", row: 1, col: 1, rowSpan: 6, colSpan: 12 },
-  defaultProperties: { direction: "column", gap: 8, padding: 12 },
+  defaultProperties: { layoutMode: "automaticStack", direction: "column", gap: 8, padding: 12 },
   visibleDuring: ["choice"],
   autoBindings: [{ target: "repeat", source: "_choices" }],
   inspectorGroups: [
     { title: "Layout", fields: [
+      { key: "layoutMode", label: "Layout Mode", type: "select", options: [{ label: "Automatic Stack", value: "automaticStack" }, { label: "Manual Placement", value: "manualPlacement" }] },
       { key: "direction", label: "Direction", type: "select", options: [{ label: "Vertical", value: "column" }, { label: "Horizontal", value: "row" }] },
       { key: "gap", label: "Spacing", type: "number", min: 0, max: 64, step: 2 },
-      { key: "maxVisible", label: "Max Visible", type: "number", min: 0, max: 20, step: 1, placeholder: "0 (unlimited)" },
     ]},
     { title: "Button Style", fields: [
       { key: "buttonHeight", label: "Button Height", type: "number", min: 20, max: 200, step: 10, placeholder: "40" },
+      { key: "padding", label: "Padding", type: "number", min: 0, max: 64, step: 4 },
     ]},
   ],
   childTemplates: [
     {
       type: "button" as WidgetType,
       layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 2, colSpan: 12 },
-      properties: {},
+      properties: { _role: "choice-button" },
       bindings: { textTemplate: "[choice.text]", actionTemplate: "select:[choice.id]" },
       style: {},
     },
