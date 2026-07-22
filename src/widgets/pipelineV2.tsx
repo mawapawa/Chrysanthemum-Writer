@@ -81,6 +81,9 @@ export function renderV2(
     if (!computed) continue;
 
     const runtimeEl = withAutoBindings(el);
+    if (context && el.bindings.textTemplate?.includes("_dialogueText")) {
+      console.log("[PIPELINE] dialogueText binding:", el.bindings.textTemplate, "context.dialogueText:", context.dialogueText, "vars._dialogueText:", context.vars?._dialogueText);
+    }
     const bindings = evaluateBindings(runtimeEl, context, elMap);
     if (!bindings.visible) continue;
 

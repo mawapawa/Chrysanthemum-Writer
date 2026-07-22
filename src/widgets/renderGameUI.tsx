@@ -17,7 +17,7 @@ export function renderGameUI(
   if (!elements || elements.length === 0) return null;
 
   const context: BindingContext = {
-    vars: { ...ctx.vars, _choices: ctx.choices },
+    vars: { ...ctx.vars, _choices: ctx.choices, _dialogueText: ctx.dialogueText, _dialogueSpeaker: ctx.dialogueSpeaker },
     dialogueText: ctx.dialogueText,
     dialogueSpeaker: ctx.dialogueSpeaker,
     dialogueFormattedText: ctx.dialogueFormattedText,

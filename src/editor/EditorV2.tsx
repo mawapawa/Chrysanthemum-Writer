@@ -175,6 +175,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
 }) {
   const [, tick] = useState(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [addMenuId, setAddMenuId] = useState<string | null>(null);
   const dragRef = useRef<{
     elId: string; startX: number; startY: number;
     mode: 'move' | 'resize' | 'reparent' | 'pegboard-move' | 'pegboard-resize';
@@ -447,7 +448,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
   }, [store, activeLayer]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) store.select(null);
+    if (e.target === e.currentTarget) { store.select(null); setAddMenuId(null); }
   }, [store]);
 
   const cw = canvasW ?? 1280;
@@ -537,12 +538,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
                         }}
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          const txt = primitiveRegistry.find(p => p.type === "text");
-                          if (txt) {
-                            const els = txt.create().map(e2 => ({ ...e2, parentId: el.id }));
-                            els.forEach(e2 => store.add(e2));
-                          }
-                          tick(n => n + 1);
+                          setAddMenuId(addMenuId === el.id ? null : el.id);
                         }}>
                           + Add Element
                         </span>
@@ -637,6 +633,53 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
           }
           const y = tl.y + tl.height - 2;
           return <div style={{ position: "absolute", left: tl.x + 2, top: y, width: tl.width - 4, height: 4, background: "#818cf8", borderRadius: 2, boxShadow: "0 0 8px rgba(129,140,248,0.5)", zIndex: 1001, pointerEvents: "none" }} />;
+        })()}
+
+        {/* Add Element popup menu */}
+        {addMenuId && (() => {
+          const ml = layouts.get(addMenuId);
+          if (!ml) return null;
+          const menuW = 140;
+          const menuX = Math.min(ml.x + ml.width - menuW, Math.max(0, ml.x));
+          const menuY = ml.y + 30;
+          return (
+            <div style={{ position: "absolute", left: menuX, top: menuY, width: menuW, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, zIndex: 2000, boxShadow: "0 4px 20px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+              <div style={{ padding: "4px 8px", fontSize: 9, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #334155" }}>Elements</div>
+              {primitiveRegistry.filter(p => p.type !== "container").map(p => (
+                <div key={p.label}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setAddMenuId(null);
+                    const ctId = addMenuId;
+                    const target = store.getById(ctId);
+                    const dir = (target?.properties?.direction as string) || "";
+                    const existing = target ? store.getChildren(ctId).length : 0;
+                    const els = p.create().map((el, i) => {
+                      const child = { ...el, parentId: el.parentId ?? ctId };
+                      if ((child.layout as any).mode === "pegboard") {
+                        if (dir === "row") {
+                          const total = existing + 1;
+                          (child.layout as any).colSpan = Math.max(1, Math.floor(12 / total));
+                          (child.layout as any).col = 1 + Math.min(i, 11);
+                        } else {
+                          (child.layout as any).row = 1;
+                          (child.layout as any).rowSpan = 1;
+                        }
+                      }
+                      return child;
+                    });
+                    els.forEach(el => store.add(el));
+                    tick(n => n + 1);
+                  }}
+                  style={{ padding: "6px 10px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#e2e8f0", fontFamily: "monospace" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span style={{ fontSize: 13 }}>{p.icon}</span> {p.label}
+                </div>
+              ))}
+            </div>
+          );
         })()}
       </div>
     </div>
