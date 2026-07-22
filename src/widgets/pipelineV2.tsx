@@ -33,19 +33,19 @@ export function renderV2(
   const results = new Map<string, React.ReactNode>();
   const skipIds = new Set<string>();
 
-  // Pass 1: inject registry auto-bindings so all evaluation sees them
-  if (context) {
-    for (const el of elements) {
-      const def = runtimeWidgetRegistry[el.type];
-      if (def) {
-        for (const ab of def.autoBindings) {
-          if (!(el.bindings as any)[ab.target]) {
-            (el.bindings as any)[ab.target] = ab.source;
-          }
-        }
+  // Helper: merge registry auto-bindings into a copy (never mutates originals)
+  const withAutoBindings = (el: UIElementV2): UIElementV2 => {
+    if (!context) return el;
+    const def = runtimeWidgetRegistry[el.type];
+    if (!def || def.autoBindings.length === 0) return el;
+    const merged = { ...el.bindings };
+    for (const ab of def.autoBindings) {
+      if (!(merged as any)[ab.target]) {
+        (merged as any)[ab.target] = ab.source;
       }
     }
-  }
+    return { ...el, bindings: merged };
+  };
 
   // Helper: check if an element is a choice/action template (has runtime bindings)
   const isTemplate = (el: UIElementV2) => {
@@ -58,8 +58,9 @@ export function renderV2(
   // Pass 2: pre-evaluate repeat containers — skip templates, keep regular children
   if (context) {
     for (const el of elements) {
-      if (el.type === "container" && el.bindings.repeat) {
-        const b = evaluateBindings(el, context, elMap);
+      const runtimeEl = el.bindings.repeat ? withAutoBindings(el) : el;
+      if (runtimeEl.type === "container" && runtimeEl.bindings.repeat) {
+        const b = evaluateBindings(runtimeEl, context, elMap);
         if (b.repeat) {
           if (b.repeat.length === 0) {
             skipIds.add(el.id); // empty: hide container completely
@@ -79,10 +80,11 @@ export function renderV2(
     const computed = layouts.get(el.id);
     if (!computed) continue;
 
-    const bindings = evaluateBindings(el, context, elMap);
+    const runtimeEl = withAutoBindings(el);
+    const bindings = evaluateBindings(runtimeEl, context, elMap);
     if (!bindings.visible) continue;
 
-    if (el.type === "container" && bindings.repeat && bindings.repeat.length > 0) {
+    if (runtimeEl.type === "container" && bindings.repeat && bindings.repeat.length > 0) {
       const renderProps = resolveProperties(el, bindings, context, assets);
       const computedStyle = resolveStyle(el.style, assets);
       results.set(el.id,

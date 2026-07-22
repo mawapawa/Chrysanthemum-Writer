@@ -43,16 +43,19 @@ function resolveFreeform(
   };
 }
 
+type Resolver = (el: UIElementV2, parent: ComputedLayout, tree: Map<string, UIElementV2[]>, elements: Map<string, UIElementV2>, seqOffset?: number) => ComputedLayout;
+
 function resolveRow(
   el: UIElementV2,
   parentLayout: ComputedLayout,
   _tree: Map<string, UIElementV2[]>,
-  elements: Map<string, UIElementV2>
+  elements: Map<string, UIElementV2>,
+  seqOffset?: number
 ): ComputedLayout {
   const gap = parentGap(el, elements);
   const pad = parentPadding(el, elements);
   const basis = (el.layout as any).basis ?? 100;
-  const offset = (el as any)._rowOffset ?? 0;
+  const offset = seqOffset ?? 0;
   return {
     x: parentLayout.x + pad + offset,
     y: parentLayout.y + pad,
@@ -68,12 +71,13 @@ function resolveColumn(
   el: UIElementV2,
   parentLayout: ComputedLayout,
   _tree: Map<string, UIElementV2[]>,
-  elements: Map<string, UIElementV2>
+  elements: Map<string, UIElementV2>,
+  seqOffset?: number
 ): ComputedLayout {
   const gap = parentGap(el, elements);
   const pad = parentPadding(el, elements);
   const basis = (el.layout as any).basis ?? 100;
-  const offset = (el as any)._colOffset ?? 0;
+  const offset = seqOffset ?? 0;
   return {
     x: parentLayout.x + pad,
     y: parentLayout.y + pad + offset,
@@ -137,8 +141,6 @@ function resolvePegboard(
   };
 }
 
-type Resolver = (el: UIElementV2, parent: ComputedLayout, tree: Map<string, UIElementV2[]>, elements: Map<string, UIElementV2>) => ComputedLayout;
-
 const RESOLVERS: Record<string, Resolver> = {
   freeform: resolveFreeform,
   row: resolveRow,
@@ -171,39 +173,48 @@ export function computeLayouts(
   // Track running positions for row/column layout
   const runningX = new Map<string, number>();
   const runningY = new Map<string, number>();
+  // Track pegboard dimensions for sequential offset computation
+  const childSize = new Map<string, { w: number; h: number }>();
 
   while (queue.length > 0) {
     const { parentId, parentLayout } = queue.shift()!;
     const parentEl = elMap.get(parentId);
     const children = tree.get(parentId) ?? [];
 
+    // Pre-compute pegboard child sizes so offsets can use them
     for (const child of children) {
-      // Use parent direction to select resolver for children, not child's mode
-      let resolver = RESOLVERS[child.layout.mode] ?? resolveFreeform;
-      if (parentEl && child.layout.mode !== "freeform" && child.layout.mode !== "pegboard") {
-        const pMode = (parentEl.properties?.direction as string) || "";
-        if (pMode === "row") resolver = resolveRow;
-        else if (pMode === "column") resolver = resolveColumn;
+      if (child.layout.mode === "pegboard" && parentEl) {
+        const tmp = resolvePegboard(child, parentLayout, tree, elMap);
+        childSize.set(child.id, { w: tmp.width, h: tmp.height });
       }
+    }
 
-      // For row/column, compute sequential offset — skip pegboard/freeform children
-      if (parentEl && child.layout.mode !== "pegboard" && child.layout.mode !== "freeform") {
-        const pMode = (parentEl.properties?.direction as string) || "";
+    for (const child of children) {
+      const pMode = (parentEl?.properties?.direction as string) || "";
+
+      // Compute sequential offset for row/column parents (stored locally, not on element)
+      let seqOff: number | undefined;
+      if (parentEl && (pMode === "row" || pMode === "column")) {
         const gap = (parentEl.properties?.gap as number) ?? 0;
-        if (pMode === "row") {
-          const offset = runningX.get(parentId) ?? 0;
-          (child as any)._rowOffset = offset;
-          const cw = (child.layout as any).basis ?? 100;
-          runningX.set(parentId, offset + cw + gap);
-        } else if (pMode === "column") {
-          const offset = runningY.get(parentId) ?? 0;
-          (child as any)._colOffset = offset;
-          const ch = (child.layout as any).basis ?? 100;
-          runningY.set(parentId, offset + ch + gap);
-        }
+        const sz = childSize.get(child.id);
+        seqOff = pMode === "row" ? (runningX.get(parentId) ?? 0) : (runningY.get(parentId) ?? 0);
+        const dim = (child.layout as any).basis ?? (pMode === "row" ? sz?.w : sz?.h) ?? 100;
+        if (pMode === "row") runningX.set(parentId, seqOff + dim + gap);
+        else runningY.set(parentId, seqOff + dim + gap);
       }
 
-      const computed = resolver(child, parentLayout, tree, elMap);
+      let resolver: Resolver;
+      if (child.layout.mode === "freeform") {
+        resolver = resolveFreeform;
+      } else if (child.layout.mode === "pegboard") {
+        resolver = resolvePegboard;
+      } else if (pMode === "row") {
+        resolver = resolveRow;
+      } else {
+        resolver = resolveColumn;
+      }
+
+      const computed = resolver(child, parentLayout, tree, elMap, seqOff);
       result.set(child.id, computed);
 
       if (tree.has(child.id)) {
