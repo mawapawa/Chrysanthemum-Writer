@@ -68,7 +68,7 @@ export function resolveProperties(
   context?: BindingContext,
   assets?: ProjectAsset[]
 ): RenderProperties {
-  const RUNTIME_WIDGETS = new Set(["dialogueBox", "choiceList", "nameBox", "portrait", "historyLog"]);
+  const RUNTIME_WIDGETS = new Set(["dialogueBox", "choiceList", "nameBox", "portrait", "historyLog", "statDisplay", "inventoryDisplay"]);
   switch (element.type) {
     case "text":
       return resolveTextProps(element, bindings, context);

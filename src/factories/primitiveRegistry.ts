@@ -192,4 +192,6 @@ export const primitiveRegistry: PrimitiveType[] = [
   runtimeWidgetPrimitive("choiceList"),
   runtimeWidgetPrimitive("nameBox"),
   runtimeWidgetPrimitive("portrait"),
+  runtimeWidgetPrimitive("statDisplay"),
+  runtimeWidgetPrimitive("inventoryDisplay"),
 ];

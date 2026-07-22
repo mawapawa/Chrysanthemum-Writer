@@ -81,7 +81,20 @@ export function renderV2(
     if (!computed) continue;
 
     const runtimeEl = withAutoBindings(el);
-    const bindings = evaluateBindings(runtimeEl, context, elMap);
+
+    // Children of runtime widgets inherit parent properties as binding vars
+    let childCtx = context;
+    if (context && el.parentId) {
+      const parent = elMap.get(el.parentId);
+      if (parent && runtimeWidgetRegistry[parent.type]) {
+        const pp = parent.properties as Record<string, any>;
+        const trackers = context.vars?._trackers as Record<string, any> | undefined;
+        const src = pp.source as string;
+        childCtx = { ...context, vars: { ...context.vars, ...pp, value: src && trackers ? trackers[src] : undefined } };
+      }
+    }
+
+    const bindings = evaluateBindings(runtimeEl, childCtx, elMap);
     if (!bindings.visible) continue;
 
     if (runtimeEl.type === "container" && bindings.repeat && bindings.repeat.length > 0) {
@@ -102,11 +115,11 @@ export function renderV2(
 
       bindings.repeat.forEach((item: any, idx: number) => {
         const itemCtx: BindingContext = {
-          ...context,
-          vars: { ...context?.vars, choice: item, _choices: context?.vars?._choices, _dialogueText: context?.dialogueText, _dialogueSpeaker: context?.dialogueSpeaker },
-          dialogueText: context?.dialogueText,
-          dialogueSpeaker: context?.dialogueSpeaker,
-          dialogueFormattedText: context?.dialogueFormattedText,
+          ...childCtx,
+          vars: { ...childCtx?.vars, choice: item, _choices: childCtx?.vars?._choices, _dialogueText: childCtx?.dialogueText, _dialogueSpeaker: childCtx?.dialogueSpeaker },
+          dialogueText: childCtx?.dialogueText,
+          dialogueSpeaker: childCtx?.dialogueSpeaker,
+          dialogueFormattedText: childCtx?.dialogueFormattedText,
         };
 
         children.forEach((child) => {

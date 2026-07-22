@@ -131,7 +131,7 @@ export interface ElementRendererProps {
   events?: ElementEvents;
 }
 
-const RUNTIME_WIDGETS = new Set<string>(["dialogueBox", "choiceList", "nameBox", "portrait", "historyLog"]);
+const RUNTIME_WIDGETS = new Set<string>(["dialogueBox", "choiceList", "nameBox", "portrait", "historyLog", "statDisplay", "inventoryDisplay"]);
 
 export function ElementRenderer({ computed, computedStyle, renderProps, events }: ElementRendererProps) {
   const content = (() => {

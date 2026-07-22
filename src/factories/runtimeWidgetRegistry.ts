@@ -148,9 +148,67 @@ const portrait: RuntimeWidgetDefinition = {
   childTemplates: [],
 };
 
+const statDisplay: RuntimeWidgetDefinition = {
+  type: "statDisplay" as WidgetType,
+  label: "Stat Display",
+  icon: "#",
+  version: 1,
+  category: "Game UI",
+  description: "Displays a tracker value. Shows current stat/variable from the story state.",
+  supportsAdvancedMode: false,
+  defaultLayout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 2 },
+  defaultProperties: { source: "", label: "Stat", direction: "column", gap: 2, padding: 8 },
+  visibleDuring: ["dialogue", "choice"],
+  autoBindings: [],
+  inspectorGroups: [
+    { title: "Data", fields: [
+      { key: "source", label: "Tracker ID", type: "text", placeholder: "e.g. courage" },
+      { key: "label", label: "Display Label", type: "text", placeholder: "Courage" },
+    ]},
+    { title: "Appearance", fields: [
+      { key: "padding", label: "Padding", type: "number", min: 0, max: 64, step: 4 },
+    ]},
+  ],
+  childTemplates: [
+    { type: "text" as WidgetType, layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 }, properties: { _role: "stat-label", fontSize: "10px", color: "#94a3b8" }, bindings: { textTemplate: "[label]" }, style: {} },
+    { type: "text" as WidgetType, layout: { mode: "pegboard", row: 2, col: 1, rowSpan: 1, colSpan: 12 }, properties: { _role: "stat-value", fontSize: "14px", color: "#e2e8f0", fontWeight: "700" }, bindings: { textTemplate: "[value]" }, style: {} },
+  ],
+};
+
+const inventoryDisplay: RuntimeWidgetDefinition = {
+  type: "inventoryDisplay" as WidgetType,
+  label: "Inventory",
+  icon: "\u{1F392}",
+  version: 1,
+  category: "Game UI",
+  description: "Displays the player's inventory. Repeats items from the story state.",
+  supportsAdvancedMode: false,
+  defaultLayout: { mode: "pegboard", row: 1, col: 1, rowSpan: 4, colSpan: 3 },
+  defaultProperties: { layoutMode: "automaticStack", direction: "column", gap: 4, padding: 8, pegboardColumns: 12, pegboardRows: 12 },
+  visibleDuring: ["dialogue", "choice"],
+  autoBindings: [{ target: "repeat", source: "_inventory" }],
+  inspectorGroups: [
+    { title: "Layout", fields: [
+      { key: "direction", label: "Direction", type: "select", options: [{ label: "Vertical", value: "column" }, { label: "Horizontal", value: "row" }] },
+      { key: "gap", label: "Spacing", type: "number", min: 0, max: 64, step: 2 },
+    ]},
+  ],
+  childTemplates: [
+    {
+      type: "text" as WidgetType,
+      layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 },
+      properties: { _role: "inventory-item", fontSize: "11px", color: "#e2e8f0" },
+      bindings: { textTemplate: "[choice.name]" },
+      style: {},
+    },
+  ],
+};
+
 export const runtimeWidgetRegistry: Record<string, RuntimeWidgetDefinition> = {
   dialogueBox,
   choiceList,
   nameBox,
   portrait,
+  statDisplay,
+  inventoryDisplay,
 };

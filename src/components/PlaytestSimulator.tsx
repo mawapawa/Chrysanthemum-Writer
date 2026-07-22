@@ -619,7 +619,9 @@ export default function PlaytestSimulator({
   }));
   const showChoicesNow = isOnLastLine && availableChoices.length > 0;
   const widgetChoices = showChoicesNow ? choicesData : [];
-  const runtimeVars = { ...vars, _hasChoices: showChoicesNow ? 1 : 0 };
+  const inventoryItems = playerInventory.map(id => ({ id, name: id.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) }));
+  const runtimeVars = { ...vars, _hasChoices: showChoicesNow ? 1 : 0, _trackers: { ...vars }, _inventory: inventoryItems };
+  const v1Values = { ...vars, _hasChoices: showChoicesNow ? 1 : 0 } as Record<string, number>;
 
   // Sequential block processing — determine ending state
   const endingBlock = (node.blocks || []).find((b): b is SceneBlock & { type: "ending" } => b.type === "ending");
@@ -1155,7 +1157,7 @@ export default function PlaytestSimulator({
                     dialogueText: activeLine?.text,
                     dialogueFormattedText: activeLine?.formattedText ? expandWiggleSpans(activeLine.formattedText) : undefined,
                     dialogueSpeaker: activeLine?.speaker,
-                    runtimeValues: runtimeVars,
+                    runtimeValues: v1Values,
                     inventory: playerInventory,
                     choices: widgetChoices,
                     onSelectChoice: (choiceId) => {
@@ -1395,7 +1397,7 @@ export default function PlaytestSimulator({
                     {overlay.layout.map(widget => (
                       <div key={widget.id} style={{ position: "absolute", left: widget.x, top: widget.y, width: widget.w, height: widget.h, overflow: "hidden" }}>
                         <WidgetRenderer project={project} config={widget} runtime={{
-                          runtimeValues: runtimeVars,
+                    runtimeValues: v1Values,
                           inventory: playerInventory,
                     choices: widgetChoices,
                           inspectedItemId: inspectedItemId ?? "",
