@@ -118,17 +118,17 @@ export function renderV2(
 
           let instanceLayout;
           if (layoutMode === "manualPlacement" || !pl) {
-            // Manual: preserve template position, just update bindings
             instanceLayout = { ...ch };
           } else {
-            // Automatic stack: position within parent's content area
             const baseX = pl.x + pad;
             const baseY = pl.y + pad;
             const contentW = pl.width - pad * 2;
+            // Use widget-defined button height if available, fall back to template's pegboard height
+            const itemH = (el.properties as any)?.buttonHeight || ch.height;
             if (pMode === "row") {
-              instanceLayout = { ...ch, x: baseX + (ch.width + gap) * idx, y: baseY, width: ch.width, height: pl.height - pad * 2 };
+              instanceLayout = { ...ch, x: baseX + (itemH + gap) * idx, y: baseY, width: itemH, height: pl.height - pad * 2 };
             } else {
-              instanceLayout = { ...ch, x: baseX, y: baseY + (ch.height + gap) * idx, width: contentW, height: ch.height };
+              instanceLayout = { ...ch, x: baseX, y: baseY + (itemH + gap) * idx, width: contentW, height: itemH };
             }
           }
 
