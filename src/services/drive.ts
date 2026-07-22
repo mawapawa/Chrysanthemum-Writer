@@ -120,12 +120,7 @@ export async function scanDriveForProjects(folderId?: string): Promise<Array<{ f
     }
     const params = new URLSearchParams({ q, fields: "files(id,name,modifiedTime)", orderBy: "modifiedTime desc", supportsAllDrives: "true", includeItemsFromAllDrives: "true" });
     const resp = await apiFetch(`/files?${params}`);
-    const files = (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name, modifiedTime: f.modifiedTime }));
-    console.log("[DRIVE] scanDriveForProjects found", files.length, "files for query:", q, "folderId:", folderId);
-    if (files.length === 0) {
-      console.warn("[DRIVE] No files found. Token scope may be wrong. Try: Settings → Reset Drive Data → Restart → Sign in again.");
-    }
-    return files;
+    return (resp.files || []).map((f: any) => ({ fileId: f.id, name: f.name, modifiedTime: f.modifiedTime }));
   } catch (e) {
     console.error("[DRIVE] scanDriveForProjects failed", e);
     return [];
@@ -154,6 +149,18 @@ export async function listUserFolders(): Promise<Array<{ id: string; name: strin
 
 export function driveFolderUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
+}
+
+export function driveFileUrl(fileId: string): string {
+  return `https://drive.google.com/file/d/${fileId}/view`;
+}
+
+export function parseFileIdFromUrl(url: string): string | null {
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  // Also accept bare file ID (no URL)
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
+  return null;
 }
 
 export function parseFolderIdFromUrl(url: string): string | null {

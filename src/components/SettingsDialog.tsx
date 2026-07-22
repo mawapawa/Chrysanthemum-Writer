@@ -217,40 +217,6 @@ export default function SettingsDialog({ project, onUpdateProject, onClose, user
           </div>
         </div>
 
-        {/* Drive Diagnostics */}
-        <div>
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Drive Diagnostics</h3>
-          <div className="bg-white/5 rounded-xl p-3">
-            <button onClick={async () => {
-              const lines: string[] = [];
-              lines.push(`=== Drive Diagnostics ===`);
-              lines.push(`User: ${user?.email || "(not signed in)"}`);
-              lines.push(`Linked folder ID: ${project?.driveFolderId || "(none)"}`);
-              lines.push(`Linked file ID: ${project?.driveFileId || "(none)"}`);
-              try {
-                const { scanDriveForProjects } = await import("../services/drive");
-                const { getAccessToken } = await import("../services/auth");
-                const token = await getAccessToken();
-                lines.push(`Has access token: ${!!token}`);
-                const found = await scanDriveForProjects(project?.driveFolderId);
-                lines.push(`Scan returned ${found.length} file(s):`);
-                for (const f of found) {
-                  lines.push(`  - ${f.name} (${f.fileId}) modified: ${f.modifiedTime || "?"}`);
-                }
-              } catch (e: any) {
-                lines.push(`ERROR: ${e?.message || String(e)}`);
-              }
-              const full = lines.join("\n");
-              console.log(full);
-              alert(full);
-            }}
-              className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-200 rounded-lg transition-colors cursor-pointer">
-              Run Drive Diagnostics
-            </button>
-            <p className="text-[10px] text-slate-500 mt-2">Scans Drive and shows results. Copy the alert text and send it to the developer.</p>
-          </div>
-        </div>
-
         {/* Export */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Export</h3>
