@@ -1,5 +1,6 @@
 import React from "react";
-import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ContainerStyleProps, ImageStyleProps, ElementEvents } from "../types";
+import type { ComputedLayout, ComputedStyle, RenderProperties, TextStyleProps, ButtonStyleProps, ContainerStyleProps, ImageStyleProps, ElementEvents, WidgetType } from "../types";
+import { runtimeWidgetRegistry } from "../factories/runtimeWidgetRegistry";
 
 // ─── TextWidgetV2 — pure renderer, receives only props ──
 
@@ -132,8 +133,18 @@ export interface ElementRendererProps {
   events?: ElementEvents;
 }
 
+const RUNTIME_WIDGETS = new Set<string>(["dialogueBox", "choiceList", "nameBox", "portrait", "historyLog"]);
+
 export function ElementRenderer({ computed, computedStyle, renderProps, events }: ElementRendererProps) {
   const content = (() => {
+    if (RUNTIME_WIDGETS.has(renderProps.type)) {
+      // Runtime widgets render as containers with their registry-defined behavior
+      const def = runtimeWidgetRegistry[renderProps.type];
+      if (def) {
+        const label = computedStyle?.background ? undefined : def.label;
+        return null; // container — children render separately via pipeline
+      }
+    }
     switch (renderProps.type) {
       case "text":
         return <TextWidgetV2 {...renderProps} />;

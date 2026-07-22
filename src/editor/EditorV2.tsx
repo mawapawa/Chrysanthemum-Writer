@@ -3,6 +3,7 @@ import type { UIElementV2, ComputedLayout, ProjectAsset, BindingContext, Element
 import { createElementStore, ElementStore, createEmptyLayouts } from "./elementStore";
 import { renderV2 } from "../widgets/pipelineV2";
 import { primitiveRegistry, createRootContainer } from "../factories/primitiveRegistry";
+import { runtimeWidgetRegistry } from "../factories/runtimeWidgetRegistry";
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -650,6 +651,34 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
 
       {/* Content */}
       <InspectSection title="Content">
+        {/* Runtime widgets: fields from registry */}
+        {(() => {
+          const rwDef = runtimeWidgetRegistry[sel.type];
+          if (rwDef) {
+            return rwDef.inspectorGroups.map(group => (
+              <div key={group.title} style={{ marginBottom: 12 }}>
+                <div style={{ color: "#64748b", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{group.title}</div>
+                {group.fields.map(f => (
+                  <InspectField key={f.key} label={f.label}>
+                    {f.type === "select" ? (
+                      <select value={sel.properties[f.key] ?? ""} onChange={e => sp(f.key, e.target.value)} style={inspInput}>
+                        {f.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    ) : f.type === "boolean" ? (
+                      <input type="checkbox" checked={!!sel.properties[f.key]} onChange={e => sp(f.key, e.target.checked)} style={{ cursor: "pointer" }} />
+                    ) : f.type === "number" ? (
+                      <input type="number" value={sel.properties[f.key] ?? ""} onChange={e => sp(f.key, Number(e.target.value))} style={inspInput} min={f.min} max={f.max} step={f.step} placeholder={f.placeholder} />
+                    ) : (
+                      <input value={sel.properties[f.key] ?? ""} onChange={e => sp(f.key, e.target.value)} style={inspInput} placeholder={f.placeholder} />
+                    )}
+                  </InspectField>
+                ))}
+              </div>
+            ));
+          }
+          return null;
+        })()}
+
         {sel.type === "text" && <>
           <InspectField label="Text"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
           <InspectField label="Font Size"><input value={sel.properties.fontSize ?? ""} onChange={e => sp("fontSize", e.target.value)} style={inspInput} placeholder="14px" /></InspectField>

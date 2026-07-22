@@ -1,4 +1,5 @@
-import type { UIElementV2 } from "../types";
+import type { UIElementV2, WidgetType } from "../types";
+import { runtimeWidgetRegistry } from "./runtimeWidgetRegistry";
 
 function id(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -196,6 +197,45 @@ const buttonPrimitive: PrimitiveType = {
 
 // ─── Registry ────────────────────────────────────────────────────
 
+// ─── Runtime Widgets (powered by registry) ─────────────────────
+
+function runtimeWidgetPrimitive(defName: string): PrimitiveType {
+  const def = runtimeWidgetRegistry[defName];
+  if (!def) throw new Error(`Unknown runtime widget: ${defName}`);
+  return {
+    type: def.type,
+    label: def.label,
+    icon: def.icon,
+    create() {
+      const containerId = id("rw_container");
+      const result: UIElementV2[] = [
+        {
+          id: containerId,
+          type: def.type as WidgetType,
+          layout: { ...def.defaultLayout } as any,
+          transform: { zIndex: 0 },
+          style: { borderRadius: "8px", borderWidth: "1px", borderColor: "#334155", borderStyle: "solid" },
+          bindings: {},
+          properties: { ...def.defaultProperties },
+        },
+      ];
+      for (const ct of def.childTemplates) {
+        result.push({
+          id: id("rw_child"),
+          type: ct.type as WidgetType,
+          parentId: containerId,
+          layout: { ...ct.layout } as any,
+          transform: { zIndex: 0 },
+          style: ct.style ? { ...ct.style } : {},
+          bindings: ct.bindings ? { ...ct.bindings } : {},
+          properties: { ...ct.properties },
+        });
+      }
+      return result;
+    },
+  };
+}
+
 export const primitiveRegistry: PrimitiveType[] = [
   // Containers
   columnContainer,
@@ -206,7 +246,12 @@ export const primitiveRegistry: PrimitiveType[] = [
   textPrimitive,
   imagePrimitive,
   buttonPrimitive,
-  // Templates (expand to primitives)
+  // Runtime Widgets
+  runtimeWidgetPrimitive("dialogueBox"),
+  runtimeWidgetPrimitive("choiceList"),
+  runtimeWidgetPrimitive("nameBox"),
+  runtimeWidgetPrimitive("portrait"),
+  // Legacy templates
   dialogueBoxTemplate,
   choiceListTemplate,
 ];

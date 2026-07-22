@@ -309,7 +309,7 @@ export interface VNProject {
   uiLayouts?: UILayoutCollection;
 }
 
-export type WidgetType = "container" | "text" | "image" | "statText" | "statBar" | "button" | "choiceList" | "portrait" | "inventory" | "divider" | "borderBox" | "repeater" | "inspector";
+export type WidgetType = "container" | "text" | "image" | "statText" | "statBar" | "button" | "choiceList" | "portrait" | "inventory" | "divider" | "borderBox" | "repeater" | "inspector" | "dialogueBox" | "nameBox" | "historyLog";
 
 export interface WidgetConfig {
   id: string;

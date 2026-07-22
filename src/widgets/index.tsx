@@ -656,6 +656,9 @@ export const REGISTRY: Record<WidgetType, WidgetDescriptor> = {
   borderBox:   { type: "borderBox",   label: "Border Box", icon: Square,              defaultW: 2, defaultH: 2, component: BorderBoxWidget },
   repeater:    { type: "repeater",    label: "Repeater",    icon: CopyPlus,           defaultW: 2, defaultH: 2, component: RepeaterWidget },
   inspector:   { type: "inspector",   label: "Inspector",   icon: Search,             defaultW: 1, defaultH: 2, component: InspectorWidget },
+  dialogueBox: { type: "dialogueBox", label: "Dialogue Box", icon: Square,               defaultW: 2, defaultH: 3, component: ContainerWidget },
+  nameBox:     { type: "nameBox",     label: "Name Box",     icon: Type,                 defaultW: 1, defaultH: 1, component: TextWidget },
+  historyLog:  { type: "historyLog",  label: "History Log",  icon: List,                 defaultW: 2, defaultH: 3, component: ContainerWidget },
 };
 
 // ── Conditional visibility ───────────────────────────────────────

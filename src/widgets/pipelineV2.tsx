@@ -5,6 +5,7 @@ import { resolveProperties } from "../utils/propertyResolver";
 import { computeLayouts } from "../utils/layoutEngine";
 import { resolveStyle } from "../utils/styleResolver";
 import { ElementRenderer } from "./elementRenderer";
+import { runtimeWidgetRegistry } from "../factories/runtimeWidgetRegistry";
 
 /**
  * Full rendering pipeline v2:
@@ -50,6 +51,16 @@ export function renderV2(
 
     const computed = layouts.get(el.id);
     if (!computed) continue;
+
+    // Apply auto-bindings from runtime widget registry
+    const widgetDef = runtimeWidgetRegistry[el.type];
+    if (widgetDef && context) {
+      for (const ab of widgetDef.autoBindings) {
+        if (!(el.bindings as any)[ab.target]) {
+          (el.bindings as any)[ab.target] = ab.source;
+        }
+      }
+    }
 
     const bindings = evaluateBindings(el, context, elMap);
     if (!bindings.visible) continue;
