@@ -441,7 +441,7 @@ async function signInTauriSupabase(): Promise<AuthUser> {
   const { listen } = await import("@tauri-apps/api/event");
   const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
 
-  const port = await invoke<number>("start_oauth_server");
+  const port = await invoke<number>("start_fixed_oauth_server");
   const redirectUri = `http://127.0.0.1:${port}/callback`;
 
   const { data, error } = await supabase!.auth.signInWithOAuth({
