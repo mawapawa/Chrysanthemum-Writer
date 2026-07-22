@@ -21,6 +21,8 @@ const SCOPE_KEY = "chrysanthemum_auth_scope";
 const AUTH_SCOPE_HASH = "v5";
 
 import { isTauri, invoke } from "@tauri-apps/api/core";
+import { syncGoogleUserToSupabase } from "./supabaseAuth";
+import { supabase } from "./supabase";
 
 const AUTH_DEBUG = true;
 function log(...args: unknown[]) {
@@ -164,14 +166,45 @@ function notifyListeners(user: AuthUser | null): void {
   listeners.forEach((fn) => fn(user));
 }
 
+function supabaseUserToAuthUser(sbUser: any): AuthUser | null {
+  if (!sbUser) return null;
+  const meta = sbUser.user_metadata ?? {};
+  return {
+    id: sbUser.id ?? meta.sub ?? "supabase-user",
+    name: meta.full_name ?? meta.name ?? sbUser.email ?? "Supabase User",
+    email: sbUser.email ?? meta.email,
+    avatarUrl: meta.avatar_url ?? meta.picture,
+  };
+}
+
+async function getSupabaseUser(): Promise<AuthUser | null> {
+  try {
+    const { data, error } = await supabase?.auth.getUser() ?? {};
+    if (error || !data?.user) return null;
+    return supabaseUserToAuthUser(data.user);
+  } catch {
+    return null;
+  }
+}
+
 export function getCurrentUser(): AuthUser | null {
-  const user = getStoredUser();
-  if (user) return user;
-  const tokens = getStoredTokens();
-  if (tokens) {
+  // Supabase is the source of truth for identity.
+  // If it's configured, the session is managed by Supabase internally.
+  // Google tokens are kept separately for Drive access only.
+  const stored = getStoredUser();
+  const hasGoogleTokens = getStoredTokens() !== null;
+  if (stored) return stored;
+  if (hasGoogleTokens) {
     return { id: "google-user", name: "Google User" };
   }
   return null;
+}
+
+// Async version that checks Supabase session — used by the hook
+export async function refreshCurrentUser(): Promise<AuthUser | null> {
+  const sbUser = await getSupabaseUser();
+  if (sbUser) return sbUser;
+  return getCurrentUser();
 }
 
 export async function getAccessToken(): Promise<string | null> {
@@ -198,22 +231,65 @@ export function onAuthChange(fn: (user: AuthUser | null) => void): () => void {
   };
 }
 
+// Subscribe to Supabase auth state changes and pipe to existing listeners
+let supabaseUnsubscribe: (() => void) | null = null;
+export function listenToSupabaseAuth(): void {
+  if (!supabase || supabaseUnsubscribe) return;
+  const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    if (session?.user) {
+      const authUser = supabaseUserToAuthUser(session.user);
+      notifyListeners(authUser);
+    } else {
+      notifyListeners(null);
+    }
+  });
+  supabaseUnsubscribe = data?.subscription?.unsubscribe ?? null;
+}
+
+export function unlistenToSupabaseAuth(): void {
+  supabaseUnsubscribe?.();
+  supabaseUnsubscribe = null;
+}
+
 export async function tryHandleOAuthRedirect(): Promise<boolean> {
   log("tryHandleOAuthRedirect() — checking for auth code in URL");
   const url = new URL(window.location.href);
   const code = url.searchParams.get("code");
+  if (!code) { log("tryHandleOAuthRedirect() — no code in URL"); return false; }
+
+  // Try Supabase code exchange first
+  if (supabase) {
+    try {
+      log("tryHandleOAuthRedirect() — exchanging code with Supabase");
+      await supabase.auth.exchangeCodeForSession(code);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const authUser = supabaseUserToAuthUser(user)!;
+        notifyListeners(authUser);
+        window.history.replaceState({}, "", window.location.origin);
+        log("tryHandleOAuthRedirect() — Supabase success");
+        return true;
+      }
+    } catch (err) {
+      log("tryHandleOAuthRedirect() — Supabase exchange failed, trying Google fallback:", err);
+    }
+  }
+
+  // Fallback: existing Google OAuth code exchange
   const codeVerifier = sessionStorage.getItem("pkce_verifier");
   if (code && codeVerifier) {
-    log("tryHandleOAuthRedirect() — code found, exchanging");
+    log("tryHandleOAuthRedirect() — exchanging with Google fallback");
     sessionStorage.removeItem("pkce_verifier");
     const tokens = await exchangeCode(code, codeVerifier);
     const user = await fetchUserInfo(tokens.accessToken);
     notifyListeners(user);
+    syncGoogleUserToSupabase(user);
     window.history.replaceState({}, "", window.location.origin);
-    log("tryHandleOAuthRedirect() — success");
+    log("tryHandleOAuthRedirect() — Google fallback success");
     return true;
   }
-  log("tryHandleOAuthRedirect() — no code in URL");
+
+  log("tryHandleOAuthRedirect() — no matching handler for code");
   return false;
 }
 
@@ -297,6 +373,7 @@ async function signInTauri(): Promise<AuthUser> {
         log("signInTauri() — token exchange succeeded");
         const user = await fetchUserInfo(tokens.accessToken);
         notifyListeners(user);
+        syncGoogleUserToSupabase(user); // non-blocking — fire-and-forget
         settled = true;
         closeWindow();
         resolve(user);
@@ -345,17 +422,114 @@ async function signInTauri(): Promise<AuthUser> {
   });
 }
 
+// ─── Supabase OAuth flows (alongside existing Google Drive flow) ──
+
+async function signInWebSupabase(): Promise<AuthUser> {
+  log("signInWebSupabase()");
+  const redirectTo = REDIRECT_URI;
+  const { data, error } = await supabase!.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo, scopes: "openid email profile https://www.googleapis.com/auth/drive" },
+  });
+  if (error || !data?.url) throw new Error(error?.message ?? "Supabase OAuth returned no URL");
+  window.location.href = data.url;
+  throw new Error("Redirecting to Supabase Google sign-in");
+}
+
+async function signInTauriSupabase(): Promise<AuthUser> {
+  log("signInTauriSupabase()");
+  const { listen } = await import("@tauri-apps/api/event");
+  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+
+  const port = await invoke<number>("start_oauth_server");
+  const redirectUri = `http://127.0.0.1:${port}/callback`;
+
+  const { data, error } = await supabase!.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: redirectUri, scopes: "openid email profile https://www.googleapis.com/auth/drive" },
+  });
+  if (error || !data?.url) throw new Error(error?.message ?? "Supabase OAuth returned no URL");
+
+  return new Promise<AuthUser>((resolve, reject) => {
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    let settled = false;
+    let unlisten: (() => void) | null = null;
+    let oauthWindow: any = null;
+
+    const closeWindow = () => { try { oauthWindow?.close(); } catch {} };
+    const cleanup = async () => {
+      unlisten?.();
+      closeWindow();
+      try { await invoke("cancel_oauth_server", { port }); } catch {}
+    };
+
+    const timeout = setTimeout(async () => {
+      if (settled) return;
+      settled = true; log("signInTauriSupabase() — timeout"); await cleanup(); reject(new Error("OAuth timed out"));
+    }, TIMEOUT_MS);
+
+    listen<string>("oauth_redirect", async (event) => {
+      if (settled) return;
+      clearTimeout(timeout);
+      try {
+        const url = new URL(event.payload);
+        const code = url.searchParams.get("code");
+        if (!code) { settled = true; await cleanup(); reject(new Error("No auth code")); return; }
+        log("signInTauriSupabase() — exchanging code for Supabase session");
+        await supabase!.auth.exchangeCodeForSession(code);
+        const { data: { user } } = await supabase!.auth.getUser();
+        if (!user) throw new Error("No Supabase user after exchange");
+        const authUser = supabaseUserToAuthUser(user)!;
+        notifyListeners(authUser);
+        settled = true; await cleanup(); resolve(authUser);
+      } catch (err) {
+        settled = true; await cleanup(); reject(err);
+      }
+    }).then((fn) => {
+      unlisten = fn;
+      log("signInTauriSupabase() — opening webview");
+      try {
+        oauthWindow = new WebviewWindow("google-oauth", { url: data.url!, width: 600, height: 700, title: "Sign in with Google", resizable: true });
+      } catch (createErr) {
+        log("WebviewWindow constructor threw:", String(createErr));
+        if (!settled) { settled = true; clearTimeout(timeout); cleanup(); reject(new Error("Failed to create OAuth window: " + createErr)); }
+      }
+      oauthWindow?.once("tauri://error", async (evt: any) => {
+        const msg = evt?.payload ? String(evt.payload) : "(no payload)";
+        log("WebviewWindow error:", msg);
+        if (!settled) { settled = true; clearTimeout(timeout); await cleanup(); reject(new Error("OAuth window error: " + msg)); }
+      });
+    }).catch((err: unknown) => {
+      settled = true; clearTimeout(timeout); reject(new Error("Failed to register listener: " + String(err)));
+    });
+  });
+}
+
 export async function signIn(): Promise<AuthUser> {
   const inTauri = isTauri();
   log("signIn() — isTauri:", inTauri);
-  if (inTauri) {
-    return signInTauri();
+
+  // Try Supabase first (application identity)
+  if (supabase) {
+    try {
+      const user = inTauri ? await signInTauriSupabase() : await signInWebSupabase();
+      log("signIn() — Supabase auth succeeded, also ensuring Drive token");
+      return user;
+    } catch (err) {
+      log("signIn() — Supabase auth failed, falling back to Google Drive OAuth:", err);
+    }
   }
+
+  // Fall back to existing Google OAuth (Drive + legacy identity)
+  if (inTauri) return signInTauri();
   return signInWeb();
 }
 
 export async function signOut(): Promise<void> {
   log("signOut()");
+  // Sign out of Supabase (application identity)
+  try { await supabase?.auth.signOut(); } catch {}
+  // Sign out of Google Drive tokens
   clearTokens();
   notifyListeners(null);
 }
