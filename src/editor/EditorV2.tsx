@@ -654,16 +654,23 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
                     const target = store.getById(ctId);
                     const dir = (target?.properties?.direction as string) || "";
                     const existing = target ? store.getChildren(ctId).length : 0;
+                    const pp = target?.properties as any;
+                    const pCols = pp?.pegboardColumns ?? 12;
+                    const pRows = pp?.pegboardRows ?? 12;
                     const els = p.create().map((el, i) => {
                       const child = { ...el, parentId: el.parentId ?? ctId };
                       if ((child.layout as any).mode === "pegboard") {
                         if (dir === "row") {
                           const total = existing + 1;
-                          (child.layout as any).colSpan = Math.max(1, Math.floor(12 / total));
-                          (child.layout as any).col = 1 + Math.min(i, 11);
+                          (child.layout as any).colSpan = Math.max(1, Math.floor(pCols / total));
+                          (child.layout as any).col = 1 + Math.min(i, pCols - 1);
+                          (child.layout as any).rowSpan = pRows;
+                          (child.layout as any).row = 1;
                         } else {
                           (child.layout as any).row = 1;
                           (child.layout as any).rowSpan = 1;
+                          (child.layout as any).colSpan = pCols;
+                          (child.layout as any).col = 1;
                         }
                       }
                       return child;
@@ -806,7 +813,7 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
                 <option value="rollback">Rollback</option>
                 <option value="quit">Quit</option>
                 <option value="close_overlay">Close Overlay</option>
-                {screenNames?.filter(s => !["dialogue","menu","inventory","status","custom"].includes(s)).map(s => (
+                {screenNames?.filter(s => s !== "dialogue").map(s => (
                   <option key={s} value={`open_hud:${s}`}>Open HUD: {s}</option>
                 ))}
               </select>
@@ -907,7 +914,8 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   const layouts = project.uiLayouts ?? createEmptyLayouts();
   const [activeScreen, setActiveScreen] = useState(layouts.activeScreen ?? "dialogue");
   const [activeLayer, setActiveLayer] = useState("default");
-  const [canvasRes, setCanvasRes] = useState(RESOLUTIONS[2]); // default 1280x720
+  const [canvasRes, setCanvasRes] = useState(RESOLUTIONS[2]);
+  const [screenMenu, setScreenMenu] = useState<{ name: string; x: number; y: number } | null>(null);
   const elements = layouts.screens[activeScreen] ?? [];
 
   const [store, setStore] = useState<ElementStore | null>(null);
@@ -1008,6 +1016,7 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
         <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginRight: 8 }}>Menu Layouts</span>
         {allScreens.map(name => (
           <button key={name} onClick={() => setActiveScreen(name)}
+            onContextMenu={(e) => { e.preventDefault(); setScreenMenu({ name, x: e.clientX, y: e.clientY }); }}
             style={{
               padding: "3px 10px", fontSize: 10, fontFamily: "monospace", fontWeight: 600,
               textTransform: "capitalize", borderRadius: 6,
@@ -1028,6 +1037,51 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
           style={{ padding: "3px 8px", fontSize: 10, fontFamily: "monospace", background: "transparent", color: "#64748b", border: "1px dashed #475569", borderRadius: 6, cursor: "pointer" }}>
           + New
         </button>
+
+        {/* Screen context menu */}
+        {screenMenu && (
+          <>
+            <div style={{ position: "fixed", inset: 0, zIndex: 9998 }} onClick={() => setScreenMenu(null)} />
+            <div style={{ position: "fixed", left: screenMenu.x, top: screenMenu.y, zIndex: 9999, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, boxShadow: "0 4px 20px rgba(0,0,0,0.4)", overflow: "hidden", minWidth: 120 }}>
+              <div onClick={() => {
+                const n = prompt("New name:", screenMenu.name);
+                if (n && n !== screenMenu.name && !layouts.screens[n]) {
+                  const screens = { ...layouts.screens, [n]: layouts.screens[screenMenu.name] };
+                  delete screens[screenMenu.name];
+                  onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen: activeScreen === screenMenu.name ? n : activeScreen }, lastModified: Date.now() });
+                  if (activeScreen === screenMenu.name) setActiveScreen(n);
+                }
+                setScreenMenu(null);
+              }} style={{ padding: "6px 12px", fontSize: 10, cursor: "pointer", color: "#e2e8f0" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>✎ Rename</div>
+              {screenMenu.name !== "dialogue" && <div key="dup" onClick={() => {
+                const n = prompt("New screen name:", screenMenu.name + "_copy");
+                if (n && !layouts.screens[n]) {
+                  const elements = layouts.screens[screenMenu.name].map(e => ({ ...e, id: e.id + "_copy", parentId: e.parentId ? e.parentId + "_copy" : undefined }));
+                  const screens = { ...layouts.screens, [n]: elements };
+                  onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen }, lastModified: Date.now() });
+                  setActiveScreen(n);
+                }
+                setScreenMenu(null);
+              }} style={{ padding: "6px 12px", fontSize: 10, cursor: "pointer", color: "#e2e8f0" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>⎘ Duplicate</div>}
+              {screenMenu.name !== "dialogue" && <div key="del" onClick={() => {
+                if (confirm(`Delete "${screenMenu.name}"?`)) {
+                  const screens = { ...layouts.screens };
+                  delete screens[screenMenu.name];
+                  onUpdateProject?.({ ...project, uiLayouts: { screens, activeScreen: activeScreen === screenMenu.name ? "dialogue" : activeScreen }, lastModified: Date.now() });
+                  if (activeScreen === screenMenu.name) setActiveScreen("dialogue");
+                }
+                setScreenMenu(null);
+              }} style={{ padding: "6px 12px", fontSize: 10, cursor: "pointer", color: "#f87171" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>✕ Delete</div>}
+            </div>
+          </>
+        )}
+
         {/* Resolution selector */}
         <select value={`${canvasRes.w}×${canvasRes.h}`} onChange={e => {
           const opt = RESOLUTIONS.find(r => `${r.w}×${r.h}` === e.target.value);
@@ -1055,16 +1109,23 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
               const parentDir = (target?.properties?.direction as string) || "";
               const existing = target ? store.getChildren(containerId) : [];
               const total = existing.length + 1;
+              const pp = target?.properties as any;
+              const pegCols = pp?.pegboardColumns ?? 12;
+              const pegRows = pp?.pegboardRows ?? 12;
               const els = p.create().map((el, i) => {
                 const child = { ...el, parentId: el.parentId ?? containerId };
                 if ((child.layout as any).mode === "pegboard") {
                   if (parentDir === "row") {
-                    const span = Math.max(1, Math.floor(12 / total));
+                    const span = Math.max(1, Math.floor(pegCols / total));
                     (child.layout as any).colSpan = span;
                     (child.layout as any).col = 1 + (existing.length + i) * span;
+                    (child.layout as any).rowSpan = pegRows;
+                    (child.layout as any).row = 1;
                   } else {
                     (child.layout as any).row = (child.layout as any).row ?? 1;
                     (child.layout as any).rowSpan = 1;
+                    (child.layout as any).colSpan = pegCols;
+                    (child.layout as any).col = 1;
                   }
                 }
                 return child;
