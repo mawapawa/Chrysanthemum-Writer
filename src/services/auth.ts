@@ -86,7 +86,8 @@ async function refreshAccessToken(refreshToken: string): Promise<TokenStore> {
     }),
   });
   if (!resp.ok) {
-    log("refreshAccessToken() — failed with status", resp.status);
+    const errBody = await resp.text().catch(() => "(no body)");
+    log("refreshAccessToken() — failed with status", resp.status, errBody);
     throw new Error("Token refresh failed");
   }
   const data = await resp.json();
@@ -305,20 +306,33 @@ async function signInTauri(): Promise<AuthUser> {
     }).then((fn) => {
       unlisten = fn;
       log("signInTauri() — listener registered, opening webview");
-      oauthWindow = new WebviewWindow("google-oauth", {
-        url: authUrl,
-        width: 600,
-        height: 700,
-        title: "Sign in with Google",
-        resizable: true,
-      });
-      oauthWindow.once("tauri://error", () => {
+      try {
+        oauthWindow = new WebviewWindow("google-oauth", {
+          url: authUrl,
+          width: 600,
+          height: 700,
+          title: "Sign in with Google",
+          resizable: true,
+        });
+      } catch (createErr) {
+        log("signInTauri() — WebviewWindow constructor threw:", String(createErr));
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          try { invoke("cancel_oauth_server", { port }); } catch { }
+          reject(new Error(`Failed to create OAuth window: ${createErr}`));
+          return;
+        }
+      }
+      oauthWindow.once("tauri://error", (evt: any) => {
+        const msg = evt?.payload ? String(evt.payload) : "(no payload)";
+        log("signInTauri() — WebviewWindow tauri://error:", msg);
         if (!settled) {
           settled = true;
           clearTimeout(timeout);
           closeWindow();
           try { invoke("cancel_oauth_server", { port }); } catch { }
-          reject(new Error("Failed to open OAuth window"));
+          reject(new Error(`Failed to open OAuth window: ${msg}`));
         }
       });
     }).catch((err: unknown) => {
