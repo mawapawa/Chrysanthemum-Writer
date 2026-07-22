@@ -1033,15 +1033,17 @@ export default function PlaytestSimulator({
           ) : (
             <>
             {(() => {
-              const v2Elements = project.uiLayouts?.screens?.dialogue;
-              if (v2Elements && v2Elements.length > 0) {
+              // Render all non-empty V2 screens (dialogue base + HUD overlays)
+              const screenNames = Object.keys(project.uiLayouts?.screens ?? {}).filter(s => project.uiLayouts!.screens[s].length > 0);
+              if (screenNames.length > 0) {
                 return (
                   <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                     <div style={{ position: "relative", flex: 1 }}>
-                      <GameUIRenderer
-                        screen="dialogue"
-                        project={project}
-                        ctx={{
+                      {screenNames.map(screen => (
+                        <GameUIRenderer key={screen}
+                          screen={screen}
+                          project={project}
+                          ctx={{
                           currentNodeId,
                           interactionState: widgetChoices.length > 0 && showChoicesNow ? "choice" : "dialogue",
                           dialogueText: activeLine?.text,
@@ -1112,6 +1114,7 @@ export default function PlaytestSimulator({
                           onEquipItem: handleEquipItem,
                         }}
                       />
+                    ))}
                     </div>
                     {/* Scene navigator bar */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", background: "#0f172a", borderTop: "1px solid #1e293b" }}>

@@ -1050,17 +1050,13 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
           return (
             <button key={p.label} onClick={() => {
               if (!canAdd) return;
-              const selEl = store.selectedId ? store.getById(store.selectedId) : null;
               const containerId = findContainerForAdd(store)!;
               const target = store.getById(containerId);
-              console.log("[ADD] selected:", selEl?.id, selEl?.type, "target:", containerId, target?.type, "target.parentId:", target?.parentId);
-              if (!target) { console.warn("[ADD] target container not found!"); return; }
               const parentDir = (target?.properties?.direction as string) || "";
               const existing = target ? store.getChildren(containerId) : [];
               const total = existing.length + 1;
               const els = p.create().map((el, i) => {
                 const child = { ...el, parentId: el.parentId ?? containerId };
-                console.log("[ADD] creating child:", child.id, child.type, "parentId:", child.parentId);
                 if ((child.layout as any).mode === "pegboard") {
                   if (parentDir === "row") {
                     const span = Math.max(1, Math.floor(12 / total));
