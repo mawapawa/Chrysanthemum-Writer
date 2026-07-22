@@ -139,7 +139,10 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
 
 const HANDLE = 8;
 const SNAP = (v: number) => Math.round(v / 10) * 10;
-const GRID = 10; // dot grid and snap spacing
+const GRID = 10;
+const MIN_HIT = 20; // minimum editor hit area dimension
+
+const editorHit = (v: number) => Math.max(v, MIN_HIT);
 
 // ─── CanvasV2 ────────────────────────────────────────────────────
 
@@ -185,10 +188,13 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
     const l = el.layout as any;
     clickRef.current = null;
     if (l.mode === "pegboard") {
+      // Top-level pegboard — move on root grid
+      // Child pegboard — start with pegboard-move; switches to reparent on exit
       dragRef.current = {
         elId, startX: e.clientX, startY: e.clientY,
         mode: 'pegboard-move',
         orig: { row: l.row ?? 1, col: l.col ?? 1, rowSpan: l.rowSpan ?? 1, colSpan: l.colSpan ?? 1 },
+        dropTargetId: el.parentId, // current parent — used for exit detection
       };
       return;
     }
@@ -305,6 +311,26 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
           tick(n => n + 1);
         }
       } else if (d.mode === 'pegboard-move') {
+        // Check if cursor left the current parent → switch to reparent
+        if (d.dropTargetId) {
+          const parentLayout = layoutsRef.current.get(d.dropTargetId);
+          if (parentLayout) {
+            const canvas = canvasRef.current;
+            if (canvas) {
+              const rect = canvas.getBoundingClientRect();
+              const mx = e.clientX - rect.left;
+              const my = e.clientY - rect.top;
+              const outside = mx < parentLayout.x || mx > parentLayout.x + parentLayout.width ||
+                              my < parentLayout.y || my > parentLayout.y + parentLayout.height;
+              if (outside) {
+                d.mode = 'reparent';
+                d.dropTargetId = undefined;
+                tick(n => n + 1);
+                return;
+              }
+            }
+          }
+        }
         const pg = parentGrid(d.elId);
         if (!pg) return;
         const colDelta = Math.round(dx / pg.stepX);
@@ -471,7 +497,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
                     onMouseLeave={() => setHoveredId(prev => prev === el.id ? null : prev)}
                     style={{
                       position: "absolute", left: l.x, top: l.y,
-                      width: l.width, height: l.height,
+                      width: editorHit(l.width), height: editorHit(l.height),
                       cursor: "pointer", zIndex: 1,
                     }}>
                     {isEmpty && !isDragging && (
@@ -527,7 +553,7 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
                   onMouseLeave={() => setHoveredId(prev => prev === el.id ? null : prev)}
                   style={{
                     position: "absolute", left: l.x, top: l.y,
-                    width: l.width, height: l.height,
+                    width: editorHit(l.width), height: editorHit(l.height),
                     cursor: el.layout.mode === "freeform" ? "move" : "grab",
                     zIndex: 900,
                   }} />
@@ -540,10 +566,15 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
         {selectedLayout && store.selectedId && (() => {
           const selEl = store.getById(store.selectedId);
           if (selEl && !selEl.parentId && selEl.type === "container") return null;
+          // Use editor-adjusted dimensions so overlay/handles match the clickable area
+          const sx = selectedLayout.x;
+          const sy = selectedLayout.y;
+          const sw = editorHit(selectedLayout.width);
+          const sh = editorHit(selectedLayout.height);
           return <>
             <div style={{
-              position: "absolute", left: selectedLayout.x - 1, top: selectedLayout.y - 1,
-              width: selectedLayout.width + 2, height: selectedLayout.height + 2,
+              position: "absolute", left: sx - 1, top: sy - 1,
+              width: sw + 2, height: sh + 2,
               border: "1px solid #6366f1", borderRadius: 1, pointerEvents: "none", zIndex: 999,
             }} />
             {([ 
@@ -561,8 +592,8 @@ function CanvasV2({ store, assets, activeLayer, canvasW, canvasH, storeVersion, 
                   position: "absolute", zIndex: 1000, cursor: cur,
                   width: HANDLE, height: HANDLE, boxSizing: "border-box",
                   background: "#fff", border: "2px solid #6366f1", borderRadius: 2,
-                  left: selectedLayout.x + cx * selectedLayout.width - HANDLE/2,
-                  top: selectedLayout.y + cy * selectedLayout.height - HANDLE/2,
+                  left: sx + cx * sw - HANDLE/2,
+                  top: sy + cy * sh - HANDLE/2,
                 }} />
             ))}
           </>;
@@ -837,14 +868,17 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
   // Find the container to insert new elements into
   const findContainerForAdd = useCallback((s: ElementStore): string | undefined => {
     const sel = s.selectedId ? s.getById(s.selectedId) : undefined;
-    if (sel?.type === "container") return sel.id;
-    if (sel?.parentId) {
-      const parent = s.getById(sel.parentId);
-      if (parent?.type === "container") return parent.id;
+    if (!sel) {
+      const root = s.elements.find(e => !e.parentId && e.type === "container");
+      return root?.id;
     }
-    // Fallback to root container when nothing is selected
-    const root = s.elements.find(e => !e.parentId && e.type === "container");
-    return root?.id;
+    // Any container-type or runtime widget can accept children
+    if (sel.type === "container" || runtimeWidgetRegistry[sel.type]) return sel.id;
+    if (sel.parentId) {
+      const parent = s.getById(sel.parentId);
+      if (parent && (parent.type === "container" || runtimeWidgetRegistry[parent.type])) return parent.id;
+    }
+    return undefined;
   }, []);
 
   // Initialize store from project data — auto-create root container on empty screens
@@ -950,7 +984,33 @@ export function EditorV2({ project, onUpdateProject, onBack }: EditorV2Props) {
             <button key={p.label} onClick={() => {
               if (!canAdd) return;
               const containerId = findContainerForAdd(store)!;
-              const els = p.create().map(el => ({ ...el, parentId: el.parentId ?? containerId }));
+              const target = store.getById(containerId);
+              const parentDir = (target?.properties?.direction as string) || "";
+              const existing = target ? store.getChildren(containerId) : [];
+              const total = existing.length + 1;
+              const els = p.create().map((el, i) => {
+                const child = { ...el, parentId: el.parentId ?? containerId };
+                if ((child.layout as any).mode === "pegboard") {
+                  if (parentDir === "row") {
+                    const span = Math.max(1, Math.floor(12 / total));
+                    (child.layout as any).colSpan = span;
+                    (child.layout as any).col = 1 + (existing.length + i) * span;
+                  } else {
+                    (child.layout as any).row = (child.layout as any).row ?? 1;
+                    (child.layout as any).rowSpan = 1;
+                  }
+                }
+                return child;
+              });
+              // Redistribute existing children evenly in row containers
+              if (parentDir === "row" && total > 1) {
+                const newSpan = Math.max(1, Math.floor(12 / total));
+                existing.forEach((ch, idx) => {
+                  if ((ch.layout as any).mode === "pegboard") {
+                    store.update(ch.id, { layout: { ...ch.layout, col: 1 + idx * newSpan, colSpan: newSpan } as any });
+                  }
+                });
+              }
               els.forEach(el => store.add(el));
             }}
               style={{
