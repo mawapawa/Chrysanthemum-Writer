@@ -14,11 +14,11 @@ interface TokenStore {
 const CLIENT_ID = "1056893092259-lpjbsnuopvfcdkejn0h4rcvq5qfv1hbl.apps.googleusercontent.com";
 const CLIENT_SECRET = "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";
 const REDIRECT_URI = `${window.location.origin}/oauth/callback`;
-const SCOPES = "openid https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
+const SCOPES = "openid https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
 const TOKEN_KEY = "chrysanthemum_tokens";
 const USER_KEY = "chrysanthemum_user";
 const SCOPE_KEY = "chrysanthemum_auth_scope";
-const AUTH_SCOPE_HASH = "v3";
+const AUTH_SCOPE_HASH = "v4";
 
 import { isTauri, invoke } from "@tauri-apps/api/core";
 
@@ -255,6 +255,7 @@ async function signInTauri(): Promise<AuthUser> {
 
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = base64UrlEncode(await sha256(codeVerifier));
+  log("signInTauri() — verifier hash check:", base64UrlEncode(await sha256(codeVerifier)) === codeChallenge ? "OK" : "MISMATCH");
 
   const authUrl = await buildAuthUrl(redirectUri, codeChallenge);
 
@@ -291,6 +292,7 @@ async function signInTauri(): Promise<AuthUser> {
           return;
         }
         log("signInTauri() — code extracted from redirect");
+        log("signInTauri() — exchanging code with verifier length:", codeVerifier.length);
         const tokens = await exchangeCode(code, codeVerifier, redirectUri);
         log("signInTauri() — token exchange succeeded");
         const user = await fetchUserInfo(tokens.accessToken);
