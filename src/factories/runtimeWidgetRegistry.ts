@@ -66,8 +66,8 @@ const dialogueBox: RuntimeWidgetDefinition = {
     ]},
   ],
   childTemplates: [
-    { type: "text" as WidgetType, layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 }, properties: { fontSize: "12px", color: "#94a3b8" }, bindings: { textTemplate: "[_dialogueSpeaker]" }, style: {} },
-    { type: "text" as WidgetType, layout: { mode: "pegboard", row: 2, col: 1, rowSpan: 1, colSpan: 12 }, properties: { fontSize: "15px", color: "#e2e8f0" }, bindings: { textTemplate: "[_dialogueText]" }, style: {} },
+    { type: "text" as WidgetType, layout: { mode: "pegboard", row: 1, col: 1, rowSpan: 1, colSpan: 12 }, properties: { _role: "speaker-name", fontSize: "12px", color: "#94a3b8" }, bindings: { textTemplate: "[_dialogueSpeaker]" }, style: {} },
+    { type: "text" as WidgetType, layout: { mode: "pegboard", row: 2, col: 1, rowSpan: 1, colSpan: 12 }, properties: { _role: "dialogue-text", fontSize: "15px", color: "#e2e8f0" }, bindings: { textTemplate: "[_dialogueText]" }, style: {} },
   ],
 };
 
@@ -80,7 +80,7 @@ const choiceList: RuntimeWidgetDefinition = {
   description: "Displays available story choices. Automatically shows during choice states.",
   supportsAdvancedMode: false,
   defaultLayout: { mode: "pegboard", row: 1, col: 1, rowSpan: 6, colSpan: 12 },
-  defaultProperties: { layoutMode: "automaticStack", direction: "column", gap: 8, padding: 12 },
+  defaultProperties: { layoutMode: "automaticStack", direction: "column", gap: 8, padding: 12, pegboardColumns: 12, pegboardRows: 12 },
   visibleDuring: ["choice"],
   autoBindings: [{ target: "repeat", source: "_choices" }],
   inspectorGroups: [

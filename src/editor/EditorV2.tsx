@@ -125,6 +125,9 @@ function HierarchyNode({ element, store, depth }: { element: UIElementV2; store:
         )}
         {children.length === 0 && <span style={{ width: 14 }} />}
         <span style={{ color: "#64748b", fontSize: 9 }}>{element.type}</span>
+        {(element as any).properties?._role && (
+          <span style={{ marginLeft: 4, fontSize: 8, color: "#818cf8", background: "#312e8120", padding: "0 4px", borderRadius: 3 }}>{(element as any).properties._role}</span>
+        )}
         <span style={{ marginLeft: 4 }}>{element.id}</span>
       </div>
       {expanded && children.map(ch => <HierarchyNode key={ch.id} element={ch} store={store} depth={depth + 1} />)}
