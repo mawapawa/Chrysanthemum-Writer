@@ -9,6 +9,14 @@ interface TokenStore {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+  idToken?: string;
+}
+
+// Latest Google ID token (JWT) — captured from token exchange for Supabase signInWithIdToken
+let _latestGoogleIdToken: string | null = null;
+
+export function getLatestGoogleIdToken(): string | null {
+  return _latestGoogleIdToken;
 }
 
 const CLIENT_ID = "1056893092259-lpjbsnuopvfcdkejn0h4rcvq5qfv1hbl.apps.googleusercontent.com";
@@ -125,10 +133,12 @@ async function exchangeCode(code: string, codeVerifier: string, redirectUri?: st
   } catch (e) {
     throw new Error(`[AUTH] exchangeCode returned non-JSON: ${text}`);
   }
+  _latestGoogleIdToken = data.id_token ?? null;
   const tokens: TokenStore = {
     accessToken: data.access_token,
-    refreshToken: data.refresh_token,
+    refreshToken: data.refresh_token ?? "",
     expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+    idToken: data.id_token ?? undefined,
   };
   storeTokens(tokens);
   return tokens;
@@ -283,7 +293,7 @@ export async function tryHandleOAuthRedirect(): Promise<boolean> {
     const tokens = await exchangeCode(code, codeVerifier);
     const user = await fetchUserInfo(tokens.accessToken);
     notifyListeners(user);
-    syncGoogleUserToSupabase(user);
+    syncGoogleUserToSupabase(getLatestGoogleIdToken() ?? undefined);
     window.history.replaceState({}, "", window.location.origin);
     log("tryHandleOAuthRedirect() — Google fallback success");
     return true;
@@ -373,7 +383,7 @@ async function signInTauri(): Promise<AuthUser> {
         log("signInTauri() — token exchange succeeded");
         const user = await fetchUserInfo(tokens.accessToken);
         notifyListeners(user);
-        syncGoogleUserToSupabase(user); // non-blocking — fire-and-forget
+        syncGoogleUserToSupabase(getLatestGoogleIdToken() ?? undefined); // non-blocking
         settled = true;
         closeWindow();
         resolve(user);
@@ -481,6 +491,16 @@ async function signInTauriSupabase(): Promise<AuthUser> {
         if (!user) throw new Error("No Supabase user after exchange");
         const authUser = supabaseUserToAuthUser(user)!;
         notifyListeners(authUser);
+        // Upsert profile for the newly-authenticated Supabase user
+        try {
+          const meta = user.user_metadata ?? {};
+          const { error: upsertErr } = await supabase!.from("profiles").upsert(
+            { id: user.id, display_name: meta.full_name ?? meta.name ?? user.email ?? "User", email: user.email ?? meta.email, avatar_url: meta.avatar_url ?? meta.picture },
+            { onConflict: "id" }
+          );
+          if (upsertErr) log("signInTauriSupabase() — profile upsert failed:", upsertErr.message);
+          else log("signInTauriSupabase() — profile upserted");
+        } catch {}
         settled = true; await cleanup(); resolve(authUser);
       } catch (err) {
         settled = true; await cleanup(); reject(err);
