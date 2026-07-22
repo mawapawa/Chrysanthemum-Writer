@@ -652,15 +652,14 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
         </button>
       </div>
 
-      {/* Content */}
-      <InspectSection title="Content">
-        {/* Runtime widgets: fields from registry */}
-        {(() => {
-          const rwDef = runtimeWidgetRegistry[sel.type];
-          if (rwDef) {
-            return rwDef.inspectorGroups.map(group => (
-              <div key={group.title} style={{ marginBottom: 12 }}>
-                <div style={{ color: "#64748b", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{group.title}</div>
+      {/* Runtime Widget Inspector */}
+      {(() => {
+        const rwDef = runtimeWidgetRegistry[sel.type];
+        if (rwDef) {
+          return <>
+            {/* Registry-defined groups */}
+            {rwDef.inspectorGroups.map(group => (
+              <InspectSection key={group.title} title={group.title}>
                 {group.fields.map(f => (
                   <InspectField key={f.key} label={f.label}>
                     {f.type === "select" ? (
@@ -676,49 +675,63 @@ function InspectorV2({ store, assets, project, onUpdateProject, screenNames }: {
                     )}
                   </InspectField>
                 ))}
-              </div>
-            ));
-          }
-          return null;
-        })()}
+              </InspectSection>
+            ))}
 
-        {sel.type === "text" && <>
-          <InspectField label="Text"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
-          <InspectField label="Font Size"><input value={sel.properties.fontSize ?? ""} onChange={e => sp("fontSize", e.target.value)} style={inspInput} placeholder="14px" /></InspectField>
-        </>}
-        {sel.type === "button" && <>
-          <InspectField label="Label"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
-          <InspectField label="Action">
-            <select value={sel.properties.buttonAction ?? "custom"} onChange={e => sp("buttonAction", e.target.value)} style={inspInput}>
-              <option value="custom">Custom</option>
-              <option value="save">Save</option>
-              <option value="load">Load</option>
-              <option value="rollback">Rollback</option>
-              <option value="quit">Quit</option>
-              <option value="close_overlay">Close Overlay</option>
-              {screenNames?.filter(s => !["dialogue","menu","inventory","status","custom"].includes(s)).map(s => (
-                <option key={s} value={`open_hud:${s}`}>Open HUD: {s}</option>
+            {/* Template children — inline selection */}
+            <InspectSection title="Internal Elements">
+              {store.getChildren(sel.id).filter(ch => (ch as any).properties?._role).map(ch => (
+                <div key={ch.id} onClick={() => store.select(ch.id)}
+                  style={{ padding: "4px 8px", marginBottom: 2, borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "monospace", background: store.selectedId === ch.id ? "#6366f120" : "transparent", color: store.selectedId === ch.id ? "#a5b4fc" : "#94a3b8", border: store.selectedId === ch.id ? "1px solid #6366f140" : "1px solid transparent" }}>
+                  ✎ {(ch as any).properties._role}
+                </div>
               ))}
-            </select>
-          </InspectField>
-        </>}
-        {sel.type === "image" && <>
-          <InspectField label="Asset ID"><input value={sel.properties.assetId ?? ""} onChange={e => sp("assetId", e.target.value)} style={inspInput} /></InspectField>
-          <InspectField label="Fit">
-            <select value={sel.properties.fit ?? "cover"} onChange={e => sp("fit", e.target.value)} style={inspInput}>
-              <option value="cover">Cover</option><option value="contain">Contain</option><option value="stretch">Stretch</option>
-            </select>
-          </InspectField>
-        </>}
-        {sel.type === "container" && <>
-          <InspectField label="Direction">
-            <select value={sel.properties.direction ?? ""} onChange={e => sp("direction", e.target.value)} style={inspInput}>
-              <option value="">Freeform</option><option value="row">Row</option><option value="column">Column</option>
-            </select>
-          </InspectField>
-          <InspectField label="Gap"><input value={sel.properties.gap ?? 0} onChange={e => sp("gap", Number(e.target.value))} style={inspInput} type="number" /></InspectField>
-        </>}
-      </InspectSection>
+            </InspectSection>
+          </>;
+        }
+        return null;
+      })()}
+
+      {!runtimeWidgetRegistry[sel.type] && <>
+        <InspectSection title="Content">
+          {sel.type === "text" && <>
+            <InspectField label="Text"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
+            <InspectField label="Font Size"><input value={sel.properties.fontSize ?? ""} onChange={e => sp("fontSize", e.target.value)} style={inspInput} placeholder="14px" /></InspectField>
+          </>}
+          {sel.type === "button" && <>
+            <InspectField label="Label"><input value={sel.bindings.textTemplate ?? ""} onChange={e => sb("textTemplate", e.target.value)} style={inspInput} /></InspectField>
+            <InspectField label="Action">
+              <select value={sel.properties.buttonAction ?? "custom"} onChange={e => sp("buttonAction", e.target.value)} style={inspInput}>
+                <option value="custom">Custom</option>
+                <option value="save">Save</option>
+                <option value="load">Load</option>
+                <option value="rollback">Rollback</option>
+                <option value="quit">Quit</option>
+                <option value="close_overlay">Close Overlay</option>
+                {screenNames?.filter(s => !["dialogue","menu","inventory","status","custom"].includes(s)).map(s => (
+                  <option key={s} value={`open_hud:${s}`}>Open HUD: {s}</option>
+                ))}
+              </select>
+            </InspectField>
+          </>}
+          {sel.type === "image" && <>
+            <InspectField label="Asset ID"><input value={sel.properties.assetId ?? ""} onChange={e => sp("assetId", e.target.value)} style={inspInput} /></InspectField>
+            <InspectField label="Fit">
+              <select value={sel.properties.fit ?? "cover"} onChange={e => sp("fit", e.target.value)} style={inspInput}>
+                <option value="cover">Cover</option><option value="contain">Contain</option><option value="stretch">Stretch</option>
+              </select>
+            </InspectField>
+          </>}
+          {sel.type === "container" && <>
+            <InspectField label="Direction">
+              <select value={sel.properties.direction ?? ""} onChange={e => sp("direction", e.target.value)} style={inspInput}>
+                <option value="">Freeform</option><option value="row">Row</option><option value="column">Column</option>
+              </select>
+            </InspectField>
+            <InspectField label="Gap"><input value={sel.properties.gap ?? 0} onChange={e => sp("gap", Number(e.target.value))} style={inspInput} type="number" /></InspectField>
+          </>}
+        </InspectSection>
+      </>}
 
       {/* Appearance */}
       <InspectSection title="Appearance">
