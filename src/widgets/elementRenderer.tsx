@@ -38,13 +38,11 @@ function TextWidgetV2(props: TextStyleProps) {
         ) : (
           <span>{props.content}</span>
         )
-      ) : (
+      ) : props.isDialogueBox ? (
         <span style={{ color: "#64748b", fontStyle: "italic", fontSize: "10px" }}>
-          {props.isDialogueBox
-            ? "Dialogue will appear here during playtest"
-            : "Double-click to edit text"}
+          Dialogue will appear here during playtest
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

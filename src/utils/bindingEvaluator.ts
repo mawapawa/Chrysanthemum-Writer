@@ -52,12 +52,13 @@ function resolvePath(obj: any, path: string): any {
   return val;
 }
 
-function interpolate(template: string | undefined, vars?: Record<string, any>): string {
+function interpolate(template: string | undefined, vars?: Record<string, any>, isRuntime?: boolean): string {
   if (!template) return "";
   return template.replace(/\[([\w.]+)\]/g, (_, name) => {
     const val = resolvePath(vars, name);
     if (val !== undefined) return String(val);
-    return `[${name}]`;
+    // In runtime mode, unresolved bindings become empty instead of showing the placeholder
+    return isRuntime ? "" : `[${name}]`;
   });
 }
 
@@ -107,8 +108,9 @@ export function evaluateBindings(
   const stateFilter = computeStateFilter(
     b.stateFilterStyle, b.stateFilterSource, b.stateFilterOperator, b.stateFilterValue, merged
   );
-  const text = interpolate(b.textTemplate, merged);
+  const isRuntime = !!context;
+  const text = interpolate(b.textTemplate, merged, isRuntime);
   const repeat = b.repeat ? resolvePath(merged, b.repeat) : undefined;
-  const action = interpolate(b.actionTemplate, merged);
+  const action = interpolate(b.actionTemplate, merged, isRuntime);
   return { visible, stateFilter, text, repeat: Array.isArray(repeat) ? repeat : undefined, action: action || undefined, invisible };
 }

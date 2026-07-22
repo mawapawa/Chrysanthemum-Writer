@@ -1033,13 +1033,15 @@ export default function PlaytestSimulator({
           ) : (
             <>
             {(() => {
-              // Render all non-empty V2 screens (dialogue base + HUD overlays)
-              const screenNames = Object.keys(project.uiLayouts?.screens ?? {}).filter(s => project.uiLayouts!.screens[s].length > 0);
-              if (screenNames.length > 0) {
+              // Render V2 screens: dialogue base + any active HUD overlay
+              const allScreens = Object.keys(project.uiLayouts?.screens ?? {}).filter(s => project.uiLayouts!.screens[s].length > 0);
+              const activeHud = activeOverlayId?.startsWith("hud_") ? activeOverlayId.slice(4) : null;
+              const renderScreens = allScreens.filter(s => s === "dialogue" || s === activeHud);
+              if (renderScreens.length > 0) {
                 return (
                   <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                     <div style={{ position: "relative", flex: 1 }}>
-                      {screenNames.map(screen => (
+                      {renderScreens.map(screen => (
                         <GameUIRenderer key={screen}
                           screen={screen}
                           project={project}

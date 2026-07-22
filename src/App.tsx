@@ -43,7 +43,7 @@ const BLANK_PROJECT: VNProject = {
       id: "node-start",
       title: "Beginning",
       description: "Your story starts here. Double-click the canvas to create new scene nodes.",
-      speaker: "Narrator",
+      speaker: "",
       dialogueLines: [],
       choices: [],
       statChanges: [],
@@ -77,21 +77,21 @@ const RAVENWOOD_TEMPLATE: VNProject = {
   scenes: [],
   nodes: {
     "node-start": {
-      id: "node-start", title: "Manor Front Gates", description: "Astrid and Jack stand in the pouring rain.", speaker: "Narrator",
-      dialogueLines: [{ id: "line-1", speaker: "Narrator", text: "[The rain drums heavily against the rusty gates.]", expression: "Neutral" }],
+      id: "node-start", title: "Manor Front Gates", description: "Astrid and Jack stand in the pouring rain.", speaker: "",
+      dialogueLines: [{ id: "line-1", speaker: "", text: "[The rain drums heavily against the rusty gates.]", expression: "Neutral" }],
       choices: [{ id: "choice-1", text: "Search the gardener's shed", targetNodeId: "node-shed" }],
       statChanges: [{ variableName: "courage", operation: "+", value: 5 }],
       position: { x: 100, y: 150 }, isEnding: false, nodeType: "story"
     },
     "node-shed": {
-      id: "node-shed", title: "Dusty Gardener Shed", description: "You search through old spades.", speaker: "Narrator",
-      dialogueLines: [{ id: "line-s1", speaker: "Narrator", text: "[Spiders scramble away.]", expression: "Neutral" }],
+      id: "node-shed", title: "Dusty Gardener Shed", description: "You search through old spades.", speaker: "",
+      dialogueLines: [{ id: "line-s1", speaker: "", text: "[Spiders scramble away.]", expression: "Neutral" }],
       choices: [{ id: "choice-s1", text: "Return to Gates", targetNodeId: "node-hallway" }],
       statChanges: [], position: { x: 420, y: 80 }, isEnding: false, nodeType: "story"
     },
     "node-hallway": {
-      id: "node-hallway", title: "Grand Manor Foyer", description: "Inside the manor.", speaker: "Narrator",
-      dialogueLines: [{ id: "line-h1", speaker: "Narrator", text: "[The temperature drops instantly.]", expression: "Neutral" }],
+      id: "node-hallway", title: "Grand Manor Foyer", description: "Inside the manor.", speaker: "",
+      dialogueLines: [{ id: "line-h1", speaker: "", text: "[The temperature drops instantly.]", expression: "Neutral" }],
       choices: [
         { id: "choice-h1", text: "Step forward", targetNodeId: "node-good-end" },
         { id: "choice-h2", text: "Bolt back outside", targetNodeId: "node-bad-end" }
@@ -105,8 +105,8 @@ const RAVENWOOD_TEMPLATE: VNProject = {
       isEnding: true, endingType: "GOOD", endingName: "True Protectors", nodeType: "story"
     },
     "node-bad-end": {
-      id: "node-bad-end", title: "Lost in Terror", description: "Fleeing in panic.", speaker: "Narrator",
-      dialogueLines: [{ id: "line-b1", speaker: "Narrator", text: "[You stumble out into the storm.]", expression: "Neutral" }],
+      id: "node-bad-end", title: "Lost in Terror", description: "Fleeing in panic.", speaker: "",
+      dialogueLines: [{ id: "line-b1", speaker: "", text: "[You stumble out into the storm.]", expression: "Neutral" }],
       choices: [], statChanges: [], position: { x: 1060, y: 320 },
       isEnding: true, endingType: "BAD", endingName: "Locked Out", nodeType: "story"
     }
@@ -287,7 +287,7 @@ export default function App() {
           id: "node-start",
           title: "The Beginning",
           description: "Your story starts here. Double-click the canvas to create new scene nodes.",
-          speaker: "Narrator",
+          speaker: "",
           dialogueLines: [],
           choices: [],
           statChanges: [],
@@ -465,7 +465,7 @@ export default function App() {
       displayId: generateDisplayId("SCN"),
       title: "New Scene Point",
       description: "Brief plot summary...",
-      speaker: "Narrator",
+      speaker: "",
       dialogueLines: [],
       choices: [],
       statChanges: [],
@@ -489,7 +489,7 @@ export default function App() {
       displayId: generateDisplayId("SCN"),
       title: "New Location",
       description: "A location in your world.",
-      speaker: "Narrator",
+      speaker: "",
       dialogueLines: [],
       choices: [],
       statChanges: [],
@@ -522,7 +522,7 @@ export default function App() {
       displayId: generateDisplayId("SCN"),
       title: "New Encounter",
       description: "An enemy encounter.",
-      speaker: "Narrator",
+      speaker: "",
       dialogueLines: [],
       choices: [],
       statChanges: [],
