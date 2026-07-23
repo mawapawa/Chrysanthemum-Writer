@@ -39,35 +39,63 @@ export async function syncGoogleUserToSupabase(googleIdToken?: string): Promise<
     return;
   }
 
-  if (!validateIdToken(googleIdToken)) {
-    console.error("[SUPABASE AUTH] Invalid Google ID token — skipping Supabase auth sync.");
+  // Checkpoint 2: validate JWT before calling signInWithIdToken
+  console.log("[AUTH:2] ID token exists:", true, "length:", googleIdToken.length);
+  const parts = googleIdToken.split(".");
+  console.log("[AUTH:2] JWT segments:", parts.length);
+  if (parts.length === 3) {
+    try {
+      const payload = JSON.parse(atob(parts[1]));
+      console.log("[AUTH:2] JWT claims — iss:", payload.iss, "aud:", payload.aud, "sub:", payload.sub);
+    } catch {}
+  } else {
+    console.error("[AUTH:2] Invalid JWT — expected 3 segments, got", parts.length);
     return;
   }
 
   try {
+    // Checkpoint 3: signInWithIdToken
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: "google",
       token: googleIdToken,
     });
 
     if (error) {
-      console.error("[SUPABASE AUTH] signInWithIdToken failed:", error.message);
+      console.error("[AUTH:3] signInWithIdToken failed:", error.message);
       return;
     }
+    console.log("[AUTH:3] signInWithIdToken succeeded — session exists:", !!data?.session, "user exists:", !!data?.user);
+    if (data?.user) {
+      console.log("[AUTH:3] Supabase user ID:", data.user.id, "email:", data.user.email);
+    }
 
-    // Upsert profile using the Supabase session user ID (UUID), not the Google user ID
+    // Confirm auth.getUser() returns the authenticated user
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    console.log("[AUTH:3] auth.getUser() — success:", !!userData?.user, "error:", userError?.message ?? "none");
+    if (userData?.user) {
+      console.log("[AUTH:3] Authenticated Supabase user ID:", userData.user.id, "email:", userData.user.email);
+    }
+
+    // Checkpoint 4: upsert profile
     const sbUser = data?.user;
     if (sbUser) {
       const meta = sbUser.user_metadata ?? {};
-      await upsertProfile({
-        id: sbUser.id,
-        name: meta.full_name ?? meta.name ?? sbUser.email ?? "User",
-        email: sbUser.email ?? meta.email,
-        avatarUrl: meta.avatar_url ?? meta.picture,
-      });
+      console.log("[AUTH:4] Upserting profile with id:", sbUser.id);
+      const { error: upsertErr } = await supabase.from("profiles").upsert(
+        {
+          id: sbUser.id,
+          display_name: meta.full_name ?? meta.name ?? sbUser.email ?? "User",
+          email: sbUser.email ?? meta.email,
+          avatar_url: meta.avatar_url ?? meta.picture,
+        },
+        { onConflict: "id" }
+      );
+      if (upsertErr) {
+        console.error("[AUTH:4] Profile upsert failed:", upsertErr.message);
+      } else {
+        console.log("[AUTH:4] Profile upsert succeeded for id:", sbUser.id);
+      }
     }
-
-    console.log("[SUPABASE AUTH] Google user synced to Supabase.");
   } catch (err) {
     console.warn("[SUPABASE AUTH] Sync failed (non-blocking):", err);
   }

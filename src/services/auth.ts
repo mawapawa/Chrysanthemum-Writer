@@ -133,6 +133,7 @@ async function exchangeCode(code: string, codeVerifier: string, redirectUri?: st
   } catch (e) {
     throw new Error(`[AUTH] exchangeCode returned non-JSON: ${text}`);
   }
+  log("[AUTH:1] Token exchange — access_token present:", !!data.access_token, "id_token present:", !!data.id_token, "refresh_token present:", !!data.refresh_token);
   _latestGoogleIdToken = data.id_token ?? null;
   const tokens: TokenStore = {
     accessToken: data.access_token,
