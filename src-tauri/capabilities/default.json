@@ -15,6 +15,7 @@
     "core:window:allow-close",
     "core:window:allow-set-shadow",
     "oauth:default",
+    "opener:default",
     {
       "identifier": "fs:scope",
       "allow": [
