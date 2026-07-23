@@ -530,20 +530,13 @@ export async function signIn(): Promise<AuthUser> {
   const inTauri = isTauri();
   log("signIn() — isTauri:", inTauri);
 
-  // Try Supabase first (application identity)
-  if (supabase) {
-    try {
-      const user = inTauri ? await signInTauriSupabase() : await signInWebSupabase();
-      log("signIn() — Supabase auth succeeded, also ensuring Drive token");
-      return user;
-    } catch (err) {
-      log("signIn() — Supabase auth failed, falling back to Google Drive OAuth:", err);
-    }
+  if (!supabase) {
+    throw new Error("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.");
   }
 
-  // Fall back to existing Google OAuth (Drive + legacy identity)
-  if (inTauri) return signInTauri();
-  return signInWeb();
+  const user = inTauri ? await signInTauriSupabase() : await signInWebSupabase();
+  log("signIn() — Supabase auth succeeded");
+  return user;
 }
 
 export async function signOut(): Promise<void> {
