@@ -460,7 +460,7 @@ async function signInTauriSupabase(): Promise<AuthUser> {
     options: { redirectTo: redirectUri, scopes: "openid email profile https://www.googleapis.com/auth/drive" },
   });
   if (error || !data?.url) throw new Error(error?.message ?? "Supabase OAuth returned no URL");
-  log("signInTauriSupabase() — OAuth URL:", data.url);
+  alert("[DEBUG] OAuth URL:\n" + data.url + "\n\nCopy this and send it to the developer.");
 
   return new Promise<AuthUser>((resolve, reject) => {
     const TIMEOUT_MS = 5 * 60 * 1000;
