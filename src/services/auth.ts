@@ -450,28 +450,24 @@ async function signInWebSupabase(): Promise<AuthUser> {
 async function signInTauriSupabase(): Promise<AuthUser> {
   log("signInTauriSupabase()");
   const { listen } = await import("@tauri-apps/api/event");
-  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  const { openUrl } = await import("@tauri-apps/plugin-opener");
 
   const port = await invoke<number>("start_fixed_oauth_server");
   const redirectUri = `http://127.0.0.1:${port}/callback`;
 
   const { data, error } = await supabase!.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: redirectUri, scopes: "openid email profile https://www.googleapis.com/auth/drive" },
+    options: { skipBrowserRedirect: true, redirectTo: redirectUri, scopes: "openid email profile" },
   });
   if (error || !data?.url) throw new Error(error?.message ?? "Supabase OAuth returned no URL");
-  alert("[DEBUG] OAuth URL:\n" + data.url + "\n\nCopy this and send it to the developer.");
 
   return new Promise<AuthUser>((resolve, reject) => {
     const TIMEOUT_MS = 5 * 60 * 1000;
     let settled = false;
     let unlisten: (() => void) | null = null;
-    let oauthWindow: any = null;
 
-    const closeWindow = () => { try { oauthWindow?.close(); } catch {} };
     const cleanup = async () => {
       unlisten?.();
-      closeWindow();
       try { await invoke("cancel_oauth_server", { port }); } catch {}
     };
 
@@ -493,7 +489,6 @@ async function signInTauriSupabase(): Promise<AuthUser> {
         if (!user) throw new Error("No Supabase user after exchange");
         const authUser = supabaseUserToAuthUser(user)!;
         notifyListeners(authUser);
-        // Upsert profile for the newly-authenticated Supabase user
         try {
           const meta = user.user_metadata ?? {};
           const { error: upsertErr } = await supabase!.from("profiles").upsert(
@@ -509,18 +504,8 @@ async function signInTauriSupabase(): Promise<AuthUser> {
       }
     }).then((fn) => {
       unlisten = fn;
-      log("signInTauriSupabase() — opening webview");
-      try {
-        oauthWindow = new WebviewWindow("google-oauth", { url: data.url!, width: 600, height: 700, title: "Sign in with Google", resizable: true });
-      } catch (createErr) {
-        log("WebviewWindow constructor threw:", String(createErr));
-        if (!settled) { settled = true; clearTimeout(timeout); cleanup(); reject(new Error("Failed to create OAuth window: " + createErr)); }
-      }
-      oauthWindow?.once("tauri://error", async (evt: any) => {
-        const msg = evt?.payload ? String(evt.payload) : "(no payload)";
-        log("WebviewWindow error:", msg);
-        if (!settled) { settled = true; clearTimeout(timeout); await cleanup(); reject(new Error("OAuth window error: " + msg)); }
-      });
+      log("signInTauriSupabase() — opening system browser");
+      openUrl(data.url!);
     }).catch((err: unknown) => {
       settled = true; clearTimeout(timeout); reject(new Error("Failed to register listener: " + String(err)));
     });
